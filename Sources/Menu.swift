@@ -95,7 +95,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if !AXIsProcessTrusted() {
             add(L("⚠︎ 需要辅助功能权限，点这里去允许…", "⚠︎ Needs Accessibility permission — Allow…"), #selector(openAccessibility))
         } else if m.toggleMode {
-            add(L("点按 \(key) 用\(name)听写，再点停止", "Tap \(key) to dictate with \(name), tap again to stop"))
+            add(L("点按 \(key) 用\(name)听写", "Tap \(key) to dictate with \(name)"))
         } else {
             add(L("按住 \(key) 用\(name)听写", "Hold \(key) to dictate with \(name)"))
         }
@@ -110,8 +110,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         header(L("听写方式", "How You Dictate"))
         add(L("按住说话", "Hold to Talk"), #selector(setTriggerMode(_:)), on: !m.toggleMode, value: "hold")
         add(L("点按开始，再点停止（免按）", "Tap to Start, Tap to Stop"), #selector(setTriggerMode(_:)), on: m.toggleMode, value: "toggle")
-        if m.toggleMode {
-            add(L("按任意键也可停止", "Any Key Also Stops"), #selector(toggleStopOnAnyKey), on: c.stopOnAnyKey, indent: 1)
+        if m.toggleMode {   // how to stop, as a plain description (the switch itself lives in Settings → Dictation)
+            add(c.stopOnAnyKey ? L("再点一下，或按任意键停止", "Tap again or press any key to stop") : L("再点一下停止", "Tap again to stop"), indent: 1)
         }
         let keys = NSMenu()
         add(L("同\(name)里的语音键（\(m.forwardKey.name)）", "Same as \(name)'s Voice Key (\(m.forwardKey.name))"), #selector(setTrigger(_:)), on: m.customTrigger == nil, to: keys, value: "auto")
