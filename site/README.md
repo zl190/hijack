@@ -8,11 +8,11 @@ python3 -m http.server 4173 --bind 127.0.0.1 --directory site
 
 ## Routes and ownership
 
-`precise.html` is the single focused homepage template. `?lang=zh` and `?lang=en` select only language; Chinese is the default. The former `precise-zh.html` address redirects to `precise.html?lang=zh`, preserving the fragment. The language link and brand link keep the current route explicit.
+`index.html` is the single homepage template, served at `/`. `?lang=zh` and `?lang=en` select only language; Chinese is the default. The former `precise.html` address redirects to `/`, preserving language and fragment; `precise-zh.html` redirects to `/?lang=zh`, preserving the fragment. The language link and brand link keep the current route explicit.
 
-`locales.js` owns localized text, accessible labels, metadata, demo messages, and cover-image references. `data-i18n` marks text and `data-i18n-*` marks translated attributes. `precise.js` applies the dictionary and runs one shared phase sequence. Both languages use the same markup, components, styles, and controls. New copy needs matching keys in both dictionaries; structural edits happen only in `precise.html`.
+`locales.js` owns localized text, accessible labels, metadata, demo messages, and cover-image references. `data-i18n` marks text and `data-i18n-*` marks translated attributes. `home.js` applies the dictionary and runs one shared phase sequence. Both languages use the same markup, components, styles, and controls. New copy needs matching keys in both dictionaries; structural edits happen only in `index.html`.
 
-`index.html` remains the earlier broader capability concept page: voice input is available; translation and OCR are explicitly concepts. It uses `styles.css` and `script.js`. No packages, build step, external fonts, analytics, or runtime network APIs are required.
+`concept.html` preserves the earlier broader capability concept page: voice input is available; translation and OCR are explicitly concepts. It uses `styles.css` and `script.js`. No packages, build step, external fonts, analytics, or runtime network APIs are required.
 
 ## Demonstration contract
 
