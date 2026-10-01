@@ -18,7 +18,11 @@ final class Config {
     var voiceStyles: [String: String] = [:]  // per voice input: how it wants its key — "hold" | "tap" | "doubleTap"
     var showMenuBarIcon = true
     var showDockIcon = false
-    var lastError: String?         // why the file couldn't be read; previous values stay in effect
+    var lastError: String?         // why the file couldn't be read (a code; see errorText); previous values stay in effect
+    // Localized at display time: the language setting lives in this object, so it can't be read while loading.
+    var errorText: String? {
+        lastError.map { _ in L("配置文件不是有效的 JSON，正在沿用上一次的设置", "The config file isn't valid JSON; keeping the previous settings") }
+    }
     var language = "system"
     var holdDelay = 0.2            // minimum hold before the voice method gets its key
     var restoreTimeout = 5.0       // longest wait after release before switching back
@@ -36,7 +40,7 @@ final class Config {
         guard let mtime, let data = try? Data(contentsOf: configURL),
               let d = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             if mtime == nil { migrateFromDefaults(); save() }
-            else { lastError = L("配置文件不是有效的 JSON，正在沿用上一次的设置", "The config file isn't valid JSON; keeping the previous settings"); log("config: can't parse \(configURL.path), keeping previous values") }
+            else { lastError = "invalidJSON"; log("config: can't parse \(configURL.path), keeping previous values") }
             loadedAt = mtime; return
         }
         loadedAt = mtime
@@ -62,6 +66,12 @@ final class Config {
     }
 
     func save() {
+        // A hand edit that doesn't parse yet must not be overwritten with the old values: refuse to write.
+        if lastError != nil, FileManager.default.fileExists(atPath: configURL.path) {
+            log("config: not saving — \(configURL.path) has an error; fix or revert it first")
+            NSSound.beep()
+            return
+        }
         func j(_ v: Any) -> String {
             if let s = v as? String { return "\"\(s)\"" }
             if let b = v as? Bool { return b ? "true" : "false" }

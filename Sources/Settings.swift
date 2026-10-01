@@ -62,7 +62,7 @@ final class SettingsStore: ObservableObject {
         voiceInput = c.voiceInput
         showMenuBarIcon = c.showMenuBarIcon; showDockIcon = c.showDockIcon; language = c.language
         holdDelay = c.holdDelay; restoreTimeout = c.restoreTimeout; fallbackDelay = c.fallbackDelay
-        configError = c.lastError
+        configError = c.errorText
         launchAtLogin = SMAppService.mainApp.status == .enabled
         trusted = AXIsProcessTrusted()
         var rows = installedProviders()

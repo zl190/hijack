@@ -99,6 +99,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         } else {
             add(L("按住 \(key) 用\(name)听写", "Hold \(key) to dictate with \(name)"))
         }
+        if let err = c.errorText {   // settings can't be changed until the file is fixed
+            add("⚠︎ " + err + L("，点这里打开", " — Open…"), #selector(openConfig))
+        }
         let readable = m.provider.readsSettings
         if m.userVoiceKey == nil && (m.detectedVoiceKey == nil || !readable) {
             add(m.detectedVoiceKey.map { L("⚠︎ \(name)里的语音键用的是默认值 \($0.name)，请确认一致", "⚠︎ \(name)'s voice key is assumed to be \($0.name) — make sure it matches") }

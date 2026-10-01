@@ -1,0 +1,466 @@
+===== zh toggle com.tencent.inputmethod.wetype.pinyin
+  点按 右 Option 用微信输入法听写  [灰]
+────
+【听写方式】
+  按住说话
+✓ 点按开始，再点停止（免按）
+  再点一下，或按任意键停止  [灰]
+  快捷键：右 Option
+        同微信输入法里的语音键（Fn）
+      ────
+      ✓ 右 Option
+        左 Option
+        右 Command
+        Fn
+      ────
+        其他按键…
+────
+  语音来源：微信输入法
+      ✓ 微信输入法
+        Handy
+      ────
+      【微信输入法里的语音键】
+      ✓ Fn（自动检测）
+        右 Option
+        左 Option
+        右 Command
+        其他…
+────
+  开机启动
+✓ 在菜单栏显示图标
+  语言
+        跟随系统
+        English
+      ✓ 中文
+  设置…   ⌘,
+  编辑配置文件…
+────
+  退出 Hijack   ⌘q
+===== zh toggle app:com.pais.handy
+  点按 右 Option 用Handy听写  [灰]
+────
+【听写方式】
+  按住说话
+✓ 点按开始，再点停止（免按）
+  再点一下，或按任意键停止  [灰]
+  快捷键：右 Option
+        同Handy里的语音键（⌥SPACE）
+      ────
+      ✓ 右 Option
+        左 Option
+        右 Command
+        Fn
+      ────
+        其他按键…
+────
+  语音来源：Handy
+        微信输入法
+      ✓ Handy
+      ────
+      【Handy里的语音键】
+      ✓ ⌥SPACE（自动检测）
+        右 Option
+        左 Option
+        右 Command
+        Fn
+        其他…
+────
+  开机启动
+✓ 在菜单栏显示图标
+  语言
+        跟随系统
+        English
+      ✓ 中文
+  设置…   ⌘,
+  编辑配置文件…
+────
+  退出 Hijack   ⌘q
+===== zh toggle com.example.unknown
+  点按 右 Option 用com.example.unknown听写  [灰]
+  ⚠︎ 读不到com.example.unknown里的语音键，请在「语音来源」里选  [灰]
+────
+【听写方式】
+  按住说话
+✓ 点按开始，再点停止（免按）
+  再点一下，或按任意键停止  [灰]
+  快捷键：右 Option
+        同com.example.unknown里的语音键（右 Option）
+      ────
+      ✓ 右 Option
+        左 Option
+        右 Command
+        Fn
+      ────
+        其他按键…
+────
+  语音来源：com.example.unknown
+        微信输入法
+        Handy
+      ✓ com.example.unknown（设置文件）  [灰]
+      ────
+      【com.example.unknown里的语音键】
+      ✓ 自动检测（没读到）
+        右 Option
+        左 Option
+        右 Command
+        Fn
+        其他…
+────
+  开机启动
+✓ 在菜单栏显示图标
+  语言
+        跟随系统
+        English
+      ✓ 中文
+  设置…   ⌘,
+  编辑配置文件…
+────
+  退出 Hijack   ⌘q
+===== zh hold com.tencent.inputmethod.wetype.pinyin
+  按住 右 Option 用微信输入法听写  [灰]
+────
+【听写方式】
+✓ 按住说话
+  点按开始，再点停止（免按）
+  快捷键：右 Option
+        同微信输入法里的语音键（Fn）
+      ────
+      ✓ 右 Option
+        左 Option
+        右 Command
+        Fn
+      ────
+        其他按键…
+────
+  语音来源：微信输入法
+      ✓ 微信输入法
+        Handy
+      ────
+      【微信输入法里的语音键】
+      ✓ Fn（自动检测）
+        右 Option
+        左 Option
+        右 Command
+        其他…
+────
+  开机启动
+✓ 在菜单栏显示图标
+  语言
+        跟随系统
+        English
+      ✓ 中文
+  设置…   ⌘,
+  编辑配置文件…
+────
+  退出 Hijack   ⌘q
+===== zh hold app:com.pais.handy
+  按住 右 Option 用Handy听写  [灰]
+────
+【听写方式】
+✓ 按住说话
+  点按开始，再点停止（免按）
+  快捷键：右 Option
+        同Handy里的语音键（⌥SPACE）
+      ────
+      ✓ 右 Option
+        左 Option
+        右 Command
+        Fn
+      ────
+        其他按键…
+────
+  语音来源：Handy
+        微信输入法
+      ✓ Handy
+      ────
+      【Handy里的语音键】
+      ✓ ⌥SPACE（自动检测）
+        右 Option
+        左 Option
+        右 Command
+        Fn
+        其他…
+────
+  开机启动
+✓ 在菜单栏显示图标
+  语言
+        跟随系统
+        English
+      ✓ 中文
+  设置…   ⌘,
+  编辑配置文件…
+────
+  退出 Hijack   ⌘q
+===== zh hold com.example.unknown
+  按住 右 Option 用com.example.unknown听写  [灰]
+  ⚠︎ 读不到com.example.unknown里的语音键，请在「语音来源」里选  [灰]
+────
+【听写方式】
+✓ 按住说话
+  点按开始，再点停止（免按）
+  快捷键：右 Option
+        同com.example.unknown里的语音键（右 Option）
+      ────
+      ✓ 右 Option
+        左 Option
+        右 Command
+        Fn
+      ────
+        其他按键…
+────
+  语音来源：com.example.unknown
+        微信输入法
+        Handy
+      ✓ com.example.unknown（设置文件）  [灰]
+      ────
+      【com.example.unknown里的语音键】
+      ✓ 自动检测（没读到）
+        右 Option
+        左 Option
+        右 Command
+        Fn
+        其他…
+────
+  开机启动
+✓ 在菜单栏显示图标
+  语言
+        跟随系统
+        English
+      ✓ 中文
+  设置…   ⌘,
+  编辑配置文件…
+────
+  退出 Hijack   ⌘q
+===== en toggle com.tencent.inputmethod.wetype.pinyin
+  Tap Right Option to dictate with 微信输入法  [灰]
+────
+【How You Dictate】
+  Hold to Talk
+✓ Tap to Start, Tap to Stop
+  Tap again or press any key to stop  [灰]
+  Shortcut: Right Option
+        Same as 微信输入法's Voice Key (Fn)
+      ────
+      ✓ Right Option
+        Left Option
+        Right Command
+        Fn
+      ────
+        Other Key…
+────
+  Dictation Source: 微信输入法
+      ✓ 微信输入法
+        Handy
+      ────
+      【微信输入法's Voice Key】
+      ✓ Fn (Detected)
+        Right Option
+        Left Option
+        Right Command
+        Other…
+────
+  Open at Login
+✓ Show in Menu Bar
+  Language
+        System
+      ✓ English
+        中文
+  Settings…   ⌘,
+  Edit Config File…
+────
+  Quit Hijack   ⌘q
+===== en toggle app:com.pais.handy
+  Tap Right Option to dictate with Handy  [灰]
+────
+【How You Dictate】
+  Hold to Talk
+✓ Tap to Start, Tap to Stop
+  Tap again or press any key to stop  [灰]
+  Shortcut: Right Option
+        Same as Handy's Voice Key (⌥SPACE)
+      ────
+      ✓ Right Option
+        Left Option
+        Right Command
+        Fn
+      ────
+        Other Key…
+────
+  Dictation Source: Handy
+        微信输入法
+      ✓ Handy
+      ────
+      【Handy's Voice Key】
+      ✓ ⌥SPACE (Detected)
+        Right Option
+        Left Option
+        Right Command
+        Fn
+        Other…
+────
+  Open at Login
+✓ Show in Menu Bar
+  Language
+        System
+      ✓ English
+        中文
+  Settings…   ⌘,
+  Edit Config File…
+────
+  Quit Hijack   ⌘q
+===== en toggle com.example.unknown
+  Tap Right Option to dictate with com.example.unknown  [灰]
+  ⚠︎ Can't detect com.example.unknown's voice key — pick it under Dictation Source  [灰]
+────
+【How You Dictate】
+  Hold to Talk
+✓ Tap to Start, Tap to Stop
+  Tap again or press any key to stop  [灰]
+  Shortcut: Right Option
+        Same as com.example.unknown's Voice Key (Right Option)
+      ────
+      ✓ Right Option
+        Left Option
+        Right Command
+        Fn
+      ────
+        Other Key…
+────
+  Dictation Source: com.example.unknown
+        微信输入法
+        Handy
+      ✓ com.example.unknown (config file)  [灰]
+      ────
+      【com.example.unknown's Voice Key】
+      ✓ Auto-Detect (Not Found)
+        Right Option
+        Left Option
+        Right Command
+        Fn
+        Other…
+────
+  Open at Login
+✓ Show in Menu Bar
+  Language
+        System
+      ✓ English
+        中文
+  Settings…   ⌘,
+  Edit Config File…
+────
+  Quit Hijack   ⌘q
+===== en hold com.tencent.inputmethod.wetype.pinyin
+  Hold Right Option to dictate with 微信输入法  [灰]
+────
+【How You Dictate】
+✓ Hold to Talk
+  Tap to Start, Tap to Stop
+  Shortcut: Right Option
+        Same as 微信输入法's Voice Key (Fn)
+      ────
+      ✓ Right Option
+        Left Option
+        Right Command
+        Fn
+      ────
+        Other Key…
+────
+  Dictation Source: 微信输入法
+      ✓ 微信输入法
+        Handy
+      ────
+      【微信输入法's Voice Key】
+      ✓ Fn (Detected)
+        Right Option
+        Left Option
+        Right Command
+        Other…
+────
+  Open at Login
+✓ Show in Menu Bar
+  Language
+        System
+      ✓ English
+        中文
+  Settings…   ⌘,
+  Edit Config File…
+────
+  Quit Hijack   ⌘q
+===== en hold app:com.pais.handy
+  Hold Right Option to dictate with Handy  [灰]
+────
+【How You Dictate】
+✓ Hold to Talk
+  Tap to Start, Tap to Stop
+  Shortcut: Right Option
+        Same as Handy's Voice Key (⌥SPACE)
+      ────
+      ✓ Right Option
+        Left Option
+        Right Command
+        Fn
+      ────
+        Other Key…
+────
+  Dictation Source: Handy
+        微信输入法
+      ✓ Handy
+      ────
+      【Handy's Voice Key】
+      ✓ ⌥SPACE (Detected)
+        Right Option
+        Left Option
+        Right Command
+        Fn
+        Other…
+────
+  Open at Login
+✓ Show in Menu Bar
+  Language
+        System
+      ✓ English
+        中文
+  Settings…   ⌘,
+  Edit Config File…
+────
+  Quit Hijack   ⌘q
+===== en hold com.example.unknown
+  Hold Right Option to dictate with com.example.unknown  [灰]
+  ⚠︎ Can't detect com.example.unknown's voice key — pick it under Dictation Source  [灰]
+────
+【How You Dictate】
+✓ Hold to Talk
+  Tap to Start, Tap to Stop
+  Shortcut: Right Option
+        Same as com.example.unknown's Voice Key (Right Option)
+      ────
+      ✓ Right Option
+        Left Option
+        Right Command
+        Fn
+      ────
+        Other Key…
+────
+  Dictation Source: com.example.unknown
+        微信输入法
+        Handy
+      ✓ com.example.unknown (config file)  [灰]
+      ────
+      【com.example.unknown's Voice Key】
+      ✓ Auto-Detect (Not Found)
+        Right Option
+        Left Option
+        Right Command
+        Fn
+        Other…
+────
+  Open at Login
+✓ Show in Menu Bar
+  Language
+        System
+      ✓ English
+        中文
+  Settings…   ⌘,
+  Edit Config File…
+────
+  Quit Hijack   ⌘q
