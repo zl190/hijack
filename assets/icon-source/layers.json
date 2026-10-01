@@ -1,0 +1,32 @@
+{
+  "canvas": [
+    1024,
+    1024
+  ],
+  "source": "Original Hijack-1024.png bright foreground silhouette, split into hat and pointer; optical contour simplified to SVG quadratics.",
+  "layers": [
+    {
+      "file": "layers/01-hat.svg",
+      "canvas": [
+        1024,
+        1024
+      ],
+      "path_nodes": 189,
+      "source_component_area": 196930,
+      "background": "transparent",
+      "effects": []
+    },
+    {
+      "file": "layers/02-pointer.svg",
+      "canvas": [
+        1024,
+        1024
+      ],
+      "path_nodes": 53,
+      "source_component_area": 20649,
+      "background": "transparent",
+      "effects": []
+    }
+  ],
+  "native_effects": "Apply background, mask, specular, shadows, refraction, and appearance overrides in Icon Composer."
+}
