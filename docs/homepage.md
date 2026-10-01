@@ -122,3 +122,9 @@ Browser verification: cover and playback both measured 238.296875px at the defau
 The Chinese demo now draws an unboxed animated waveform, centered in the bottom status area. It contains no microphone or text: speaking animates nine rounded bars, submission collapses them into a pulsing line, and completion hides them. Reduced-motion mode disables these animations. The middle step uses a microphone icon instead of the WeType name; the current-source display still identifies WeType.
 
 Clicking any step now plays the remaining sequence. Clicking the first step shows the original source, then advances through holding, submission, and restoration. Playback clears prior timers before restarting. The return arrow is at the left midpoint and only appears after the completed state. Verified in the browser: first-step click reached the speaking state with nine waveform bars and no return arrow, then restored 鼠须管 and revealed the arrow; returning restored the cover, cleared the selected step, and showed the play button. No browser errors were reported. JavaScript syntax and whitespace checks passed.
+
+## Two-card input-source switcher
+
+The Chinese workflow now has two interactive cards: the previous input method and voice input. Two arrows between them show outbound and return motion with a short overshoot-and-settle animation; the selected card also springs into place. Submission keeps the voice card selected until text is committed, then the original input method becomes active. Reduced-motion preferences disable the bounce. Browser verification confirmed WeType / voice-card selection while submitting, then 鼠须管 / original-card selection with the return-arrow animation.
+
+The cover's play button is now a small translucent dark pill. The Chinese footer keeps only the project/license line, per user request. Verified the simplified footer in the browser; JavaScript syntax and whitespace checks pass.

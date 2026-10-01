@@ -33,10 +33,11 @@
     document.querySelector('#demo-status').textContent = stage.status;
     document.querySelector('#sample-text').textContent = stage.text;
     if (capsuleLabel) capsuleLabel.textContent = stage.capsule || labels.capsule;
-    const activeStep = isChinese ? Math.min(index, 2) : index;
+    const activeStep = isChinese ? (index === 1 || index === 2 ? 1 : 0) : index;
     if (isChinese) {
-      document.querySelector('#return-source').textContent = index === 2 ? stage.source : stages[0].source;
-      document.querySelector('#return-detail').textContent = index === 2 ? '等待文字提交…' : index === 3 ? '已恢复，继续打字' : '文字上屏后切回';
+      document.querySelector('.source-steps').dataset.direction = ['idle', 'out', 'waiting', 'back'][index];
+      document.querySelector('#typing-detail').textContent = index === 3 ? '继续打字' : '原输入法';
+      document.querySelector('#voice-detail').textContent = index === 2 ? '等待上屏…' : '语音输入';
     }
     document.querySelectorAll('[data-step]').forEach(item => {
       if (Number(item.dataset.step) === activeStep) item.setAttribute('aria-current', 'step');
