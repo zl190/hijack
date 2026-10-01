@@ -7,7 +7,10 @@ Voice input, then back to your preferred input method.
 
 语音输入，然后切回原来的输入法。
 
-[Website · 官网](https://hijack.ylab3.com) · [Releases](https://github.com/zl190/hijack/releases)
+[![Latest release](https://img.shields.io/github/v/release/zl190/hijack?color=626e56)](https://github.com/zl190/hijack/releases/latest)
+[![macOS 13+](https://img.shields.io/badge/macOS-13%2B-626e56?logo=apple&logoColor=white)](#install)
+[![License: MIT](https://img.shields.io/github/license/zl190/hijack?color=626e56)](LICENSE)
+[![Website](https://img.shields.io/badge/website-hijack.ylab3.com-a44830)](https://hijack.ylab3.com)
 
 ## Install
 
