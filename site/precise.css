@@ -191,10 +191,10 @@ html[lang="zh-CN"] .footer { line-height: 1.9; }
 
 .has-cover { position: relative; }
 .demo-cover { display: none; }
-.has-cover[data-stage="0"] .demo-cover { display: block; position: absolute; inset: 0; background: #f7f2e8; }
-.demo-cover img { display: block; width: 100%; height: 100%; object-fit: contain; object-position: center top; }
+.has-cover[data-stage="0"] .demo-cover { display: block; }
+.demo-cover img { display: block; width: 100%; height: auto; }
 .has-cover[data-stage="0"] .window-bar,
 .has-cover[data-stage="0"] .editor,
-.has-cover[data-stage="0"] .demo-controls p { visibility: hidden; }
-.has-cover[data-stage="0"] .demo-controls { position: relative; justify-content: flex-end; border-color: transparent; }
-.has-cover[data-stage="0"] #play { background: #fffefa; color: #252923; border-color: #c6cebd; min-width: 60px; box-shadow: 0 2px 8px #0002; }
+.has-cover[data-stage="0"] .demo-controls p { display: none; }
+.has-cover[data-stage="0"] .demo-controls { position: absolute; right: 0; bottom: 0; left: 0; justify-content: flex-end; border: 0; pointer-events: none; }
+.has-cover[data-stage="0"] #play { pointer-events: auto; background: #fffefa; color: #252923; border-color: #c6cebd; min-width: 60px; box-shadow: 0 2px 8px #0002; }
