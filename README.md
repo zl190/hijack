@@ -6,14 +6,21 @@ Hold a key to dictate with WeType (微信输入法) from any input source; your 
 
 ## Install
 
-Needs Xcode Command Line Tools and WeType with its push-to-talk voice key set.
+Apple silicon, macOS 13+, and WeType with its push-to-talk voice key set.
 
 ```sh
-git clone https://github.com/zl190/hijack.git
-cd hijack && ./install.sh
+curl -fsSL https://raw.githubusercontent.com/zl190/hijack/main/install.sh | sh
 ```
 
-Allow Hijack in System Settings › Privacy & Security › Accessibility.
+or
+
+```sh
+brew install --cask zl190/tap/hijack
+```
+
+Then allow Hijack in System Settings › Privacy & Security › Accessibility (once; updates keep it).
+
+Build from source instead: `./install-from-source.sh` (needs Xcode Command Line Tools).
 
 ## Settings
 
