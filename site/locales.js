@@ -9,7 +9,7 @@ window.HIJACK_LOCALES = {
     "install": "安装 Hijack",
     "eyebrow": "macOS 菜单栏工具",
     "headlineVoice": "语音输入，",
-    "headlineTyping": "自己的输入法，",
+    "headlineTyping": "习惯的输入法，",
     "headlineBoth": "我全都要。",
     "intro": "语音输入，然后切回",
     "introStrong": "原来的输入法",
