@@ -6,5 +6,5 @@ cd "$(dirname "$0")"
 VERSION="$(cat VERSION)"
 HIJACK_SIGN_ID="Hijack Signing" ./build.sh
 ditto -c -k --keepParent build/Hijack.app build/Hijack.zip
-gh release create "v$VERSION" build/Hijack.zip --title "Hijack $VERSION" --notes "Hijack $VERSION"
+gh release create "v$VERSION" build/Hijack.zip --title "Hijack $VERSION" --notes-file "release-notes/v$VERSION.md"
 shasum -a 256 build/Hijack.zip
