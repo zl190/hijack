@@ -27,6 +27,7 @@
   function showStage(index) {
     const stage = stages[index];
     appWindow.dataset.stage = String(index);
+    if (isChinese) appWindow.dataset.view = 'demo';
     document.querySelector('#current-source').textContent = stage.source;
     document.querySelector('#demo-status').textContent = stage.status;
     document.querySelector('#sample-text').textContent = stage.text;
@@ -39,6 +40,7 @@
     document.querySelectorAll('[data-step]').forEach(item => {
       if (Number(item.dataset.step) === activeStep) item.setAttribute('aria-current', 'step');
       else item.removeAttribute('aria-current');
+      item.querySelector('.step-select')?.setAttribute('aria-pressed', String(Number(item.dataset.step) === activeStep));
     });
   }
   function clearTimers() { timers.forEach(clearTimeout); timers = []; }
@@ -47,6 +49,7 @@
     button.disabled = true;
     button.textContent = labels.playing;
     showStage(1);
+    document.querySelector('#back-to-meme')?.focus();
     timers.push(setTimeout(() => showStage(2), 1800));
     timers.push(setTimeout(() => {
       showStage(3);
@@ -54,10 +57,35 @@
       button.textContent = labels.replay;
     }, 3800));
   });
+  function showCover() {
+    showStage(0);
+    appWindow.dataset.view = 'cover';
+    document.querySelectorAll('[data-step]').forEach(item => {
+      item.removeAttribute('aria-current');
+      item.querySelector('.step-select')?.setAttribute('aria-pressed', 'false');
+    });
+  }
+  document.querySelectorAll('[data-go-stage]').forEach(stepButton => {
+    stepButton.addEventListener('click', () => {
+      clearTimers();
+      const index = Number(stepButton.dataset.goStage);
+      showStage(index);
+      button.disabled = false;
+      button.textContent = labels.play;
+      if (index === 2) timers.push(setTimeout(() => showStage(3), 1800));
+    });
+  });
+  document.querySelector('#back-to-meme')?.addEventListener('click', () => {
+    clearTimers();
+    showCover();
+    button.disabled = false;
+    button.textContent = labels.play;
+    button.focus();
+  });
   window.addEventListener('pagehide', clearTimers);
   window.addEventListener('pageshow', event => {
     if (event.persisted) {
-      clearTimers(); showStage(0); button.disabled = false; button.textContent = labels.play;
+      clearTimers(); if (isChinese) showCover(); else showStage(0); button.disabled = false; button.textContent = labels.play;
     }
   });
   document.querySelectorAll('[data-copy]').forEach(copyButton => {

@@ -110,3 +110,9 @@ Verification: the Chinese demonstration retains WeType after key release while t
 The Chinese hero now reads “语音输入，自己的输入法，我全都要。” The example source is 鼠须管 (Squirrel for macOS). The workflow has three cards; the last card shows WeType while text is being submitted and then returns to 鼠须管. Repetitive slogans were removed and practical setup/privacy information retained in shorter copy.
 
 The user-selected meme is the initial cover. The final requested button text is “▶ 播放演示”, including replay. The play button overlays the bottom-right corner of the full image. Clicking replaces the cover with the existing editor animation. Verified in-browser: cover and button visible; release stage still shows WeType; completed stage restores 鼠须管; the final button remains available. At 390px the full image and button fit and document width equals viewport width. JavaScript syntax and whitespace checks passed.
+
+## Stable frame and interactive steps
+
+Cover and demo now share the image aspect ratio. An icon-only return control is positioned at the right-side vertical midpoint per the user's placement request; it cancels pending playback and returns to the cover. The play button appears only on the cover. Three step buttons select the input-source state directly. The release step shows submission in progress before restoring the previous source. The cover clears step selection.
+
+Browser verification: cover and playback both measured 238.296875px at the default viewport, and cover/step selection both measured 162.0859375px at 320px. The return arrow's vertical center matched the frame's center. At 320px there is no horizontal overflow, all three steps can be selected, the release step reaches the restored state, and returning to the cover clears the active step. Returning during playback cancels it and restores the enabled play button.

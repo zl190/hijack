@@ -29,7 +29,7 @@
 
       <div class="demo" aria-label="输入法切换演示">
         <div class="demo-heading"><span>输入法切换</span><span>演示</span></div>
-        <div class="app-window has-cover" data-stage="0">
+        <div class="app-window has-cover" data-stage="0" data-view="cover">
           <div class="demo-cover"><img src="assets/hijack-want-it-all.png" width="1672" height="941" alt="微信的语音输入，加上自己的输入法：我全都要。"></div>
           <div class="window-bar"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="window-name">编辑器</span><span class="source-label">当前输入法 <strong id="current-source">鼠须管</strong></span></div>
           <div class="editor">
@@ -38,12 +38,13 @@
             <p class="dictated"><span id="sample-text">在这里输入…</span><span class="caret" aria-hidden="true"></span></p>
             <div class="voice-capsule" id="voice-capsule" aria-hidden="true"><span class="wave" aria-hidden="true">▂ ▆ ▃ ▇ ▂</span><span id="capsule-label">微信语音输入</span></div>
           </div>
+          <button id="back-to-meme" class="back-to-meme" type="button" aria-label="返回封面">←</button>
           <div class="demo-controls"><p id="demo-status" role="status" aria-live="polite">正在使用鼠须管输入。</p><button id="play" type="button">▶ 播放演示</button></div>
         </div>
         <ol class="source-steps" aria-label="输入法切换顺序">
-          <li data-step="0" aria-current="step"><span class="step-action">平时打字</span><strong>鼠须管</strong><span class="step-detail">原输入法</span></li>
-          <li data-step="1"><span class="step-action">按住说话</span><strong>微信输入法</strong><span class="step-detail">语音输入</span></li>
-          <li data-step="2"><span class="step-action">松开切回</span><strong id="return-source">鼠须管</strong><span class="step-detail" id="return-detail">文字上屏后切回</span></li>
+          <li data-step="0"><button class="step-select" type="button" data-go-stage="0" aria-label="平时打字" aria-pressed="false"><span class="step-action">平时打字</span><strong>鼠须管</strong><span class="step-detail">原输入法</span></button></li>
+          <li data-step="1"><button class="step-select" type="button" data-go-stage="1" aria-label="按住说话" aria-pressed="false"><span class="step-action">按住说话</span><strong>微信输入法</strong><span class="step-detail">语音输入</span></button></li>
+          <li data-step="2"><button class="step-select" type="button" data-go-stage="2" aria-label="松开切回" aria-pressed="false"><span class="step-action">松开切回</span><strong id="return-source">鼠须管</strong><span class="step-detail" id="return-detail">文字上屏后切回</span></button></li>
         </ol>
         <noscript><p class="demo-note">播放演示需要启用 JavaScript。</p></noscript>
       </div>
