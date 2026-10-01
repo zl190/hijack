@@ -1,8 +1,4 @@
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://hijack.ylab3.com/assets/brand/hijack-wordmark-inverse.svg">
-  <source media="(prefers-color-scheme: light)" srcset="https://hijack.ylab3.com/assets/brand/hijack-wordmark.svg">
-  <img src="https://hijack.ylab3.com/assets/brand/hijack-wordmark.svg" width="190" alt="Hijack">
-</picture>
+<img src="assets/hijack-wordmark-readme.svg" width="210" alt="Hijack">
 
 **Voice input, then back to your preferred input method.**
 
