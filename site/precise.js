@@ -2,7 +2,7 @@
   'use strict';
   const isChinese = document.documentElement.lang.toLowerCase().startsWith('zh');
   const labels = isChinese ? {
-    capsule: '微信语音输入', playing: '演示中…', replay: '↻ 再看一次', play: '▶ 播放演示',
+    capsule: '微信语音输入', playing: '演示中…', replay: '▶ 播放演示', play: '▶ 播放演示',
     copying: '正在复制…', copied: '已复制，粘贴到终端运行。',
     copyFallback: '已选中命令，请按 ⌘C 或 Ctrl+C 复制。'
   } : {

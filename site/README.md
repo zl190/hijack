@@ -21,3 +21,5 @@ At widths up to 900px, the page uses a compact reading path: one selected hero s
 Its demonstration makes the macOS input source explicit: ABC → WeType while holding → WeType while finishing after release → ABC after text submission. ABC is illustrative; Hijack restores the previous source. Serve this directory and open `/precise.html` to compare versions.
 
 [`precise-zh.html`](precise-zh.html) is the Simplified Chinese version of the focused homepage. Its header links to English, and the English header links back to Chinese. Both pages share `precise.css` and `precise.js`; the document language selects demo and clipboard messages. Installation commands are identical in both languages.
+
+The Chinese page uses `assets/hijack-want-it-all.png` as the initial demo cover. “▶ 播放演示” starts the existing input-source animation. This user-requested meme adaptation was created with the built-in image-generation tool from the movie still linked at https://tools.wingzero.tw/memes/26 (image: https://i.imgur.com/Ak4RdhN.png). The movie imagery is not part of the project's original MIT-licensed artwork.

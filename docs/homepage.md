@@ -104,3 +104,9 @@ Verification:
 User request: add a Chinese version of the focused homepage. Added `site/precise-zh.html` with translated copy, metadata, accessibility labels, installation guidance, and privacy explanation. Both languages share the demonstration logic and styles, with scoped Chinese typography and reciprocal language links. The installation command strings are unchanged.
 
 Verification: the Chinese demonstration retains WeType after key release while text is being submitted, then restores ABC. Chinese clipboard feedback works. Navigation to English and English playback still work. The Chinese layout has no horizontal overflow at 320 and 390 CSS pixels; at 390px its collapsed document height is 1,206px. HTML structure, IDs, local links, command equality, JavaScript syntax, and whitespace checks pass. No native behavior or deployment is included.
+
+## Chinese copy and meme cover
+
+The Chinese hero now reads “语音输入，自己的输入法，我全都要。” The example source is 鼠须管 (Squirrel for macOS). The workflow has three cards; the last card shows WeType while text is being submitted and then returns to 鼠须管. Repetitive slogans were removed and practical setup/privacy information retained in shorter copy.
+
+The user-selected meme is the initial cover. The final requested button text is “▶ 播放演示”, including replay. Clicking replaces the cover with the existing editor animation, without changing the demo frame height. Verified in-browser: cover and button visible; release stage still shows WeType; completed stage restores 鼠须管; the final button remains available. At 390px the full image and button fit and document width equals viewport width. JavaScript syntax and whitespace checks passed.
