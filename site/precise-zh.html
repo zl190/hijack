@@ -41,12 +41,10 @@
           <div class="demo-controls"><p id="demo-status" role="status" aria-live="polite">正在使用鼠须管输入。</p><button id="play" type="button">▶ 播放切换演示</button></div>
         </div>
         <ol class="source-steps" aria-label="输入法切换顺序">
-          <li data-step="0" aria-current="step"><span class="step-action">开始前</span><strong>鼠须管</strong><span class="step-detail">原输入法</span></li>
-          <li data-step="1"><span class="step-action">按住按键</span><strong>微信输入法</strong><span class="step-detail">语音输入</span></li>
-          <li data-step="2"><span class="step-action">松开按键</span><strong>微信输入法</strong><span class="step-detail">等待提交</span></li>
-          <li data-step="3"><span class="step-action">继续打字</span><strong>鼠须管</strong><span class="step-detail">已恢复</span></li>
+          <li data-step="0" aria-current="step"><span class="step-action">平时打字</span><strong>鼠须管</strong><span class="step-detail">原输入法</span></li>
+          <li data-step="1"><span class="step-action">按住说话</span><strong>微信输入法</strong><span class="step-detail">语音输入</span></li>
+          <li data-step="2"><span class="step-action">松开切回</span><strong id="return-source">鼠须管</strong><span class="step-detail" id="return-detail">文字提交后恢复</span></li>
         </ol>
-        <p class="demo-note">鼠须管只是示例，Hijack 会记住并恢复你开始时的输入法。此处仅演示流程，不会录音。</p>
         <noscript><p class="demo-note">上方已展示完整流程。启用 JavaScript 可播放演示。</p></noscript>
       </div>
     </section>

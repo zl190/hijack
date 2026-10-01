@@ -31,8 +31,13 @@
     document.querySelector('#demo-status').textContent = stage.status;
     document.querySelector('#sample-text').textContent = stage.text;
     document.querySelector('#capsule-label').textContent = stage.capsule || labels.capsule;
+    const activeStep = isChinese ? Math.min(index, 2) : index;
+    if (isChinese) {
+      document.querySelector('#return-source').textContent = index === 2 ? stage.source : stages[0].source;
+      document.querySelector('#return-detail').textContent = index === 2 ? '等待文字提交…' : index === 3 ? '已恢复，继续打字' : '文字提交后恢复';
+    }
     document.querySelectorAll('[data-step]').forEach(item => {
-      if (Number(item.dataset.step) === index) item.setAttribute('aria-current', 'step');
+      if (Number(item.dataset.step) === activeStep) item.setAttribute('aria-current', 'step');
       else item.removeAttribute('aria-current');
     });
   }
