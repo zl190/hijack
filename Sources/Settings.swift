@@ -46,7 +46,7 @@ final class SettingsStore: ObservableObject {
             switch phase {
             case "switching": self?.live = L("切到\(detail)…", "Switching to \(detail)…")
             case "listening": self?.live = L("正在听…", "Listening…")
-            case "finishing": self?.live = L("说完了，等它上屏…", "Done talking, waiting for the text…")
+            case "finishing": self?.live = L("说完了，等文字上屏…", "Done talking, waiting for the text…")
             default: self?.live = ""; self?.last = detail.isEmpty ? L("完成", "Done") : detail
             }
         }
@@ -141,7 +141,7 @@ struct KeyRecorder: View {
     var body: some View {
         let on = store.recording == target
         Button { on ? store.stopRecording() : store.startRecording(target) } label: {
-            Text(on ? L("按下想用的键…（Esc 取消）", "Press a key… (Esc cancels)") : key.name)
+            Text(on ? L("按下想用的键…（Esc 取消）", "Press a Key… (Esc Cancels)") : key.name)
                 .font(.system(size: 12, weight: .medium))
                 .frame(minWidth: 96).padding(.horizontal, 8).frame(height: 22)
                 .foregroundStyle(on ? Color.accentColor : .primary)
@@ -171,9 +171,9 @@ struct DictationTab: View {
             ErrorBanner(store: store)
             Form {
                 Section {
-                    Picker(L("方式", "Mode"), selection: Binding(get: { store.triggerMode }, set: { v in store.edit { $0.triggerMode = v } })) {
+                    Picker(L("听写方式", "How You Dictate"), selection: Binding(get: { store.triggerMode }, set: { v in store.edit { $0.triggerMode = v } })) {
                         Text(L("按住说话", "Hold to Talk")).tag("hold")
-                        Text(L("点按开始，再点停止", "Tap to Start, Tap to Stop")).tag("toggle")
+                        Text(L("点按开始，再点停止（免按）", "Tap to Start, Tap to Stop")).tag("toggle")
                     }.pickerStyle(.radioGroup)
                     if store.triggerMode == "toggle" {
                         Toggle(L("按任意键也可停止（这个键不会输入）", "Any key also stops (that key isn't typed)"),
@@ -184,9 +184,9 @@ struct DictationTab: View {
                     LabeledContent(L("快捷键", "Shortcut")) {
                         HStack(spacing: 8) {
                             if store.trigger != nil {
-                                Button(L("同语音键", "Same as Voice Key")) { store.edit { $0.trigger = nil } }.buttonStyle(.link)
+                                Button(L("改回同说话键（\(store.model.forwardKey.name)）", "Use Talk Key (\(store.model.forwardKey.name))")) { store.edit { $0.trigger = nil } }.buttonStyle(.link)
                             } else {
-                                Text(L("同语音键", "Same as voice key")).foregroundStyle(.secondary).font(.callout)
+                                Text(L("同\(store.currentName)里的说话键", "Same as \(store.currentName)'s talk key")).foregroundStyle(.secondary).font(.callout)
                             }
                             KeyRecorder(store: store, target: .trigger, key: store.effectiveTrigger)
                         }
@@ -197,11 +197,22 @@ struct DictationTab: View {
                     }
                 }
                 Section(L("试一下", "Try It")) {
+                    if !store.trusted {
+                        HStack {
+                            Label(L("还没有辅助功能权限，Hijack 收不到快捷键", "No Accessibility permission yet — Hijack can't see the shortcut"), systemImage: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.orange).font(.callout)
+                            Spacer()
+                            Button(L("去允许…", "Allow…")) {
+                                NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+                            }
+                        }
+                    }
                     HStack(spacing: 10) {
-                        Bars(live: store.live == L("正在听…", "Listening…"))
+                        if store.live.isEmpty { Image(systemName: "mic").foregroundStyle(.secondary).frame(width: 26) }
+                        else { Bars(live: store.live == L("正在听…", "Listening…")) }
                         Text(store.live.isEmpty
-                             ? (store.triggerMode == "toggle" ? L("点一下 \(store.effectiveTrigger.name)，说一句，再点一下", "Tap \(store.effectiveTrigger.name), say something, tap again")
-                                                             : L("按住 \(store.effectiveTrigger.name) 说一句", "Hold \(store.effectiveTrigger.name) and say something"))
+                             ? (store.triggerMode == "toggle" ? L("点按\(store.effectiveTrigger.name)，说一句，再点一下", "Tap \(store.effectiveTrigger.name), say something, tap again")
+                                                             : L("按住\(store.effectiveTrigger.name)说一句", "Hold \(store.effectiveTrigger.name) and say something"))
                              : store.live)
                         Spacer()
                     }
@@ -230,44 +241,53 @@ struct Bars: View {
 
 struct SourcesTab: View {
     @ObservedObject var store: SettingsStore
+    @State private var showStyle = false
     let styleNames = ["hold": L("按住", "Hold"), "tap": L("单击", "Single Tap"), "doubleTap": L("双击", "Double Tap")]
     var body: some View {
         VStack(spacing: 0) {
             ErrorBanner(store: store)
             Form {
-                Section {
-                    ForEach(store.sources) { s in
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                Image(systemName: s.id == store.voiceInput ? "largecircle.fill.circle" : "circle")
-                                    .foregroundStyle(s.id == store.voiceInput ? Color.accentColor : .secondary)
-                                Text(s.name).font(.body.weight(s.id == store.voiceInput ? .semibold : .regular))
-                                Spacer()
-                            }
-                            .contentShape(Rectangle())
-                            .onTapGesture { store.edit { $0.voiceInput = s.id } }
-                            HStack(spacing: 8) {
-                                Text(L("它的语音键", "Its voice key")).foregroundStyle(.secondary).font(.callout).frame(width: 90, alignment: .leading)
-                                KeyRecorder(store: store, target: .voiceKey(s.id), key: s.userKey ?? s.detectedKey ?? KeySpec.named("right_option")!)
-                                if s.userKey != nil {
-                                    Button(L("恢复自动", "Use Detected")) { store.edit { $0.voiceKeys[s.id] = nil } }.buttonStyle(.link).font(.callout)
-                                } else {
-                                    Text(s.detectedKey == nil ? L("⚠︎ 没读到，请录制", "⚠︎ Not found — record it")
-                                         : s.readsSettings ? L("自动检测", "Detected") : L("默认值，未验证", "Default, unverified"))
-                                        .font(.callout).foregroundStyle(s.detectedKey == nil || !s.readsSettings ? Color.orange : .secondary)
+                if store.sources.isEmpty {
+                    Section {
+                        Text(L("没有找到已安装的语音工具。支持：微信输入法、豆包输入法、搜狗输入法、Handy。",
+                               "No supported voice tool is installed. Supported: WeType, Doubao, Sogou, Handy."))
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    Section {
+                        Picker(L("语音来源", "Voice Source"), selection: Binding(get: { store.voiceInput }, set: { v in store.edit { $0.voiceInput = v } })) {
+                            ForEach(store.sources) { Text($0.name).tag($0.id) }
+                        }.pickerStyle(.radioGroup)
+                    } footer: {
+                        Text(L("只列出已安装的语音工具；其他的可以写进配置文件。", "Only installed voice tools are listed; others can go in the config file."))
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
+                    if let s = store.sources.first(where: { $0.id == store.voiceInput }) {
+                        Section(L("\(s.name)的设置", "\(s.name)")) {
+                            LabeledContent(L("说话键", "Talk Key")) {
+                                HStack(spacing: 8) {
+                                    if s.userKey != nil {
+                                        Button(L("恢复自动检测", "Use Auto-Detect")) { store.edit { $0.voiceKeys[s.id] = nil } }.buttonStyle(.link).font(.callout)
+                                    } else {
+                                        Text(s.detectedKey == nil ? L("⚠︎ 没读到，请录制", "⚠︎ Not found — record it")
+                                             : s.readsSettings ? L("自动检测", "Auto-Detected") : L("默认值，未验证", "Default, Unverified"))
+                                            .font(.callout).foregroundStyle(s.detectedKey == nil || !s.readsSettings ? Color.orange : .secondary)
+                                    }
+                                    KeyRecorder(store: store, target: .voiceKey(s.id), key: s.userKey ?? s.detectedKey ?? KeySpec.named("right_option")!)
                                 }
                             }
-                            HStack(spacing: 8) {
-                                Text(L("启动方式", "Starts on")).foregroundStyle(.secondary).font(.callout).frame(width: 90, alignment: .leading)
-                                Picker("", selection: Binding(get: { s.style }, set: { v in store.edit { $0.voiceStyles[s.id] = v } })) {
+                            Text(L("\(s.name)在它自己的设置里用来说话的键。Hijack 会替你按它。", "The key \(s.name) uses for talking, set in its own settings. Hijack presses it for you."))
+                                .font(.footnote).foregroundStyle(.secondary)
+                            if s.style != "hold" || s.styleIsSet || showStyle {
+                                Picker(L("启动方式", "Starts With"), selection: Binding(get: { s.style }, set: { v in store.edit { $0.voiceStyles[s.id] = v } })) {
                                     ForEach(["hold", "tap", "doubleTap"], id: \.self) { Text(styleNames[$0]!).tag($0) }
-                                }.labelsHidden().pickerStyle(.segmented).frame(width: 220)
+                                }.pickerStyle(.segmented)
+                            } else {
+                                Button(L("它不支持按住说话？更改启动方式…", "Doesn't support hold-to-talk? Change how it starts…")) { showStyle = true }
+                                    .buttonStyle(.link).font(.callout)
                             }
-                        }.padding(.vertical, 4)
+                        }
                     }
-                } footer: {
-                    Text(L("只列出已经安装的语音工具。其他输入法或 app 可以在配置文件里写 voiceInput。", "Only installed voice tools are listed. Others can be set as voiceInput in the config file."))
-                        .font(.footnote).foregroundStyle(.secondary)
                 }
             }.formStyle(.grouped)
         }.frame(width: 520).fixedSize(horizontal: false, vertical: true)
@@ -325,7 +345,7 @@ struct AdvancedTab: View {
     func row(_ title: String, _ hint: String, _ value: Double, range: ClosedRange<Double>, step: Double, set: @escaping (Config, Double) -> Void) -> some View {
         LabeledContent {
             Stepper(value: Binding(get: { value }, set: { v in store.edit { set($0, (v * 100).rounded() / 100) } }), in: range, step: step) {
-                Text(String(format: L("%.2g 秒", "%.2g s"), value)).monospacedDigit()
+                Text(String(format: L("%.2g 秒", "%.2g s"), value)).monospacedDigit().frame(width: 52, alignment: .trailing)
             }
         } label: {
             VStack(alignment: .leading, spacing: 2) { Text(title); Text(hint).font(.footnote).foregroundStyle(.secondary) }
@@ -337,8 +357,8 @@ struct AdvancedTab: View {
             Form {
                 Section {
                     row(L("按住多久才开始", "Hold before starting"), L("太短容易误触发", "Shorter means more accidental starts"), store.holdDelay, range: 0.05...1, step: 0.05) { $0.holdDelay = $1 }
-                    row(L("最多等它上屏", "Longest wait for the text"), L("说长段话时可以调大", "Raise it for long dictations"), store.restoreTimeout, range: 1...15, step: 0.5) { $0.restoreTimeout = $1 }
-                    row(L("看不到它的窗口时等待", "Wait when its window can't be seen"), L("用于不显示窗口的语音工具", "For voice tools that show no window"), store.fallbackDelay, range: 0.5...10, step: 0.5) { $0.fallbackDelay = $1 }
+                    row(L("最多等文字上屏", "Longest wait for the text"), L("说长段话时可以调大", "Raise it for long dictations"), store.restoreTimeout, range: 1...15, step: 0.5) { $0.restoreTimeout = $1 }
+                    row(L("语音工具没有窗口时等待", "Wait when the voice tool shows no window"), L("看不到它何时上屏完，就固定等这么久", "Hijack can't tell when it's done, so it waits this long"), store.fallbackDelay, range: 0.5...10, step: 0.5) { $0.fallbackDelay = $1 }
                 }
                 Section {
                     LabeledContent(L("日志", "Log")) {
@@ -355,9 +375,10 @@ struct AdvancedTab: View {
 final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     static var shared: SettingsWindowController?
 
-    static func show() {
+    static func show(tab: Int? = nil) {
         let c = shared ?? SettingsWindowController()
         shared = c
+        if let tab, let tabs = c.window?.contentViewController as? NSTabViewController { tabs.selectedTabViewItemIndex = tab }
         SettingsStore.shared.refresh()
         NSApp.activate(ignoringOtherApps: true)      // accessory apps otherwise open it behind other windows
         c.window?.makeKeyAndOrderFront(nil)
@@ -377,12 +398,12 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
             return item
         }
         tabs.addTabViewItem(tab(L("听写", "Dictation"), "mic", DictationTab(store: store)))
-        tabs.addTabViewItem(tab(L("语音来源", "Sources"), "waveform", SourcesTab(store: store)))
+        tabs.addTabViewItem(tab(L("语音来源", "Voice Source"), "waveform", SourcesTab(store: store)))
         tabs.addTabViewItem(tab(L("通用", "General"), "gearshape", GeneralTab(store: store)))
         tabs.addTabViewItem(tab(L("高级", "Advanced"), "slider.horizontal.3", AdvancedTab(store: store)))
         let window = NSWindow(contentViewController: tabs)
         window.styleMask = [.titled, .closable]
-        window.title = appName
+        window.title = tabs.tabViewItems.first?.label ?? appName   // the title follows the tab, from the start
         window.isReleasedWhenClosed = false
         self.init(window: window)
         window.delegate = self

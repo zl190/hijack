@@ -15,7 +15,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.delegate = self
         applyAppearance()
         engine.start()
-        if !AXIsProcessTrusted() {   // system prompt also adds us to the Accessibility list
+        if !AXIsProcessTrusted() {   // first run: the window explains what's missing; the system prompt adds us to the list
+            SettingsWindowController.show()
             let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
             _ = AXIsProcessTrustedWithOptions(opts)
         }
@@ -58,6 +59,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc func openSettings() { SettingsWindowController.show() }
+    @objc func recordShortcut() { SettingsWindowController.show(tab: 0); SettingsStore.shared.startRecording(.trigger) }
+    @objc func recordTalkKey() { SettingsWindowController.show(tab: 1); SettingsStore.shared.startRecording(.voiceKey(m.voiceID)) }
 
     func updateIcon() {
         if Config.shared.showMenuBarIcon, item == nil {
@@ -95,17 +98,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if !AXIsProcessTrusted() {
             add(L("⚠︎ 需要辅助功能权限，点这里去允许…", "⚠︎ Needs Accessibility permission — Allow…"), #selector(openAccessibility))
         } else if m.toggleMode {
-            add(L("点按 \(key) 用\(name)听写", "Tap \(key) to dictate with \(name)"))
+            add(L("点按\(key)用\(name)听写", "Tap \(key) to dictate with \(name)"))
         } else {
-            add(L("按住 \(key) 用\(name)听写", "Hold \(key) to dictate with \(name)"))
+            add(L("按住\(key)用\(name)听写", "Hold \(key) to dictate with \(name)"))
         }
         if let err = c.errorText {   // settings can't be changed until the file is fixed
             add("⚠︎ " + err + L("，点这里打开", " — Open…"), #selector(openConfig))
         }
         let readable = m.provider.readsSettings
         if m.userVoiceKey == nil && (m.detectedVoiceKey == nil || !readable) {
-            add(m.detectedVoiceKey.map { L("⚠︎ \(name)里的语音键用的是默认值 \($0.name)，请确认一致", "⚠︎ \(name)'s voice key is assumed to be \($0.name) — make sure it matches") }
-                ?? L("⚠︎ 读不到\(name)里的语音键，请在「语音来源」里选", "⚠︎ Can't detect \(name)'s voice key — pick it under Dictation Source"))
+            add(m.detectedVoiceKey.map { L("⚠︎ \(name)里的说话键用的是默认值\($0.name)，请确认一致", "⚠︎ \(name)'s talk key is assumed to be \($0.name) — make sure it matches") }
+                ?? L("⚠︎ 读不到\(name)里的说话键，请在「语音来源」里选", "⚠︎ Can't detect \(name)'s talk key — pick it under Voice Source"))
         }
         menu.addItem(.separator())
 
@@ -119,12 +122,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 .font: NSFont.menuFont(ofSize: NSFont.smallSystemFontSize), .foregroundColor: NSColor.secondaryLabelColor])
         }
         let keys = NSMenu()
-        add(L("同\(name)里的语音键（\(m.forwardKey.name)）", "Same as \(name)'s Voice Key (\(m.forwardKey.name))"), #selector(setTrigger(_:)), on: m.customTrigger == nil, to: keys, value: "auto")
+        add(L("同\(name)里的说话键（\(m.forwardKey.name)）", "Same as \(name)'s Talk Key (\(m.forwardKey.name))"), #selector(setTrigger(_:)), on: m.customTrigger == nil, to: keys, value: "auto")
         keys.addItem(.separator())
         for id in quickKeys { let k = KeySpec.named(id)!; add(k.name, #selector(setTrigger(_:)), on: m.customTrigger == k, to: keys, value: id) }
         if let t = m.customTrigger, t.quickID.map(quickKeys.contains) != true { add(t.name, on: true, to: keys) }
         keys.addItem(.separator())
-        add(L("其他按键…", "Other Key…"), #selector(openConfig), to: keys)
+        add(L("其他按键…", "Other Key…"), #selector(recordShortcut), to: keys)
         add(L("快捷键：\(key)", "Shortcut: \(key)")).submenu = keys
         menu.addItem(.separator())
 
@@ -135,44 +138,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             add(p.name, #selector(setVoiceSource(_:)), on: m.voiceID == p.id, to: src, value: p.id)
             listed.insert(p.id)
         }
-        if !listed.contains(m.voiceID) { add(L("\(name)（设置文件）", "\(name) (config file)"), on: true, to: src) }
+        if !listed.contains(m.voiceID) { add(L("\(name)（配置文件）", "\(name) (Config File)"), on: true, to: src) }
         src.addItem(.separator())
-        header(L("\(name)里的语音键", "\(name)'s Voice Key"), to: src)
+        header(L("\(name)里的说话键", "\(name)'s Talk Key"), to: src)
         let found = m.detectedVoiceKey
         let autoTitle: String = {
             guard let k = found else { return L("自动检测（没读到）", "Auto-Detect (Not Found)") }
-            return readable ? L("\(k.name)（自动检测）", "\(k.name) (Detected)") : L("\(k.name)（默认，未验证）", "\(k.name) (Default, Unverified)")
+            return readable ? L("\(k.name)（自动检测）", "\(k.name) (Auto-Detected)") : L("\(k.name)（默认，未验证）", "\(k.name) (Default, Unverified)")
         }()
         add(autoTitle, #selector(setVoiceKey(_:)), on: m.userVoiceKey == nil, to: src, value: "auto")
         for id in quickKeys where KeySpec.named(id) != found {
             let k = KeySpec.named(id)!; add(k.name, #selector(setVoiceKey(_:)), on: m.userVoiceKey == k, to: src, value: id)
         }
         if let u = m.userVoiceKey, u.quickID.map(quickKeys.contains) != true { add(u.name, on: true, to: src) }
-        add(L("其他…", "Other…"), #selector(openConfig), to: src)
+        add(L("其他按键…", "Other Key…"), #selector(recordTalkKey), to: src)
         // Start style: only when the source can't simply be held (or the user changed it).
         if m.voiceStyle != "hold" || c.voiceStyles[m.voiceID] != nil {
             src.addItem(.separator())
-            header(L("\(name)的启动方式", "\(name) Starts Listening On"), to: src)
+            header(L("\(name)的启动方式", "How \(name) Starts"), to: src)
             let names = ["hold": L("按住", "Hold"), "tap": L("单击", "Single Tap"), "doubleTap": L("双击", "Double Tap")]
             for code in ["hold", "tap", "doubleTap"] {
                 add(names[code]!, #selector(setVoiceStyle(_:)), on: m.voiceStyle == code, to: src, value: code)
             }
         }
-        add(L("语音来源：\(name)", "Dictation Source: \(name)")).submenu = src
+        add(L("语音来源：\(name)", "Voice Source: \(name)")).submenu = src
         menu.addItem(.separator())
 
-        // App
-        add(L("开机启动", "Open at Login"), #selector(toggleLogin), on: SMAppService.mainApp.status == .enabled)
-        add(L("在菜单栏显示图标", "Show in Menu Bar"), #selector(toggleIcon), on: c.showMenuBarIcon)
-        let langs = NSMenu()
-        for (code, title) in [("system", L("跟随系统", "System")), ("en", "English"), ("zh", "中文")] {
-            add(title, #selector(setLanguage(_:)), on: c.language == code, to: langs, value: code)
-        }
-        add(L("语言", "Language")).submenu = langs
+        // Everything set once (login item, icons, language, config file, timings) lives in Settings.
         let settings = add(L("设置…", "Settings…"), #selector(openSettings))
         settings.keyEquivalent = ","; settings.keyEquivalentModifierMask = .command
         if #available(macOS 27.0, *) { settings.preferredImageVisibility = .hidden }   // no auto icon: keep titles aligned
-        add(L("编辑配置文件…", "Edit Config File…"), #selector(openConfig))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: L("退出 \(appName)", "Quit \(appName)"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
     }
