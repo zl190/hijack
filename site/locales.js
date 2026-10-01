@@ -73,7 +73,7 @@ window.HIJACK_LOCALES = {
     "install": "Install Hijack",
     "eyebrow": "macOS menu bar utility",
     "headlineVoice": "Voice input.",
-    "headlineTyping": "My input method.",
+    "headlineTyping": "Your preferred input method.",
     "headlineBoth": "Why not both?",
     "intro": "Dictate, then switch back to ",
     "introStrong": "your previous input method",
