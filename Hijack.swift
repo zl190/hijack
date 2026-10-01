@@ -277,6 +277,7 @@ final class Config {
     var voiceInput = weTypeID
     var voiceKeys: [String: KeySpec] = [:]   // per voice input; missing = "auto" (detected, or a known default)
     var triggerMode = "hold"                 // "hold": hold to talk · "toggle": tap to start, tap again to stop
+    var stopOnAnyKey = true                  // toggle: any key also stops (that key is swallowed, never typed)
     var voiceStyles: [String: String] = [:]  // per voice input: how it wants its key — "hold" | "tap" | "doubleTap"
     var showMenuBarIcon = true
     var language = "system"
@@ -308,6 +309,7 @@ final class Config {
         if let old = KeySpec(json: d["voiceKey"]), voiceKeys[voiceInput] == nil { voiceKeys[voiceInput] = old }   // older single "voiceKey"
         showMenuBarIcon = d["showMenuBarIcon"] as? Bool ?? true
         triggerMode = (d["triggerMode"] as? String) == "toggle" ? "toggle" : "hold"
+        stopOnAnyKey = d["stopOnAnyKey"] as? Bool ?? true
         voiceStyles = (d["voiceStyles"] as? [String: String] ?? [:]).filter { ["hold", "tap", "doubleTap"].contains($0.value) }
         language = d["language"] as? String ?? "system"
         holdDelay = d["holdDelay"] as? Double ?? 0.2
@@ -327,7 +329,7 @@ final class Config {
         }
         let pairs: [(String, Any)] = [
             ("trigger", trigger?.json ?? "follow"), ("voiceInput", voiceInput), ("voiceKeys", voiceKeys.mapValues(\.json)),
-            ("triggerMode", triggerMode), ("voiceStyles", voiceStyles),
+            ("triggerMode", triggerMode), ("stopOnAnyKey", stopOnAnyKey), ("voiceStyles", voiceStyles),
             ("showMenuBarIcon", showMenuBarIcon), ("language", language),
             ("holdDelay", holdDelay), ("restoreTimeout", restoreTimeout), ("fallbackDelay", fallbackDelay),
         ]
@@ -389,6 +391,7 @@ final class Engine {
 
     var trigger = KeySpec(code: 61)   // snapshot per session, so a config change mid-session can't strand it
     var active = false                // a voice session is running (hold: key held · toggle: between taps)
+    var swallowUp: Int?               // key that stopped a toggle session: also eat its key-up
 
     // Turn the session into what the voice method expects: hold its key, or tap / double-tap it.
     func tapKey(after delay: Double = 0) {
@@ -504,11 +507,19 @@ final class Engine {
 
     func handle(_ type: CGEventType, _ event: CGEvent) -> Unmanaged<CGEvent>? {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+            log("event tap was disabled by the system (\(type == .tapDisabledByTimeout ? "timeout" : "user input")), re-enabling")
             if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
             return Unmanaged.passUnretained(event)
         }
         guard event.getIntegerValueField(.eventSourceUserData) != marker else { return Unmanaged.passUnretained(event) }
         let code = Int(event.getIntegerValueField(.keyboardEventKeycode))
+        if type == .keyUp, code == swallowUp { swallowUp = nil; return nil }
+        // Toggle session running: any other key stops it, and is not typed (Return must not send a message).
+        if active && m.toggleMode && m.c.stopOnAnyKey && type == .keyDown && code != trigger.code {
+            log("stopped by keyCode \(code)")
+            active = false; swallowUp = code; _ = released()
+            return nil
+        }
         if !physicalDown && !active { trigger = m.trigger }   // config is read only between sessions
         guard code == trigger.code else { return Unmanaged.passUnretained(event) }
         let down: Bool
@@ -524,6 +535,7 @@ final class Engine {
             down = type == .keyDown
         }
         var pass = passthrough
+        if down != physicalDown { log("trigger \(down ? "down" : "up") (session \(active ? "running" : "idle"), \(m.toggleMode ? "toggle" : "hold"))") }
         if down && !physicalDown {
             physicalDown = true
             if !active { active = true; pass = pressed() }                    // hold or toggle: start
@@ -635,6 +647,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         for (code, title) in [("hold", L("按住说，松开停", "Hold to talk")), ("toggle", L("免按：点一下开始，再点一下结束", "Hands-free: tap to start, tap again to stop"))] {
             _ = add(title, #selector(setTriggerMode(_:)), state: m.c.triggerMode == code, to: modes).representedObject = code
         }
+        modes.addItem(.separator())
+        let anyKey = add(L("免按时按任意键结束（这个键不会输入）", "Hands-free: any key stops (that key isn't typed)"), #selector(toggleStopOnAnyKey), state: m.c.stopOnAnyKey, to: modes)
+        if !m.toggleMode { anyKey.action = nil }   // only meaningful in hands-free mode
         add(L("触发方式：\(m.toggleMode ? "免按" : "按住")", "Trigger: \(m.toggleMode ? "hands-free" : "hold")"), nil).submenu = modes
         let sources = NSMenu()
         for c in voiceCandidates() {
@@ -709,6 +724,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc func setTriggerMode(_ sender: NSMenuItem) {
         let c = Config.shared; c.reload(); c.triggerMode = sender.representedObject as? String ?? "hold"; c.save()
         log("trigger mode set to \(c.triggerMode)")
+    }
+    @objc func toggleStopOnAnyKey() {
+        let c = Config.shared; c.reload(); c.stopOnAnyKey.toggle(); c.save()
     }
     @objc func setVoiceStyle(_ sender: NSMenuItem) {
         let c = Config.shared; c.reload()
