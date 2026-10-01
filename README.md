@@ -5,8 +5,6 @@
 
 Voice input, then back to your preferred input method.
 
-语音输入，然后切回原来的输入法。
-
 [![Latest release](https://img.shields.io/github/v/release/zl190/hijack?color=626e56)](https://github.com/zl190/hijack/releases/latest)
 [![macOS 13+](https://img.shields.io/badge/macOS-13%2B-626e56?logo=apple&logoColor=white)](#install)
 [![License: MIT](https://img.shields.io/github/license/zl190/hijack?color=626e56)](LICENSE)
@@ -34,9 +32,9 @@ Build from source: `./install-from-source.sh` (requires Xcode Command Line Tools
 
 | Type | Tool | Status |
 | --- | --- | --- |
-| Input method | WeType · 微信输入法 | Tested |
-| Input method | Sogou · 搜狗输入法 | Tested |
-| Input method | Doubao · 豆包输入法 | Tested |
+| Input method | WeType | Tested |
+| Input method | Sogou | Tested |
+| Input method | Doubao | Tested |
 | App | Handy | Tested |
 | App | Wispr Flow | Supported; testing pending |
 | App | Openless | Supported; testing pending |
