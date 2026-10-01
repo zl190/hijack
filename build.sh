@@ -7,7 +7,23 @@ cd "$(dirname "$0")"
 VERSION="${HIJACK_VERSION:-$(cat VERSION)}"
 APP=build/Hijack.app
 rm -rf build && mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-swiftc -O -target arm64-apple-macos13 Sources/*.swift -o "$APP/Contents/MacOS/Hijack"
+# App Intents: the compiler emits const values, Apple's processor turns them into Metadata.appintents,
+# which is how Shortcuts / Spotlight / Siri find Hijack's actions (what Xcode does in its build phase).
+WORK="$(mktemp -d)"
+cat > "$WORK/protocols.json" <<'JSON'
+["AppIntent","EntityQuery","AppEntity","TransientEntity","AppEnum","AppShortcutsProvider","AnyResolverProviding","AppIntentsPackage","DynamicOptionsProvider","EntityPropertyQuery","EntityStringQuery"]
+JSON
+swiftc -O -wmo -module-name Hijack -target arm64-apple-macos13 \
+  -emit-const-values-path "$WORK/Hijack.swiftconstvalues" -Xfrontend -const-gather-protocols-file -Xfrontend "$WORK/protocols.json" \
+  Sources/*.swift -o "$APP/Contents/MacOS/Hijack"
+ls "$PWD"/Sources/*.swift > "$WORK/sources.txt"
+echo "$WORK/Hijack.swiftconstvalues" > "$WORK/constvals.txt"
+xcrun appintentsmetadataprocessor --quiet-warnings --output "$APP/Contents/Resources" \
+  --toolchain-dir "$(xcode-select -p)/Toolchains/XcodeDefault.xctoolchain" --module-name Hijack \
+  --sdk-root "$(xcrun --show-sdk-path)" --xcode-version "$(xcodebuild -version | awk '/Build version/ {print $3}')" \
+  --platform-family macOS --deployment-target 13.0 --target-triple arm64-apple-macos13 \
+  --source-file-list "$WORK/sources.txt" --swift-const-vals-list "$WORK/constvals.txt" >/dev/null 2>&1
+[ -f "$APP/Contents/Resources/Metadata.appintents/extract.actionsdata" ] || { echo "App Intents metadata missing" >&2; exit 1; }
 ICONSET="$(mktemp -d)/Hijack.iconset"; mkdir -p "$ICONSET"
 for sz in 16 32 128 256 512; do
   sips -z $sz $sz assets/Hijack-1024.png --out "$ICONSET/icon_${sz}x${sz}.png" >/dev/null

@@ -9,7 +9,8 @@ pkill -x Hijack 2>/dev/null || true
 rm -rf /Applications/Hijack.app
 mv "$TMP/Hijack.app" /Applications/
 xattr -dr com.apple.quarantine /Applications/Hijack.app 2>/dev/null || true
-open /Applications/Hijack.app || { sleep 2; open /Applications/Hijack.app; }   # LaunchServices can fail right after a replace (-609)
+# LaunchServices can refuse a launch right after the bundle is replaced (-600/-609) while it re-registers it
+for try in 1 2 3; do open /Applications/Hijack.app && break; sleep 2; done
 # the `hijack` command: link it into ~/.local/bin when that's on PATH
 if [ -d "$HOME/.local/bin" ] && echo ":$PATH:" | grep -q ":$HOME/.local/bin:"; then
   ln -sf /Applications/Hijack.app/Contents/MacOS/Hijack "$HOME/.local/bin/hijack" && echo "Linked the hijack command into ~/.local/bin"
