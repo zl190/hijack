@@ -181,6 +181,7 @@ struct Card<Content: View>: View {
         VStack(alignment: .leading, spacing: 6) {
             if let title { Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(.secondary).padding(.leading, 6) }
             VStack(alignment: .leading, spacing: 0) { content }
+                .frame(maxWidth: .infinity, alignment: .leading)   // every card spans the page, whatever its content
                 .padding(.horizontal, 14).padding(.vertical, 4)
                 .modifier(GlassCard())
         }
