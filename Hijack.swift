@@ -166,10 +166,10 @@ final class Model {
     var voiceName: String { sourceName(voiceID) }
     var isWeType: Bool { voiceID == weTypeID }
     // The voice method's own push-to-talk key: read from WeType, chosen by the user for others.
-    var voiceKey: ModKey? {
-        if isWeType, let k = weTypeVoiceKey() { return k }
-        return (defaults.object(forKey: "voiceKey.\(voiceID)") as? Int).flatMap(ModKey.by(code:))
-    }
+    // Voice key precedence: the user's explicit choice, else auto-detected (WeType only), else Right Option.
+    var userVoiceKey: ModKey? { (defaults.object(forKey: "voiceKey.\(voiceID)") as? Int).flatMap(ModKey.by(code:)) }
+    var detectedVoiceKey: ModKey? { isWeType ? weTypeVoiceKey() : nil }
+    var voiceKey: ModKey? { userVoiceKey ?? detectedVoiceKey }
     var forwardKey: ModKey { voiceKey ?? ModKey.all[0] }
     var customTrigger: ModKey? {
         get { (defaults.object(forKey: "triggerKey") as? Int).flatMap(ModKey.by(code:)) }
@@ -351,7 +351,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let keys = NSMenu()
         _ = add(L("跟随语音键（\(m.forwardKey.name)）", "Same as voice key (\(m.forwardKey.name))"), #selector(setTrigger(_:)), state: m.customTrigger == nil, tag: -1, to: keys)
         keys.addItem(.separator())
-        for k in ModKey.all where k != m.forwardKey {
+        for k in ModKey.all {   // every key, so "pin to the current voice key" is a real choice too
             _ = add(k.name, #selector(setTrigger(_:)), state: m.customTrigger == k, tag: Int(k.code), to: keys)
         }
         let keyItem = add(L("触发键：\(m.trigger.name)", "Trigger key: \(m.trigger.name)"), nil)
@@ -362,15 +362,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             i.representedObject = c.id
         }
         add(L("语音输入法：\(m.voiceName)", "Voice input: \(m.voiceName)"), nil).submenu = sources
-        if m.isWeType && weTypeVoiceKey() != nil {
-            _ = add(L("它的语音键：\(m.forwardKey.name)（自动读取）", "Its voice key: \(m.forwardKey.name) (detected)"), nil)
-        } else {
-            let vk = NSMenu()
-            for k in ModKey.all {
-                _ = add(k.name, #selector(setVoiceKey(_:)), state: m.forwardKey == k, tag: Int(k.code), to: vk)
-            }
-            add(L("它的语音键：\(m.forwardKey.name)", "Its voice key: \(m.forwardKey.name)"), nil).submenu = vk
+        let vk = NSMenu()
+        if m.isWeType {
+            let found = m.detectedVoiceKey?.name ?? L("没读到", "not found")
+            _ = add(L("自动检测（\(found)）", "Auto-detect (\(found))"), #selector(setVoiceKey(_:)), state: m.userVoiceKey == nil, tag: -1, to: vk)
+            vk.addItem(.separator())
         }
+        for k in ModKey.all {
+            _ = add(k.name, #selector(setVoiceKey(_:)), state: m.userVoiceKey == k || (!m.isWeType && m.userVoiceKey == nil && k == m.forwardKey), tag: Int(k.code), to: vk)
+        }
+        add(L("它的语音键：\(m.forwardKey.name)", "Its voice key: \(m.forwardKey.name)"), nil).submenu = vk
         menu.addItem(.separator())
 
         _ = add(L("开机启动", "Launch at login"), #selector(toggleLogin), state: SMAppService.mainApp.status == .enabled)
@@ -399,7 +400,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if let id = sender.representedObject as? String { m.voiceID = id; log("voice source set to \(id)") }
     }
     @objc func setVoiceKey(_ sender: NSMenuItem) {
-        m.defaults.set(sender.tag, forKey: "voiceKey.\(m.voiceID)")
+        if sender.tag < 0 { m.defaults.removeObject(forKey: "voiceKey.\(m.voiceID)") }
+        else { m.defaults.set(sender.tag, forKey: "voiceKey.\(m.voiceID)") }
         log("voice key for \(m.voiceID) set to \(m.forwardKey.name)")
     }
     @objc func setLanguage(_ sender: NSMenuItem) {
