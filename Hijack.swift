@@ -59,6 +59,13 @@ func weTypeVoiceKey() -> ModKey? {
         .appendingPathComponent("Library/Application Support/WeType/mmkv/wetype.settings")
     guard let data = try? Data(contentsOf: url),
           let s = String(data: data, encoding: .isoLatin1) else { return nil }
+    // voicePTTHotKey: 0 = the default Fn/🌐 key, 1 = custom shortcut (voicePTTShortcut_keyCodes).
+    // Choosing Fn only flips this flag and leaves the old custom key codes in place.
+    // MMKV appends updates, so the last occurrence is the current value: [len=1][varint].
+    if let m = s.range(of: "voicePTTHotKey\u{01}", options: .backwards),
+       let v = s[m.upperBound...].unicodeScalars.first, v.value == 0 {
+        return ModKey.by(code: 63)
+    }
     guard let r = s.range(of: "voicePTTShortcut_keyCodes", options: .backwards) else { return nil }
     let tail = s[r.upperBound...].prefix(24)
     guard let open = tail.firstIndex(of: "["), let close = tail.firstIndex(of: "]"), open < close else { return nil }
