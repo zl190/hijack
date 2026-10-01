@@ -20,18 +20,15 @@
   <main id="main" class="shell">
     <section class="hero" aria-labelledby="title">
       <div class="hero-copy">
-        <p class="eyebrow"><span aria-hidden="true"></span>一个 macOS 菜单栏小工具</p>
+        <p class="eyebrow"><span aria-hidden="true"></span>macOS</p>
         <h1 id="title">语音输入，<br>自己的输入法，<br><em>我全都要。</em></h1>
-        <p class="intro">按住触发键，临时切到微信输入法，开始语音输入。松开后，Hijack 等待文字提交，再自动恢复<strong>你刚才使用的输入法。</strong></p>
-        <p class="context-note">应用没换，输入位置没变，用完回到原来的输入法。</p>
         <a class="primary" href="#install">安装 Hijack <span aria-hidden="true">↗</span></a>
         <p class="compatibility">Apple 芯片 · macOS 13+ · 需安装微信输入法</p>
       </div>
 
       <div class="demo" aria-label="输入法切换演示">
-        <div class="demo-heading"><span>看清输入法怎么切换</span><span>流程示意</span></div>
         <div class="app-window" data-stage="0">
-          <div class="window-bar"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="window-name">你正在用的编辑器</span><span class="source-label">当前输入法 <strong id="current-source">鼠须管</strong></span></div>
+          <div class="window-bar"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="window-name">编辑器</span><span class="source-label">当前输入法 <strong id="current-source">鼠须管</strong></span></div>
           <div class="editor">
             <p class="document-label">会议笔记</p>
             <p class="document-line">下一步</p>
@@ -45,12 +42,11 @@
           <li data-step="1"><span class="step-action">按住说话</span><strong>微信输入法</strong><span class="step-detail">语音输入</span></li>
           <li data-step="2"><span class="step-action">松开切回</span><strong id="return-source">鼠须管</strong><span class="step-detail" id="return-detail">文字提交后恢复</span></li>
         </ol>
-        <noscript><p class="demo-note">上方已展示完整流程。启用 JavaScript 可播放演示。</p></noscript>
       </div>
     </section>
 
     <section class="install" id="install" aria-labelledby="install-title">
-      <div class="install-intro"><p class="eyebrow">装好就能用</p><h2 id="install-title">装一个小工具，<br>少一次手动切换。</h2><p>先安装微信输入法，并设好「按键说话」快捷键。下面两种安装方式任选其一。</p><span class="install-footnote">直接安装发布版 · 无需开发工具</span></div>
+<div class="install-intro"><h2 id="install-title">安装 Hijack</h2></div>
       <div class="install-right">
         <details id="install-guide" class="install-guide">
           <summary>查看安装命令 <span aria-hidden="true">↗</span></summary>
@@ -58,14 +54,12 @@
             <div class="command"><div class="command-title"><span>CURL</span><button type="button" data-copy="curl" aria-label="复制 curl 命令">复制</button></div><pre><code id="curl">curl -fsSL https://raw.githubusercontent.com/zl190/hijack/main/install.sh | sh</code></pre></div>
             <div class="command"><div class="command-title"><span>或使用 HOMEBREW</span><button type="button" data-copy="brew" aria-label="复制 Homebrew 命令">复制</button></div><pre><code id="brew">brew install --cask zl190/tap/hijack</code></pre></div>
             <p class="copy-status" id="copy-status" role="status" aria-live="polite"></p>
-            <p class="permission">安装后，在<strong>系统设置 → 隐私与安全性 → 辅助功能</strong>中允许 Hijack。点击菜单栏图标可选择触发键，默认跟随微信输入法的语音键。</p>
-            <a class="release-link" href="https://github.com/zl190/hijack/releases">查看发布版本 <span aria-hidden="true">↗</span></a>
+            <a class="release-link" href="https://github.com/zl190/hijack">安装与设置 <span aria-hidden="true">↗</span></a>
           </div>
         </details>
-        <details class="privacy"><summary>谁在处理我的语音？</summary><p>语音识别由微信输入法完成。Hijack 负责切换输入法和转发触发按键，不录制、保存或上传音频。音频如何处理、传输和保留，请参阅微信输入法的隐私政策。</p></details>
       </div>
     </section>
   </main>
-  <footer class="shell footer"><span>Hijack · MIT 开源许可</span><p>Hijack 是独立项目，与腾讯及微信输入法无关联，也未获得其官方背书。</p></footer>
+  <footer class="shell footer"><span>Hijack · MIT 开源许可</span></footer>
 </body>
 </html>
