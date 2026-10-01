@@ -1,6 +1,6 @@
 // Hijack — hold a key to dictate with a voice input method (default WeType) from any input source; the previous input source
-// comes back after release. Everything is set from its menu (menu bar icon, or open the app again).
-// Other voice IMEs (unmaintained): defaults write com.zl190.hijack voiceInputSource <id>
+// comes back after release. Settings live in ~/.config/hijack/config.json; the menu (menu bar icon, or
+// open the app again) edits the common ones.
 // Build: ./install.sh
 import AppKit
 import ApplicationServices
@@ -8,18 +8,15 @@ import Carbon
 import ServiceManagement
 
 let appName = "Hijack"
-let restoreDelay = 5.0   // longest wait after release before switching back
-let fallbackDelay = 2.5  // used when the voice input method shows no window to watch
 let capsuleGrace = 0.15  // after its voice window disappears, wait this long, then switch back
-let holdDelay = 0.2      // minimum hold before WeType gets the key (a quick tap does nothing)
 let maxSwitchWait = 1.0  // give up waiting for the input source switch after this long
 let marker: Int64 = 0x5357424B               // tags events we post ourselves
 let weTypeID = "com.tencent.inputmethod.wetype.pinyin"
 
-// MARK: language  (system by default; menu can force English or Chinese)
+// MARK: language  (system by default; config can force English or Chinese)
 
 func zh() -> Bool {
-    switch UserDefaults.standard.string(forKey: "language") ?? "system" {
+    switch Config.shared.language {
     case "zh": return true
     case "en": return false
     default: return Locale.preferredLanguages.first?.hasPrefix("zh") ?? false
@@ -27,36 +24,74 @@ func zh() -> Bool {
 }
 func L(_ zhText: String, _ en: String) -> String { zh() ? zhText : en }
 
-// MARK: modifier-only keys
+// MARK: keys — any key plus modifiers; a bare modifier key is a "modifier-only" key
 
-struct ModKey: Equatable {
-    let code: CGKeyCode
-    let zhName: String
-    let enName: String
-    let device: UInt64     // device-dependent bit, tells left from right
-    let flag: CGEventFlags // device-independent modifier flag
-
-    var name: String { L(zhName, enName) }
-
-    static let all: [ModKey] = [
-        ModKey(code: 61, zhName: "右 Option", enName: "Right Option", device: 0x40, flag: .maskAlternate),
-        ModKey(code: 58, zhName: "左 Option", enName: "Left Option", device: 0x20, flag: .maskAlternate),
-        ModKey(code: 54, zhName: "右 Command", enName: "Right Command", device: 0x10, flag: .maskCommand),
-        ModKey(code: 62, zhName: "右 Control", enName: "Right Control", device: 0x2000, flag: .maskControl),
-        ModKey(code: 60, zhName: "右 Shift", enName: "Right Shift", device: 0x04, flag: .maskShift),
-        ModKey(code: 63, zhName: "Fn", enName: "Fn", device: 0, flag: .maskSecondaryFn),
-    ]
-    static func by(code: Int) -> ModKey? { all.first { Int($0.code) == code } }
-
-    func isDown(_ flags: CGEventFlags) -> Bool {
-        device == 0 ? flags.contains(flag) : flags.rawValue & device != 0
+enum Mod: String, CaseIterable { case ctrl, option, shift, command, fn
+    var flag: CGEventFlags {
+        switch self { case .ctrl: .maskControl; case .option: .maskAlternate; case .shift: .maskShift
+                      case .command: .maskCommand; case .fn: .maskSecondaryFn }
     }
+    var symbol: String {
+        switch self { case .ctrl: "⌃"; case .option: "⌥"; case .shift: "⇧"; case .command: "⌘"; case .fn: "fn " }
+    }
+    // NSEvent.ModifierFlags bits, as WeType stores them
+    var nsBit: Int { switch self { case .shift: 1 << 17; case .ctrl: 1 << 18; case .option: 1 << 19; case .command: 1 << 20; case .fn: 1 << 23 } }
+}
+
+struct NamedKey { let id: String; let code: Int; let zh: String; let en: String; let device: UInt64; let flag: CGEventFlags? }
+
+let namedKeys: [NamedKey] = [
+    NamedKey(id: "right_option", code: 61, zh: "右 Option", en: "Right Option", device: 0x40, flag: .maskAlternate),
+    NamedKey(id: "left_option", code: 58, zh: "左 Option", en: "Left Option", device: 0x20, flag: .maskAlternate),
+    NamedKey(id: "right_command", code: 54, zh: "右 Command", en: "Right Command", device: 0x10, flag: .maskCommand),
+    NamedKey(id: "left_command", code: 55, zh: "左 Command", en: "Left Command", device: 0x08, flag: .maskCommand),
+    NamedKey(id: "right_control", code: 62, zh: "右 Control", en: "Right Control", device: 0x2000, flag: .maskControl),
+    NamedKey(id: "left_control", code: 59, zh: "左 Control", en: "Left Control", device: 0x01, flag: .maskControl),
+    NamedKey(id: "right_shift", code: 60, zh: "右 Shift", en: "Right Shift", device: 0x04, flag: .maskShift),
+    NamedKey(id: "left_shift", code: 56, zh: "左 Shift", en: "Left Shift", device: 0x02, flag: .maskShift),
+    NamedKey(id: "fn", code: 63, zh: "Fn", en: "Fn", device: 0, flag: .maskSecondaryFn),
+] + [("f13", 105), ("f14", 107), ("f15", 113), ("f16", 106), ("f17", 64), ("f18", 79), ("f19", 80), ("f20", 90), ("space", 49)]
+    .map { NamedKey(id: $0.0, code: $0.1, zh: $0.0.uppercased(), en: $0.0.uppercased(), device: 0, flag: nil) }
+
+// Menu quick picks; anything else goes in the config file.
+let quickKeys = ["right_option", "left_option", "right_command", "right_control", "right_shift", "fn"]
+
+struct KeySpec: Equatable {
+    var code: Int
+    var mods: Set<Mod> = []
+    var named: NamedKey? { namedKeys.first { $0.code == code } }
+    var modifierOnly: Bool { mods.isEmpty && named?.flag != nil }
+    var name: String {
+        let base = named.map { L($0.zh, $0.en) } ?? "keyCode \(code)"
+        return Mod.allCases.filter { mods.contains($0) }.map(\.symbol).joined() + base
+    }
+    var flags: CGEventFlags { mods.reduce(into: CGEventFlags()) { $0.insert($1.flag) } }
+    static func named(_ id: String) -> KeySpec? { namedKeys.first { $0.id == id }.map { KeySpec(code: $0.code) } }
+
+    // JSON: "right_option" | {"keyCode": 49, "modifiers": ["ctrl", "option"]}
+    init(code: Int, mods: Set<Mod> = []) { self.code = code; self.mods = mods }
+    init?(json: Any?) {
+        if let s = json as? String, let k = KeySpec.named(s) { self = k; return }
+        guard let d = json as? [String: Any] else { return nil }
+        let code = (d["keyCode"] as? Int) ?? (d["key"] as? String).flatMap { KeySpec.named($0)?.code }
+        guard let code else { return nil }
+        self.code = code
+        self.mods = Set(((d["modifiers"] as? [String]) ?? []).compactMap(Mod.init(rawValue:)))
+    }
+    var json: Any {
+        if mods.isEmpty, let n = named { return n.id }
+        var d: [String: Any] = named.map { ["key": $0.id] } ?? ["keyCode": code]
+        d["modifiers"] = Mod.allCases.filter { mods.contains($0) }.map(\.rawValue)
+        return d
+    }
+    var quickID: String? { mods.isEmpty ? named.map(\.id) : nil }
 }
 
 // WeType keeps its push-to-talk key in a private MMKV store; read it (never write it).
 // MMKV layout: a little-endian UInt32 with the live data length, then the data; updates are appended,
 // so the last occurrence inside the live range is current. Bytes past that length are stale leftovers.
-func weTypeVoiceKey() -> ModKey? {
+// Values are [length][bytes]: keyCodes is a string like "[61]", modifiers a varint of NSEvent flags.
+func weTypeVoiceKey() -> KeySpec? {
     let url = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent("Library/Application Support/WeType/mmkv/wetype.settings")
     guard let data = try? Data(contentsOf: url), data.count > 4 else { return nil }
@@ -68,7 +103,15 @@ func weTypeVoiceKey() -> ModKey? {
     guard let open = tail.firstIndex(of: "["), let close = tail.firstIndex(of: "]"), open < close else { return nil }
     let codes = tail[tail.index(after: open)..<close].split(separator: ",")
         .compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }
-    return codes.count == 1 ? ModKey.by(code: codes[0]) : nil
+    guard codes.count == 1 else { return nil }
+    var key = KeySpec(code: codes[0])
+    if !key.modifierOnly, let m = s.range(of: "voicePTTShortcut_modifiers", options: .backwards) {
+        let bytes = Array(s[m.upperBound...].unicodeScalars.prefix(6).map { Int($0.value) })
+        var value = 0, shift = 0
+        for b in bytes.dropFirst() { value |= (b & 0x7f) << shift; shift += 7; if b & 0x80 == 0 { break } }
+        key.mods = Set(Mod.allCases.filter { value & $0.nsBit != 0 })
+    }
+    return key
 }
 
 // MARK: input sources
@@ -153,33 +196,95 @@ func log(_ msg: String) {
     else { try? line.write(to: logURL, atomically: true, encoding: .utf8) }
 }
 
-// MARK: settings
+// MARK: settings — ~/.config/hijack/config.json is the source of truth; the menu just edits it.
+// Re-read whenever it changes on disk, so hand edits apply on the next key press or menu open.
+
+let configURL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".config/hijack/config.json")
+
+final class Config {
+    static let shared = Config()
+    var trigger: KeySpec?          // nil = "follow" the voice key
+    var voiceInput = weTypeID
+    var voiceKey: KeySpec?         // nil = "auto" (detected for WeType)
+    var showMenuBarIcon = true
+    var language = "system"
+    var holdDelay = 0.2            // minimum hold before the voice method gets its key
+    var restoreTimeout = 5.0       // longest wait after release before switching back
+    var fallbackDelay = 2.5        // used when the voice method shows no window to watch
+    private var loadedAt: Date?
+    private var checkedAt = Date.distantPast
+
+    init() { reload(force: true) }
+
+    func reload(force: Bool = false) {
+        guard force || Date().timeIntervalSince(checkedAt) > 0.5 else { return }   // at most twice a second
+        checkedAt = Date()
+        let mtime = (try? FileManager.default.attributesOfItem(atPath: configURL.path)[.modificationDate]) as? Date
+        guard force || mtime != loadedAt else { return }
+        guard let mtime, let data = try? Data(contentsOf: configURL),
+              let d = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            if mtime == nil { migrateFromDefaults(); save() } else { log("config: can't parse \(configURL.path), keeping previous values") }
+            loadedAt = mtime; return
+        }
+        loadedAt = mtime
+        trigger = (d["trigger"] as? String) == "follow" || d["trigger"] == nil ? nil : KeySpec(json: d["trigger"])
+        voiceInput = d["voiceInput"] as? String ?? weTypeID
+        voiceKey = (d["voiceKey"] as? String) == "auto" || d["voiceKey"] == nil ? nil : KeySpec(json: d["voiceKey"])
+        showMenuBarIcon = d["showMenuBarIcon"] as? Bool ?? true
+        language = d["language"] as? String ?? "system"
+        holdDelay = d["holdDelay"] as? Double ?? 0.2
+        restoreTimeout = d["restoreTimeout"] as? Double ?? 5.0
+        fallbackDelay = d["fallbackDelay"] as? Double ?? 2.5
+        if !force { log("config: reloaded (trigger \(trigger?.name ?? "follow"), voiceKey \(voiceKey?.name ?? "auto"), voiceInput \(voiceInput))") }
+        if d["trigger"] != nil, (d["trigger"] as? String) != "follow", trigger == nil { log("config: unknown trigger \(d["trigger"]!), following the voice key") }
+        if d["voiceKey"] != nil, (d["voiceKey"] as? String) != "auto", voiceKey == nil { log("config: unknown voiceKey \(d["voiceKey"]!), using auto") }
+    }
+
+    func save() {
+        func j(_ v: Any) -> String {
+            if let s = v as? String { return "\"\(s)\"" }
+            if let b = v as? Bool { return b ? "true" : "false" }
+            if let x = v as? Double { return String(format: "%g", x) }
+            let d = (try? JSONSerialization.data(withJSONObject: v, options: [.sortedKeys, .fragmentsAllowed])) ?? Data()
+            return String(data: d, encoding: .utf8) ?? "null"
+        }
+        let pairs: [(String, Any)] = [
+            ("trigger", trigger?.json ?? "follow"), ("voiceInput", voiceInput), ("voiceKey", voiceKey?.json ?? "auto"),
+            ("showMenuBarIcon", showMenuBarIcon), ("language", language),
+            ("holdDelay", holdDelay), ("restoreTimeout", restoreTimeout), ("fallbackDelay", fallbackDelay),
+        ]
+        let text = "{\n" + pairs.map { "  \"\($0.0)\": \(j($0.1))" }.joined(separator: ",\n") + "\n}\n"
+        try? FileManager.default.createDirectory(at: configURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? text.write(to: configURL, atomically: true, encoding: .utf8)
+        loadedAt = (try? FileManager.default.attributesOfItem(atPath: configURL.path)[.modificationDate]) as? Date
+    }
+
+    // One-time: carry over settings from the menu-only versions (UserDefaults).
+    private func migrateFromDefaults() {
+        let u = UserDefaults.standard
+        voiceInput = u.string(forKey: "voiceInputSource") ?? weTypeID
+        trigger = (u.object(forKey: "triggerKey") as? Int).map { KeySpec(code: $0) }
+        voiceKey = (u.object(forKey: "voiceKey.\(voiceInput)") as? Int).map { KeySpec(code: $0) }
+        showMenuBarIcon = u.object(forKey: "showMenuBarIcon") as? Bool ?? true
+        language = u.string(forKey: "language") ?? "system"
+        log("config: created \(configURL.path)")
+    }
+}
 
 final class Model {
     static let shared = Model()
-    let defaults = UserDefaults.standard
+    var c: Config { Config.shared.reload(); return Config.shared }
 
-    var voiceID: String {
-        get { defaults.string(forKey: "voiceInputSource") ?? weTypeID }
-        set { defaults.set(newValue == weTypeID ? nil : newValue, forKey: "voiceInputSource") }
-    }
+    var voiceID: String { c.voiceInput }
     var voiceName: String { sourceName(voiceID) }
     var isWeType: Bool { voiceID == weTypeID }
-    // The voice method's own push-to-talk key: read from WeType, chosen by the user for others.
     // Voice key precedence: the user's explicit choice, else auto-detected (WeType only), else Right Option.
-    var userVoiceKey: ModKey? { (defaults.object(forKey: "voiceKey.\(voiceID)") as? Int).flatMap(ModKey.by(code:)) }
-    var detectedVoiceKey: ModKey? { isWeType ? weTypeVoiceKey() : nil }
-    var voiceKey: ModKey? { userVoiceKey ?? detectedVoiceKey }
-    var forwardKey: ModKey { voiceKey ?? ModKey.all[0] }
-    var customTrigger: ModKey? {
-        get { (defaults.object(forKey: "triggerKey") as? Int).flatMap(ModKey.by(code:)) }
-        set { defaults.set(newValue.map { Int($0.code) }, forKey: "triggerKey") }
-    }
-    var trigger: ModKey { customTrigger ?? forwardKey }
-    var showIcon: Bool {
-        get { defaults.object(forKey: "showMenuBarIcon") as? Bool ?? true }
-        set { defaults.set(newValue, forKey: "showMenuBarIcon") }
-    }
+    var userVoiceKey: KeySpec? { c.voiceKey }
+    var detectedVoiceKey: KeySpec? { isWeType ? weTypeVoiceKey() : nil }
+    var forwardKey: KeySpec { userVoiceKey ?? detectedVoiceKey ?? KeySpec.named("right_option")! }
+    // Trigger precedence: the user's explicit choice, else follow the voice key.
+    var customTrigger: KeySpec? { c.trigger }
+    var trigger: KeySpec { customTrigger ?? forwardKey }
 }
 
 // MARK: key handling
@@ -195,10 +300,16 @@ final class Engine {
     var sawWindow = false   // the voice method showed a window during this press
     var tap: CFMachPort?
 
-    func post(_ key: ModKey, down: Bool) {
-        guard let e = CGEvent(keyboardEventSource: nil, virtualKey: key.code, keyDown: down) else { return }
-        e.type = .flagsChanged
-        e.flags = down ? CGEventFlags(rawValue: key.flag.rawValue | key.device) : []
+    var trigger = KeySpec(code: 61)   // snapshot per press, so a config change mid-press can't strand it
+
+    func post(_ key: KeySpec, down: Bool) {
+        guard let e = CGEvent(keyboardEventSource: nil, virtualKey: CGKeyCode(key.code), keyDown: down) else { return }
+        if key.modifierOnly, let n = key.named, let flag = n.flag {
+            e.type = .flagsChanged
+            e.flags = down ? CGEventFlags(rawValue: flag.rawValue | n.device) : []
+        } else {
+            e.flags = key.flags
+        }
         e.setIntegerValueField(.eventSourceUserData, value: marker)
         e.post(tap: .cghidEventTap)
     }
@@ -209,7 +320,7 @@ final class Engine {
         sawWindow = false
         let cur = currentID()
         // Already in the voice method and the trigger is its own key: let it see the real key.
-        if cur == m.voiceID && m.trigger == m.forwardKey {
+        if cur == m.voiceID && trigger == m.forwardKey {
             passthrough = true; log("down: already voice IME, pass through"); return true
         }
         passthrough = false
@@ -221,10 +332,10 @@ final class Engine {
             guard physicalDown, gen == generation else { log("released before forward"); return }
             let ready = currentID() == m.voiceID
             let waited = Date().timeIntervalSince(start)
-            if (ready && waited >= holdDelay) || waited >= maxSwitchWait {
+            if (ready && waited >= m.c.holdDelay) || waited >= maxSwitchWait {
                 forwarded = true
                 post(m.forwardKey, down: true)
-                log("forward \(m.forwardKey.enName) down after \(Int(waited * 1000))ms ready=\(ready) \(focusDesc())")
+                log("forward \(m.forwardKey.name) down after \(Int(waited * 1000))ms ready=\(ready) \(focusDesc())")
             } else {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) { forwardWhenReady() }
             }
@@ -245,7 +356,7 @@ final class Engine {
             if visible == true { sawWindow = true }
             if sawWindow && capsuleGone == nil && visible == false { capsuleGone = Date(); log("voice window gone after \(Int(waited * 1000))ms") }
             let graceDone = capsuleGone.map { Date().timeIntervalSince($0) >= capsuleGrace } ?? false
-            guard graceDone || waited >= (sawWindow ? restoreDelay : fallbackDelay) else {
+            guard graceDone || waited >= (sawWindow ? m.c.restoreTimeout : m.c.fallbackDelay) else {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { restoreWhenDone() }; return
             }
             guard currentID() == m.voiceID, let prev = previous else { return }
@@ -261,15 +372,26 @@ final class Engine {
             if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
             return Unmanaged.passUnretained(event)
         }
-        guard type == .flagsChanged,
-              event.getIntegerValueField(.eventSourceUserData) != marker,
-              CGKeyCode(event.getIntegerValueField(.keyboardEventKeycode)) == m.trigger.code
-        else { return Unmanaged.passUnretained(event) }
-        let down = m.trigger.isDown(event.flags)
+        guard event.getIntegerValueField(.eventSourceUserData) != marker else { return Unmanaged.passUnretained(event) }
+        let code = Int(event.getIntegerValueField(.keyboardEventKeycode))
+        if !physicalDown { trigger = m.trigger }      // config is read only between presses
+        guard code == trigger.code else { return Unmanaged.passUnretained(event) }
+        let down: Bool
+        if trigger.modifierOnly {
+            guard type == .flagsChanged, let n = trigger.named, let flag = n.flag else { return Unmanaged.passUnretained(event) }
+            down = n.device == 0 ? event.flags.contains(flag) : event.flags.rawValue & n.device != 0
+        } else {
+            guard type == .keyDown || type == .keyUp else { return Unmanaged.passUnretained(event) }
+            let relevant: CGEventFlags = [.maskControl, .maskAlternate, .maskShift, .maskCommand, .maskSecondaryFn]
+            if type == .keyDown && !physicalDown && event.flags.intersection(relevant) != trigger.flags.intersection(relevant) {
+                return Unmanaged.passUnretained(event)    // same key, different modifiers: not ours
+            }
+            down = type == .keyDown
+        }
         var pass = passthrough
         if down && !physicalDown { physicalDown = true; pass = pressed() }
         else if !down && physicalDown { physicalDown = false; pass = released() }
-        return pass ? Unmanaged.passUnretained(event) : nil
+        return pass ? Unmanaged.passUnretained(event) : nil   // key repeats while held are swallowed too
     }
 
     func start() {
@@ -280,7 +402,7 @@ final class Engine {
         let me = Unmanaged.passUnretained(self).toOpaque()
         guard let tap = CGEvent.tapCreate(
             tap: .cghidEventTap, place: .headInsertEventTap, options: .defaultTap,
-            eventsOfInterest: CGEventMask(1 << CGEventType.flagsChanged.rawValue),
+            eventsOfInterest: CGEventMask(1 << CGEventType.flagsChanged.rawValue | 1 << CGEventType.keyDown.rawValue | 1 << CGEventType.keyUp.rawValue),
             callback: { _, type, event, ctx in
                 Unmanaged<Engine>.fromOpaque(ctx!).takeUnretainedValue().handle(type, event)
             }, userInfo: me)
@@ -319,7 +441,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func updateIcon() {
-        if m.showIcon, item == nil {
+        if Config.shared.showMenuBarIcon, item == nil {
             let it = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
             let icon = Bundle.main.image(forResource: "HijackMenuTemplate")
                 ?? NSImage(systemSymbolName: "mic", accessibilityDescription: appName)
@@ -328,13 +450,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             it.button?.image = icon
             it.menu = menu
             item = it
-        } else if !m.showIcon, let it = item {
+        } else if !Config.shared.showMenuBarIcon, let it = item {
             NSStatusBar.system.removeStatusItem(it); item = nil
         }
     }
 
     // Rebuilt every time it opens, so it always shows the live state.
     func menuNeedsUpdate(_ menu: NSMenu) {
+        Config.shared.reload()
         menu.removeAllItems()
         func add(_ title: String, _ action: Selector?, state: Bool = false, tag: Int = 0, to: NSMenu? = nil) -> NSMenuItem {
             let i = NSMenuItem(title: title, action: action, keyEquivalent: "")
@@ -348,66 +471,82 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         menu.addItem(.separator())
 
-        let keys = NSMenu()
-        _ = add(L("跟随语音键（\(m.forwardKey.name)）", "Same as voice key (\(m.forwardKey.name))"), #selector(setTrigger(_:)), state: m.customTrigger == nil, tag: -1, to: keys)
-        keys.addItem(.separator())
-        for k in ModKey.all {   // every key, so "pin to the current voice key" is a real choice too
-            _ = add(k.name, #selector(setTrigger(_:)), state: m.customTrigger == k, tag: Int(k.code), to: keys)
+        // Quick picks; a key set in the config file that isn't one of them shows as a checked extra row.
+        func keyMenu(current: KeySpec?, auto: String, action: Selector) -> NSMenu {
+            let km = NSMenu()
+            _ = add(auto, action, state: current == nil, to: km).representedObject = "auto"
+            km.addItem(.separator())
+            for id in quickKeys {
+                let k = KeySpec.named(id)!
+                _ = add(k.name, action, state: current == k, to: km).representedObject = id
+            }
+            if let current, current.quickID.map(quickKeys.contains) != true {
+                _ = add(L("\(current.name)（设置文件）", "\(current.name) (config file)"), nil, state: true, to: km)
+            }
+            km.addItem(.separator())
+            _ = add(L("更多…（编辑设置文件）", "More… (edit config file)"), #selector(openConfig), to: km)
+            return km
         }
-        let keyItem = add(L("触发键：\(m.trigger.name)", "Trigger key: \(m.trigger.name)"), nil)
-        keyItem.submenu = keys
+        add(L("触发键：\(m.trigger.name)", "Trigger key: \(m.trigger.name)"), nil).submenu =
+            keyMenu(current: m.customTrigger, auto: L("跟随语音键（\(m.forwardKey.name)）", "Same as voice key (\(m.forwardKey.name))"), action: #selector(setTrigger(_:)))
         let sources = NSMenu()
         for c in voiceCandidates() {
-            let i = add(c.name, #selector(setVoiceSource(_:)), state: c.id == m.voiceID, to: sources)
-            i.representedObject = c.id
+            _ = add(c.name, #selector(setVoiceSource(_:)), state: c.id == m.voiceID, to: sources).representedObject = c.id
         }
         add(L("语音输入法：\(m.voiceName)", "Voice input: \(m.voiceName)"), nil).submenu = sources
-        let vk = NSMenu()
-        if m.isWeType {
-            let found = m.detectedVoiceKey?.name ?? L("没读到", "not found")
-            _ = add(L("自动检测（\(found)）", "Auto-detect (\(found))"), #selector(setVoiceKey(_:)), state: m.userVoiceKey == nil, tag: -1, to: vk)
-            vk.addItem(.separator())
-        }
-        for k in ModKey.all {
-            _ = add(k.name, #selector(setVoiceKey(_:)), state: m.userVoiceKey == k || (!m.isWeType && m.userVoiceKey == nil && k == m.forwardKey), tag: Int(k.code), to: vk)
-        }
-        add(L("它的语音键：\(m.forwardKey.name)", "Its voice key: \(m.forwardKey.name)"), nil).submenu = vk
+        let found = m.detectedVoiceKey?.name ?? L("没读到", "not found")
+        let autoTitle = m.isWeType ? L("自动检测（\(found)）", "Auto-detect (\(found))") : L("默认（右 Option）", "Default (Right Option)")
+        add(L("它的语音键：\(m.forwardKey.name)", "Its voice key: \(m.forwardKey.name)"), nil).submenu =
+            keyMenu(current: m.userVoiceKey, auto: autoTitle, action: #selector(setVoiceKey(_:)))
         menu.addItem(.separator())
 
         _ = add(L("开机启动", "Launch at login"), #selector(toggleLogin), state: SMAppService.mainApp.status == .enabled)
-        _ = add(L("在菜单栏显示图标", "Show in menu bar"), #selector(toggleIcon), state: m.showIcon)
+        _ = add(L("在菜单栏显示图标", "Show in menu bar"), #selector(toggleIcon), state: Config.shared.showMenuBarIcon)
         let langs = NSMenu()
-        let lang = UserDefaults.standard.string(forKey: "language") ?? "system"
         for (code, title) in [("system", L("跟随系统", "System")), ("en", "English"), ("zh", "中文")] {
-            let i = add(title, #selector(setLanguage(_:)), state: lang == code, to: langs)
-            i.representedObject = code
+            _ = add(title, #selector(setLanguage(_:)), state: Config.shared.language == code, to: langs).representedObject = code
         }
         add(L("语言", "Language"), nil).submenu = langs
+        let settings = add(L("打开设置文件…", "Open config file…"), #selector(openConfig))
+        settings.keyEquivalent = ","
+        settings.keyEquivalentModifierMask = .command
         menu.addItem(.separator())
         let quit = NSMenuItem(title: L("退出 \(appName)", "Quit \(appName)"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         menu.addItem(quit)
     }
 
+    // Menu actions edit the config file (the source of truth).
+    func pick(_ sender: NSMenuItem) -> KeySpec? {
+        (sender.representedObject as? String).flatMap { $0 == "auto" ? nil : KeySpec.named($0) }
+    }
     @objc func setTrigger(_ sender: NSMenuItem) {
-        m.customTrigger = sender.tag < 0 ? nil : ModKey.by(code: sender.tag)
+        let c = Config.shared; c.reload(); c.trigger = pick(sender); c.save()
         log("trigger set to \(m.trigger.name)")
+    }
+    @objc func setVoiceKey(_ sender: NSMenuItem) {
+        let c = Config.shared; c.reload(); c.voiceKey = pick(sender); c.save()
+        log("voice key set to \(m.forwardKey.name)")
+    }
+    @objc func setVoiceSource(_ sender: NSMenuItem) {
+        guard let id = sender.representedObject as? String else { return }
+        let c = Config.shared; c.reload(); c.voiceInput = id; c.voiceKey = nil; c.save()
+        log("voice source set to \(id)")
+    }
+    @objc func setLanguage(_ sender: NSMenuItem) {
+        let c = Config.shared; c.reload(); c.language = sender.representedObject as? String ?? "system"; c.save()
+    }
+    @objc func toggleIcon() {
+        let c = Config.shared; c.reload(); c.showMenuBarIcon.toggle(); c.save(); updateIcon()
     }
     @objc func toggleLogin() {
         if SMAppService.mainApp.status == .enabled { try? SMAppService.mainApp.unregister() }
         else { try? SMAppService.mainApp.register() }
     }
-    @objc func setVoiceSource(_ sender: NSMenuItem) {
-        if let id = sender.representedObject as? String { m.voiceID = id; log("voice source set to \(id)") }
+    @objc func openConfig() {
+        Config.shared.reload()
+        if !FileManager.default.fileExists(atPath: configURL.path) { Config.shared.save() }
+        NSWorkspace.shared.open(configURL)
     }
-    @objc func setVoiceKey(_ sender: NSMenuItem) {
-        if sender.tag < 0 { m.defaults.removeObject(forKey: "voiceKey.\(m.voiceID)") }
-        else { m.defaults.set(sender.tag, forKey: "voiceKey.\(m.voiceID)") }
-        log("voice key for \(m.voiceID) set to \(m.forwardKey.name)")
-    }
-    @objc func setLanguage(_ sender: NSMenuItem) {
-        UserDefaults.standard.set(sender.representedObject as? String, forKey: "language")
-    }
-    @objc func toggleIcon() { m.showIcon.toggle(); updateIcon() }
     @objc func openAccessibility() {
         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
     }
