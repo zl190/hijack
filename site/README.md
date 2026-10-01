@@ -19,3 +19,5 @@ At widths up to 900px, the page uses a compact reading path: one selected hero s
 [`precise.html`](precise.html) is a separate English homepage covering only the shipping WeType voice workflow. It uses `precise.css` and `precise.js` and shares the existing icon assets. The broader concept homepage remains unchanged at `index.html`.
 
 Its demonstration makes the macOS input source explicit: ABC → WeType while holding → WeType while finishing after release → ABC after text submission. ABC is illustrative; Hijack restores the previous source. Serve this directory and open `/precise.html` to compare versions.
+
+[`precise-zh.html`](precise-zh.html) is the Simplified Chinese version of the focused homepage. Its header links to English, and the English header links back to Chinese. Both pages share `precise.css` and `precise.js`; the document language selects demo and clipboard messages. Installation commands are identical in both languages.

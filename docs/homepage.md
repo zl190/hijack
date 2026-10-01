@@ -98,3 +98,9 @@ Verification:
 - No browser warnings/errors reported. JavaScript syntax, HTML nesting/IDs/local-link checks, and whitespace checks pass.
 - Original `site/index.html`, `site/script.js`, and `site/styles.css` remain unchanged from the prior commit.
 - Clipboard denial fallback and disabled-JavaScript browser execution were not exercised; static markup retains the entire four-step explanation and manual-copy commands.
+
+## Simplified Chinese focused homepage
+
+User request: add a Chinese version of the focused homepage. Added `site/precise-zh.html` with translated copy, metadata, accessibility labels, installation guidance, and privacy explanation. Both languages share the demonstration logic and styles, with scoped Chinese typography and reciprocal language links. The installation command strings are unchanged.
+
+Verification: the Chinese demonstration retains WeType after key release while text is being submitted, then restores ABC. Chinese clipboard feedback works. Navigation to English and English playback still work. The Chinese layout has no horizontal overflow at 320 and 390 CSS pixels; at 390px its collapsed document height is 1,206px. HTML structure, IDs, local links, command equality, JavaScript syntax, and whitespace checks pass. No native behavior or deployment is included.

@@ -167,3 +167,23 @@ code { font-family: var(--mono); }
   .install { padding-inline: 19px; }
 }
 @media(prefers-reduced-motion:reduce) { * { scroll-behavior: auto !important; } }
+/* Chinese variant shares layout and behavior with the focused English page. */
+html[lang="zh-CN"] { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; }
+html[lang="zh-CN"] h1 { font-size: clamp(30px, 3.6vw, 48px); letter-spacing: -1.3px; line-height: 1.3; }
+html[lang="zh-CN"] .eyebrow { letter-spacing: 1.5px; }
+html[lang="zh-CN"] .intro { line-height: 1.95; }
+html[lang="zh-CN"] .source-label strong { min-width: 59px; }
+html[lang="zh-CN"] .source-steps strong { font-family: inherit; font-size: 12px; }
+html[lang="zh-CN"] .demo-controls p { max-width: 230px; }
+html[lang="zh-CN"] .footer { line-height: 1.9; }
+@media(max-width:760px) {
+  html[lang="zh-CN"] h1 { font-size: clamp(30px, 8.5vw, 42px); letter-spacing: -.9px; }
+  html[lang="zh-CN"] .intro { line-height: 1.9; }
+  html[lang="zh-CN"] .source-steps strong { font-size: 11px; }
+  .header nav { gap: 12px; }
+}
+@media(max-width:370px) {
+  html[lang="zh-CN"] h1 { font-size: 29px; }
+  html[lang="zh-CN"] .source-steps strong { font-size: 10px; }
+  html[lang="zh-CN"] .demo-controls { flex-wrap: wrap; }
+}
