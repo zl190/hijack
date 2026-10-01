@@ -1,81 +1,61 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="site/assets/brand/hijack-wordmark-inverse.svg">
+  <source media="(prefers-color-scheme: light)" srcset="site/assets/brand/hijack-wordmark.svg">
   <img src="site/assets/brand/hijack-wordmark.svg" width="190" alt="Hijack">
 </picture>
 
-Voice input, then back to your preferred input method.
+**Voice input, then back to your preferred input method.**
 
-[![Latest release](https://img.shields.io/github/v/release/zl190/hijack?color=626e56)](https://github.com/zl190/hijack/releases/latest)
-[![macOS 13+](https://img.shields.io/badge/macOS-13%2B-626e56?logo=apple&logoColor=white)](#install)
-[![License: MIT](https://img.shields.io/github/license/zl190/hijack?color=626e56)](LICENSE)
-[![Website](https://img.shields.io/badge/website-hijack.ylab3.com-a44830)](https://hijack.ylab3.com)
+Hijack is a small macOS menu bar app that connects your trigger key to a voice input tool. Dictate with WeType, Sogou or Doubao, then return to the input method you were using. Standalone apps such as Handy work without switching input methods.
+
+[![Latest release](https://img.shields.io/github/v/release/zl190/hijack?style=flat-square&label=release&color=blue)](https://github.com/zl190/hijack/releases/latest)
+[![macOS 13+](https://img.shields.io/badge/macOS-13%2B-black?style=flat-square&logo=apple&logoColor=white)](#install)
+[![License: MIT](https://img.shields.io/github/license/zl190/hijack?style=flat-square&color=green)](LICENSE)
+
+[See it in action](https://hijack.ylab3.com/?lang=en) · [User guide](docs/usage.md) · [Report an issue](https://github.com/zl190/hijack/issues)
 
 ## Install
 
-Apple silicon, macOS 13+, and an installed voice input tool.
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/zl190/hijack/main/install.sh | sh
-```
-
-or
+Requires **Apple silicon**, **macOS 13 or later**, and a voice input tool installed separately.
 
 ```sh
 brew install --cask zl190/tap/hijack
 ```
 
-Allow Hijack in System Settings › Privacy & Security › Accessibility. Open Hijack to choose your voice tool and trigger key in Settings. Hold to talk, or choose hands-free mode to tap to start and stop.
+Or install the latest release with:
 
-Build from source: `./install-from-source.sh` (requires Xcode Command Line Tools).
+```sh
+curl -fsSL https://raw.githubusercontent.com/zl190/hijack/main/install.sh | sh
+```
+
+## Get started
+
+1. Open Hijack and allow it in **System Settings → Privacy & Security → Accessibility**.
+2. In Hijack's **Settings**, choose your voice tool and trigger key.
+3. Hold the trigger to talk, then release it. After your voice tool submits the text, Hijack restores your previous input method.
+
+Prefer hands-free dictation? Choose toggle mode to tap once to start and again to stop.
 
 ## Voice tools
 
-| Type | Tool | Status |
+| Tool | Integration | Status |
 | --- | --- | --- |
-| Input method | WeType | Tested |
-| Input method | Sogou | Tested |
-| Input method | Doubao | Tested |
-| App | Handy | Tested |
-| App | Wispr Flow | Supported; testing pending |
-| App | Openless | Supported; testing pending |
-| App | Typeless | Supported; testing pending |
+| WeType | Input method | Tested |
+| Sogou | Input method | Tested |
+| Doubao | Input method | Tested |
+| Handy | Standalone app | Tested |
+| Wispr Flow | Manual voice-key configuration | Testing pending |
+| Openless | Manual voice-key configuration | Testing pending |
+| Typeless | Manual voice-key configuration | Testing pending |
 
-Compatibility status is reported by the project owner as of 2026-10-01. Version 1.1 includes built-in providers for WeType, Sogou, Doubao and Handy. Other apps use manual voice-key configuration; their end-to-end behavior still needs validation. For input-method providers, Hijack restores the previous input source after dictation. Standalone app providers do not need to change the input source.
+Compatibility reflects maintainer testing as of October 1, 2026. The first four tools have built-in providers; the remaining apps use manual configuration and still need end-to-end validation.
 
-## Settings
+## Help and development
 
-Open Hijack again, or choose **Settings… (⌘,)** in its menu. The Dictation, Sources, General and Advanced tabs cover the trigger, voice tools, language, icons and timing.
+See the [user guide](docs/usage.md) for settings, command-line usage and troubleshooting. Download updates and read changes on the [releases page](https://github.com/zl190/hijack/releases).
 
-The source of truth is `~/.config/hijack/config.json`. Edits apply on the next key press; no restart is needed. An invalid JSON file is never overwritten. Example:
-
-```json
-{
-  "trigger": "follow",
-  "voiceInput": "com.tencent.inputmethod.wetype.pinyin",
-  "voiceKeys": {},
-  "triggerMode": "hold",
-  "stopOnAnyKey": true,
-  "language": "system"
-}
-```
-
-`trigger: "follow"` follows the selected tool's voice key. `voiceKeys` stores overrides by source ID. `triggerMode` is `hold` or `toggle`; `language` is `system`, `en` or `zh`. Logs are at `~/Library/Logs/Hijack.log`.
-
-## Command line
-
-`hijack` is the same app run from the terminal (Homebrew puts it on your PATH; the install scripts link it into `~/.local/bin`):
-
-```sh
-hijack status            # what Hijack is doing, and whether it can
-hijack doctor            # check everything; exits 1 if something is broken
-hijack sources           # installed voice sources and their talk keys
-hijack get [setting]     # read settings
-hijack set mode toggle   # change a setting (validated)
-hijack log -f            # follow the log
-```
-
-`status`, `sources`, and `get` take `--json`.
+To build from a local checkout, run `./install-from-source.sh` with Xcode Command Line Tools installed. Website development is documented in [site/README.md](site/README.md).
 
 ## License
 
-MIT. Third-party homepage imagery has separate provenance documented in [`site/README.md`](site/README.md).
+[MIT](LICENSE). Third-party homepage imagery has [separate provenance](site/README.md#assets-and-cache).
