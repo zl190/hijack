@@ -1,6 +1,6 @@
 // Hijack — hold a key to dictate with a voice input method (default WeType) from any input source; the previous input source
-// comes back after release. Settings live in ~/.config/hijack/config.json; the menu (menu bar icon, or
-// open the app again) edits the common ones.
+// comes back after release. Settings live in ~/.config/hijack/config.json; the menu bar menu edits the common
+// ones and the settings window (⌘, or open the app again) all of them.
 // Build: ./build.sh (all files in Sources/)
 import AppKit
 import ApplicationServices

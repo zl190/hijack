@@ -19,6 +19,12 @@ final class Engine {
     var trigger = KeySpec(code: 61)   // snapshot per session, so a config change mid-session can't strand it
     var active = false                // a voice session is running (hold: key held · toggle: between taps)
     var swallowUp: Int?               // key that stopped a toggle session: also eat its key-up
+    var paused = false                // the settings window is recording a key: let every key through
+
+    // Live progress for the settings window's "Try it" area.
+    func report(_ phase: String, _ detail: String = "") {
+        NotificationCenter.default.post(name: .hijackActivity, object: nil, userInfo: ["phase": phase, "detail": detail])
+    }
 
     // Turn the session into what the voice method expects: hold its key, or tap / double-tap it.
     func tapKey(after delay: Double = 0) {
@@ -80,6 +86,7 @@ final class Engine {
             DispatchQueue.main.asyncAfter(deadline: .now() + m.c.holdDelay) { [self] in
                 guard active, gen == generation else { log("released before forward"); return }
                 forwarded = true; startVoice(); log("forward \(m.forwardKey.name) start (\(m.voiceStyle))")
+                report("listening", m.voiceName)
             }
             return false
         }
@@ -91,6 +98,7 @@ final class Engine {
         if let cur, cur != m.voiceID { previous = cur }
         log("down: \(cur ?? "?") \(focusDesc())")
         if cur != m.voiceID { switchTo(m.voiceID, "switch to") }
+        report("switching", m.voiceName)
         let gen = generation, start = Date()
         func forwardWhenReady() {
             guard active, gen == generation else { log("released before forward"); return }
@@ -99,6 +107,7 @@ final class Engine {
             if (ready && waited >= m.c.holdDelay) || waited >= maxSwitchWait {
                 forwarded = true
                 startVoice()
+                report("listening", m.voiceName)
                 log("forward \(m.forwardKey.name) start (\(m.voiceStyle)) after \(Int(waited * 1000))ms ready=\(ready) \(focusDesc())")
             } else {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) { forwardWhenReady() }
@@ -111,7 +120,8 @@ final class Engine {
     func released() -> Bool {
         if passthrough { passthrough = false; log("up: pass through"); return true }
         if forwarded { endVoice(); forwarded = false; log("forward end (\(m.voiceStyle)) \(focusDesc())") }
-        if !m.provider.switchesInputSource { return false }   // nothing to switch back
+        if !m.provider.switchesInputSource { report("done", m.voiceName); return false }   // nothing to switch back
+        report("finishing", m.voiceName)
         let gen = generation, released = Date()
         var capsuleGone: Date?
         func restoreWhenDone() {
@@ -124,9 +134,10 @@ final class Engine {
             guard graceDone || waited >= (sawWindow ? m.c.restoreTimeout : m.c.fallbackDelay) else {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { restoreWhenDone() }; return
             }
-            guard currentID() == m.voiceID, let prev = previous else { return }
+            guard currentID() == m.voiceID, let prev = previous else { report("done", ""); return }
             log("restore after \(Int(waited * 1000))ms, held \(Int(released.timeIntervalSince(pressedAt)))s, \(focusDesc())")
             switchTo(prev, "restore")
+            report("done", L("等上屏 \(String(format: "%.1f", waited)) 秒，已切回 \(sourceName(prev))", "waited \(String(format: "%.1f", waited))s for the text, back to \(sourceName(prev))"))
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { restoreWhenDone() }
         return false
@@ -138,7 +149,7 @@ final class Engine {
             if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
             return Unmanaged.passUnretained(event)
         }
-        guard event.getIntegerValueField(.eventSourceUserData) != marker else { return Unmanaged.passUnretained(event) }
+        guard !paused, event.getIntegerValueField(.eventSourceUserData) != marker else { return Unmanaged.passUnretained(event) }
         let code = Int(event.getIntegerValueField(.keyboardEventKeycode))
         if type == .keyUp, code == swallowUp { swallowUp = nil; return nil }
         // Toggle session running: any other key stops it, and is not typed (Return must not send a message).
@@ -194,3 +205,5 @@ final class Engine {
         log("started: trigger \(m.trigger.name), forward \(m.forwardKey.name), voice \(m.voiceID)")
     }
 }
+
+extension Notification.Name { static let hijackActivity = Notification.Name("HijackActivity") }

@@ -17,6 +17,8 @@ final class Config {
     var stopOnAnyKey = true                  // toggle: any key also stops (that key is swallowed, never typed)
     var voiceStyles: [String: String] = [:]  // per voice input: how it wants its key — "hold" | "tap" | "doubleTap"
     var showMenuBarIcon = true
+    var showDockIcon = false
+    var lastError: String?         // why the file couldn't be read; previous values stay in effect
     var language = "system"
     var holdDelay = 0.2            // minimum hold before the voice method gets its key
     var restoreTimeout = 5.0       // longest wait after release before switching back
@@ -33,10 +35,12 @@ final class Config {
         guard force || mtime != loadedAt else { return }
         guard let mtime, let data = try? Data(contentsOf: configURL),
               let d = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            if mtime == nil { migrateFromDefaults(); save() } else { log("config: can't parse \(configURL.path), keeping previous values") }
+            if mtime == nil { migrateFromDefaults(); save() }
+            else { lastError = L("配置文件不是有效的 JSON，正在沿用上一次的设置", "The config file isn't valid JSON; keeping the previous settings"); log("config: can't parse \(configURL.path), keeping previous values") }
             loadedAt = mtime; return
         }
         loadedAt = mtime
+        lastError = nil
         trigger = (d["trigger"] as? String) == "follow" || d["trigger"] == nil ? nil : KeySpec(json: d["trigger"])
         voiceInput = d["voiceInput"] as? String ?? weTypeID
         voiceKeys = [:]
@@ -45,6 +49,7 @@ final class Config {
         }
         if let old = KeySpec(json: d["voiceKey"]), voiceKeys[voiceInput] == nil { voiceKeys[voiceInput] = old }   // older single "voiceKey"
         showMenuBarIcon = d["showMenuBarIcon"] as? Bool ?? true
+        showDockIcon = d["showDockIcon"] as? Bool ?? false
         triggerMode = (d["triggerMode"] as? String) == "toggle" ? "toggle" : "hold"
         stopOnAnyKey = d["stopOnAnyKey"] as? Bool ?? true
         voiceStyles = (d["voiceStyles"] as? [String: String] ?? [:]).filter { ["hold", "tap", "doubleTap"].contains($0.value) }
@@ -67,7 +72,7 @@ final class Config {
         let pairs: [(String, Any)] = [
             ("trigger", trigger?.json ?? "follow"), ("voiceInput", voiceInput), ("voiceKeys", voiceKeys.mapValues(\.json)),
             ("triggerMode", triggerMode), ("stopOnAnyKey", stopOnAnyKey), ("voiceStyles", voiceStyles),
-            ("showMenuBarIcon", showMenuBarIcon), ("language", language),
+            ("showMenuBarIcon", showMenuBarIcon), ("showDockIcon", showDockIcon), ("language", language),
             ("holdDelay", holdDelay), ("restoreTimeout", restoreTimeout), ("fallbackDelay", fallbackDelay),
         ]
         let text = "{\n" + pairs.map { "  \"\($0.0)\": \(j($0.1))" }.joined(separator: ",\n") + "\n}\n"

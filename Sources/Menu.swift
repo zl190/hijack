@@ -13,7 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ n: Notification) {
         menu.delegate = self
-        updateIcon()
+        applyAppearance()
         engine.start()
         if !AXIsProcessTrusted() {   // system prompt also adds us to the Accessibility list
             let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
@@ -21,13 +21,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    // Opening the app again (Finder / Spotlight / LaunchBar) pops the menu at the pointer,
-    // so it stays reachable with the menu bar icon hidden.
+    // Opening the app again (Finder / Spotlight / LaunchBar / Dock) shows the settings window,
+    // so everything stays reachable with both icons hidden.
     func applicationShouldHandleReopen(_ s: NSApplication, hasVisibleWindows: Bool) -> Bool {
-        NSApp.activate(ignoringOtherApps: true)
-        menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
+        SettingsWindowController.show()
         return false
     }
+
+    // Menu bar icon + Dock icon follow the config.
+    func applyAppearance() {
+        updateIcon()
+        let policy: NSApplication.ActivationPolicy = Config.shared.showDockIcon ? .regular : .accessory
+        if NSApp.activationPolicy() != policy {
+            NSApp.setActivationPolicy(policy)
+            if policy == .regular { installMainMenu(); SettingsWindowController.shared?.window?.makeKeyAndOrderFront(nil) }
+        }
+    }
+
+    // With a Dock icon Hijack is a regular app, so it gets the standard app menu (Settings… ⌘, and Quit ⌘Q).
+    func installMainMenu() {
+        let main = NSMenu(), appItem = NSMenuItem()
+        main.addItem(appItem)
+        let appMenu = NSMenu()
+        let settings = NSMenuItem(title: L("设置…", "Settings…"), action: #selector(openSettings), keyEquivalent: ",")
+        settings.target = self
+        appMenu.addItem(settings)
+        appMenu.addItem(.separator())
+        appMenu.addItem(NSMenuItem(title: L("隐藏 \(appName)", "Hide \(appName)"), action: #selector(NSApplication.hide(_:)), keyEquivalent: "h"))
+        appMenu.addItem(NSMenuItem(title: L("退出 \(appName)", "Quit \(appName)"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        appItem.submenu = appMenu
+        let windowItem = NSMenuItem(); main.addItem(windowItem)
+        let windowMenu = NSMenu(title: L("窗口", "Window"))
+        windowMenu.addItem(NSMenuItem(title: L("关闭", "Close"), action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w"))
+        windowItem.submenu = windowMenu
+        NSApp.mainMenu = main
+    }
+
+    @objc func openSettings() { SettingsWindowController.show() }
 
     func updateIcon() {
         if Config.shared.showMenuBarIcon, item == nil {
@@ -44,7 +74,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    // Rebuilt every time it opens, so it always shows the live state.
     // Rebuilt every time it opens, so it always shows the live state.
     // Layout: status · how you dictate (mode, shortcut) · dictation source (+ its key, its start style) · app.
     func menuNeedsUpdate(_ menu: NSMenu) {
@@ -135,8 +164,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             add(title, #selector(setLanguage(_:)), on: c.language == code, to: langs, value: code)
         }
         add(L("语言", "Language")).submenu = langs
-        let edit = add(L("编辑配置文件…", "Edit Config File…"), #selector(openConfig))
-        edit.keyEquivalent = ","; edit.keyEquivalentModifierMask = .command
+        let settings = add(L("设置…", "Settings…"), #selector(openSettings))
+        settings.keyEquivalent = ","; settings.keyEquivalentModifierMask = .command
+        add(L("编辑配置文件…", "Edit Config File…"), #selector(openConfig))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: L("退出 \(appName)", "Quit \(appName)"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
     }
