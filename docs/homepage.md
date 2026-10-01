@@ -58,3 +58,26 @@ Verification:
 - Narrow/wide transitions update the disclosure default; users can open or close it directly between transitions.
 
 No new native capability, release, or deployment is included in this revision.
+
+## Release-instructions review correction
+
+Diagnosis: the homepage’s installation copy was based on `cb1ab6a`, which built from source. Main commit `03b1eb4` changed `install.sh` to download a prebuilt release, added `install-from-source.sh`, and documented curl/Homebrew installation. The isolated homepage branch was rebased onto the updated `origin/main` before this correction.
+
+The original installation content audit failed all four checks: missing curl command, missing Homebrew command, incorrect Command Line Tools prerequisite, and incorrect source-checkout prerequisite.
+
+Read-only verification on 2026-10-01:
+- Published installer: https://raw.githubusercontent.com/zl190/hijack/main/install.sh
+- Homebrew cask: https://raw.githubusercontent.com/zl190/homebrew-tap/main/Casks/hijack.rb
+- GitHub release: https://github.com/zl190/hijack/releases/tag/v1.0.0, with `Hijack.zip` (2,027,613 bytes).
+- Both installer and cask require Apple silicon; README/cask require macOS 13+.
+- Reviewed the complete unchanged `Hijack.swift`: it switches input sources, forwards trigger-key events, observes the voice capsule, and logs event/focus metadata. It has no audio capture, storage, or upload code. WeType’s server-side audio processing and retention were not independently verified, so the FAQ directs users to its privacy policy and does not claim local-only recognition.
+
+Changes: two prebuilt installation commands with independent copy feedback; no developer-tool/source-checkout prerequisites; explicit Available/Concept selector badges; independent-project/non-affiliation footer; compact workflow disclosure on narrow screens; privacy answer scoped specifically to audio. The installer scripts and app were not executed or changed.
+
+Verified in the live preview:
+- Both command blocks match the published README exactly; clipboard contents match each command after the asynchronous write completes.
+- Installer disclosure, privacy FAQ, and compact workflow explanation expand correctly.
+- Available/Concept labels appear in the selectors before any interaction; affiliation disclaimer remains visible on narrow screens.
+- 390 px collapsed page height: 1,207 px. At 320 px with installation expanded and at 1440 px desktop width, document scroll width equals viewport width.
+- Desktop installation defaults open; compact defaults closed. No console warnings/errors reported.
+- `node --check site/script.js`, HTML structure/link checks, and `git diff --check` pass. Install commands were verified read-only and were not executed.

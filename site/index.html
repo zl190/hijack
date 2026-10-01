@@ -24,17 +24,17 @@
   <main id="main">
     <section class="hero wrap" aria-labelledby="hero-title">
       <div class="scene-picker story-picker" id="hero-stories" role="group" aria-label="Choose a hero story">
-        <span class="story-picker-label">THREE WAYS TO MAKE IT YOURS</span>
-        <button type="button" data-scene="voice" aria-pressed="true"><span>01</span> WeType voice</button>
-        <button type="button" data-scene="translate" aria-pressed="false"><span>02</span> Translation</button>
-        <button type="button" data-scene="ocr" aria-pressed="false"><span>03</span> Text capture</button>
+        <span class="story-picker-label">AVAILABLE TODAY &amp; IDEAS TO EXPLORE</span>
+        <button type="button" data-scene="voice" aria-pressed="true"><span class="story-number">01</span><span class="story-label">WeType voice</span><small class="story-badge available">Available</small></button>
+        <button type="button" data-scene="translate" aria-pressed="false"><span class="story-number">02</span><span class="story-label">Translation</span><small class="story-badge">Concept</small></button>
+        <button type="button" data-scene="ocr" aria-pressed="false"><span class="story-number">03</span><span class="story-label">Text capture</span><small class="story-badge">Concept</small></button>
       </div>
       <div class="hero-copy">
         <p class="eyebrow"><span class="status-dot" aria-hidden="true"></span> YOUR TOOLS. YOUR RULES.</p>
         <h1 id="hero-title"><span id="story-headline">WeType’s voice.</span><br><span class="underlined" id="story-payoff">Your keyboard.</span></h1>
         <p class="hero-description" id="story-description">Keep the input method you love. Borrow WeType’s voice when a thought is easier to say, then return to your familiar keyboard.</p>
         <div class="hero-actions"><a class="button button-dark" id="story-action" href="#install"><span id="story-action-label">Try the voice example</span><span aria-hidden="true">↗</span></a><a class="text-link" href="#demo">Try the demo <span aria-hidden="true">↓</span></a></div>
-        <p class="hero-meta">macOS 13+ <span>·</span> Menu bar utility <span>·</span> MIT licensed</p>
+        <p class="hero-meta">Apple silicon · macOS 13+ <span>·</span> Menu bar utility <span>·</span> MIT licensed</p>
       </div>
 
       <div class="demo-area" id="demo">
@@ -51,6 +51,7 @@
         </div>
         <div class="input-journey" aria-label="Your setup, borrow a capability, return to your flow"><span data-phase="idle"><i aria-hidden="true">A</i>Your setup</span><b aria-hidden="true">→</b><span data-phase="borrowing"><i aria-hidden="true">⌥</i><span id="journey-capability">Borrow voice</span></span><b aria-hidden="true">→</b><span data-phase="done"><i aria-hidden="true">A</i>Back to you</span></div>
         <p class="demo-note" id="demo-note">Example: WeType voice. Illustrative only; no audio recorded.</p>
+        <details class="compact-how"><summary id="example-how-title">How the voice example works</summary><p id="example-how-copy">Hold your trigger key to switch temporarily to WeType and start dictation. Release it to finish; Hijack waits for the text to settle, then restores your previous input source.</p></details>
         <noscript><p class="demo-note">Enable JavaScript to play the demo. The full guide is available below.</p></noscript>
       </div>
     </section>
@@ -71,8 +72,46 @@
 
     <section class="details wrap" aria-label="Your preferences"><div><span class="detail-symbol" aria-hidden="true">⌘</span><h3>Your key, your choice</h3><p>Choose a trigger that fits your hands and the way you work.</p></div><div><span class="detail-symbol" aria-hidden="true">◒</span><h3>As visible as you want</h3><p>Show or hide the menu bar icon. Choose launch at login and your interface language.</p></div><div><img src="assets/HijackMenuTemplate-master.png" alt="" width="31" height="31"><h3>A little more yours</h3><p>Keep the tools you know. Make room for the capabilities you love.</p></div></section>
 
-    <section class="install-section wrap" id="install" aria-labelledby="install-title"><div class="install-panel"><div class="install-heading"><img src="assets/Hijack-1024.png" alt="" width="78" height="78"><p class="eyebrow">START WITH ONE SMALL BORROW</p><h2 id="install-title">Make yourself<br> at home.</h2><p>Start with one useful capability.<br>Make it part of your own routine.</p><span class="install-meta">Current build: WeType voice · macOS 13+</span></div><div class="install-content"><details class="install-guide" id="install-guide"><summary>Install the voice example <span aria-hidden="true">↗</span></summary><div class="install-guide-body"><h3>Before you start</h3><p class="install-help">The current source build implements the WeType voice example. Translation and text capture are concepts.</p><ul class="requirements"><li>Install WeType and set its push-to-talk voice key.</li><li>Install Xcode Command Line Tools.</li><li>Have the Hijack source checked out and open its folder in Terminal.</li></ul><div class="command-block"><div class="command-header"><span>RUN FROM YOUR HIJACK FOLDER</span><button id="copy-command" type="button">Copy command</button></div><pre><code id="install-command">./install.sh</code></pre></div><p class="copy-status" id="copy-status" role="status" aria-live="polite"></p><p class="install-help">The script builds and opens <strong>/Applications/Hijack.app</strong>. On first launch, allow Hijack in System Settings → Privacy & Security → Accessibility.</p><details><summary>Need the build tools?</summary><p>Run <code>xcode-select --install</code> in Terminal, then follow the system installer.</p></details><details><summary>Where are the settings?</summary><p>Click the hat in your menu bar to set your trigger, launch at login, and language. If the icon is hidden, open Hijack again to reach its settings.</p></details><details><summary>Who processes my voice?</summary><p>Hijack switches input sources and forwards trigger-key events. WeType processes the speech; its own policies govern how that voice data is handled.</p></details></div></details></div></div></section>
+    <section class="install-section wrap" id="install" aria-labelledby="install-title">
+      <div class="install-panel">
+        <div class="install-heading">
+          <img src="assets/Hijack-1024.png" alt="" width="78" height="78">
+          <p class="eyebrow">START WITH ONE SMALL BORROW</p>
+          <h2 id="install-title">Make yourself<br> at home.</h2>
+          <p>Start with one useful capability.<br>Make it part of your own routine.</p>
+          <span class="install-meta">Apple silicon · macOS 13+ · WeType voice</span>
+        </div>
+        <div class="install-content">
+          <details class="install-guide" id="install-guide">
+            <summary>Install Hijack <span aria-hidden="true">↗</span></summary>
+            <div class="install-guide-body">
+              <h3>Ready to run</h3>
+              <p class="install-help">Install the prebuilt app with either command below. No source checkout or developer tools needed.</p>
+              <ul class="requirements">
+                <li>An Apple silicon Mac running macOS 13 or later.</li>
+                <li>WeType installed, with its push-to-talk voice key set.</li>
+              </ul>
+              <div class="command-block">
+                <div class="command-header"><span>INSTALL WITH CURL</span><button type="button" data-copy-command="curl-command" data-copy-status="curl-status" aria-label="Copy curl command">Copy</button></div>
+                <pre><code id="curl-command">curl -fsSL https://raw.githubusercontent.com/zl190/hijack/main/install.sh | sh</code></pre>
+              </div>
+              <p class="copy-status" id="curl-status" role="status" aria-live="polite"></p>
+              <div class="command-block">
+                <div class="command-header"><span>OR, IF YOU USE HOMEBREW</span><button type="button" data-copy-command="brew-command" data-copy-status="brew-status" aria-label="Copy Homebrew command">Copy</button></div>
+                <pre><code id="brew-command">brew install --cask zl190/tap/hijack</code></pre>
+              </div>
+              <p class="copy-status" id="brew-status" role="status" aria-live="polite"></p>
+              <p class="install-help">The curl installer downloads the latest GitHub release into <strong>/Applications/Hijack.app</strong> and opens it. On first launch, allow Hijack in System Settings → Privacy &amp; Security → Accessibility.</p>
+              <p class="install-help">The current release supports the WeType voice example. Translation and text capture are concepts.</p>
+              <a class="release-link" href="https://github.com/zl190/hijack/releases">View releases on GitHub <span aria-hidden="true">↗</span></a>
+              <details><summary>Where are the settings?</summary><p>Click the hat in your menu bar to set your trigger, launch at login, and language. If the icon is hidden, open Hijack again to reach its settings.</p></details>
+              <details><summary>Who processes my voice?</summary><p>Hijack does not record, store, or upload audio. It switches input sources and forwards trigger-key events. WeType handles speech recognition; consult its privacy policy for audio processing, network transfer, and retention.</p></details>
+            </div>
+          </details>
+        </div>
+      </div>
+    </section>
   </main>
-  <footer class="wrap site-footer"><a class="brand footer-brand" href="#"><img src="assets/HijackMenuTemplate-master.png" alt="" width="28" height="28"><span>Hijack.</span></a><p>A tip of the hat to your way.</p><span>Made for macOS · MIT License</span></footer>
+  <footer class="wrap site-footer"><a class="brand footer-brand" href="#"><img src="assets/HijackMenuTemplate-master.png" alt="" width="28" height="28"><span>Hijack.</span></a><p>A tip of the hat to your way.</p><span>Made for macOS · MIT License</span><p class="affiliation-note">Hijack is an independent project, not affiliated with or endorsed by Tencent or WeType.</p></footer>
 </body>
 </html>

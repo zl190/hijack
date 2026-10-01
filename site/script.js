@@ -7,6 +7,8 @@
       action: 'Try the voice example', destination: '#install',
       title: 'A thought, right where you work', context: 'draft.ts', source: 'ABC', borrowed: 'Voice',
       availability: 'Voice example · available now', note: 'Example: WeType voice. Illustrative only; no audio recorded.',
+      howTitle: 'How the voice example works',
+      how: 'Hold your trigger key to switch temporarily to WeType and start dictation. Release it to finish; Hijack waits for the text to settle, then restores your previous input source.',
       capability: 'Borrow voice', borrowing: 'Borrowing voice input',
       before: 'function saveDraft() {', after: '  return draft.persist();\n}', prefix: '// ',
       placeholder: 'Say this comment out loud.', text: 'Save locally, then sync to the cloud.',
@@ -19,6 +21,8 @@
       action: 'See the borrowing pattern', destination: '#how-it-works',
       title: 'Keep your place in the story', context: 'Reading · A selected passage', source: 'Reader', borrowed: 'Translate',
       availability: 'Translation · concept only', note: 'Illustrative concept. Translation is not available in Hijack today.',
+      howTitle: 'How this concept could work',
+      how: 'Select a passage, borrow a translation, and return to the same place in your article. This illustrates a possible workflow; translation is not available in Hijack today.',
       capability: 'Translate', borrowing: 'Borrowing a translation',
       before: '“À chacun sa façon de travailler.”', after: 'Your article. Your place. Your notes.', prefix: '',
       placeholder: 'A little help with this passage.', text: '“Everyone has their own way of working.”',
@@ -31,6 +35,8 @@
       action: 'See the borrowing pattern', destination: '#how-it-works',
       title: 'From a picture to your own notes', context: 'Notebook · A captured idea', source: 'Notes', borrowed: 'OCR',
       availability: 'Text capture · concept only', note: 'Illustrative concept. Text capture is not available in Hijack today.',
+      howTitle: 'How this concept could work',
+      how: 'Select text in an image, borrow another app’s recognition, and take the words into your notes. This is a possible workflow; text capture is not available in Hijack today.',
       capability: 'Capture text', borrowing: 'Borrowing text recognition',
       before: 'Image: workshop-whiteboard.png', after: 'Keep the words in your own notebook.', prefix: '',
       placeholder: 'There is a thought worth keeping.', text: 'Make the tools fit the way you think.',
@@ -70,6 +76,8 @@
     document.querySelector('#demo-note').textContent = scene.note;
     document.querySelector('#journey-capability').textContent = scene.capability;
     document.querySelector('#borrow-label').textContent = scene.borrowing;
+    document.querySelector('#example-how-title').textContent = scene.howTitle;
+    document.querySelector('#example-how-copy').textContent = scene.how;
     const line = paragraph(scene.prefix); line.className = 'dictation-line';
     const text = document.createElement('span'); text.id = 'dictation-text'; text.className = 'placeholder-text'; text.textContent = scene.placeholder;
     const caret = document.createElement('span'); caret.className = 'caret'; caret.setAttribute('aria-hidden', 'true');
@@ -91,17 +99,20 @@
   document.querySelectorAll('[data-demo-link]').forEach(link => link.addEventListener('click', () => { selectScene(link.dataset.demoLink); play.focus({ preventScroll: true }); }));
   play.addEventListener('click', playDemo);
   window.addEventListener('pagehide', clear);
-  document.querySelector('#copy-command').addEventListener('click', async () => {
-    const feedback = document.querySelector('#copy-status');
-    try {
-      if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
-      await navigator.clipboard.writeText(document.querySelector('#install-command').textContent.trim());
-      feedback.textContent = 'Copied. Paste into Terminal from your Hijack folder.';
-    } catch {
-      const range = document.createRange(); range.selectNodeContents(document.querySelector('#install-command'));
-      const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
-      feedback.textContent = 'Copy was blocked. The command is selected; press ⌘C or Ctrl+C.';
-    }
+  document.querySelectorAll('[data-copy-command]').forEach(button => {
+    button.addEventListener('click', async () => {
+      const command = document.getElementById(button.dataset.copyCommand);
+      const feedback = document.getElementById(button.dataset.copyStatus);
+      try {
+        if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
+        await navigator.clipboard.writeText(command.textContent.trim());
+        feedback.textContent = 'Copied. Paste into Terminal to install.';
+      } catch {
+        const range = document.createRange(); range.selectNodeContents(command);
+        const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
+        feedback.textContent = 'Copy was blocked. The command is selected; press ⌘C or Ctrl+C.';
+      }
+    });
   });
   // Keep the brief mobile page readable; users expand installation when they need it.
   const compactLayout = window.matchMedia('(max-width: 900px)');
