@@ -54,19 +54,16 @@ struct ModKey: Equatable {
 }
 
 // WeType keeps its push-to-talk key in a private MMKV store; read it (never write it).
+// MMKV layout: a little-endian UInt32 with the live data length, then the data; updates are appended,
+// so the last occurrence inside the live range is current. Bytes past that length are stale leftovers.
 func weTypeVoiceKey() -> ModKey? {
     let url = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent("Library/Application Support/WeType/mmkv/wetype.settings")
-    guard let data = try? Data(contentsOf: url),
-          let s = String(data: data, encoding: .isoLatin1) else { return nil }
-    // voicePTTHotKey: 0 = the default Fn/🌐 key, 1 = custom shortcut (voicePTTShortcut_keyCodes).
-    // Choosing Fn only flips this flag and leaves the old custom key codes in place.
-    // MMKV appends updates, so the last occurrence is the current value: [len=1][varint].
-    if let m = s.range(of: "voicePTTHotKey\u{01}", options: .backwards),
-       let v = s[m.upperBound...].unicodeScalars.first, v.value == 0 {
-        return ModKey.by(code: 63)
-    }
-    guard let r = s.range(of: "voicePTTShortcut_keyCodes", options: .backwards) else { return nil }
+    guard let data = try? Data(contentsOf: url), data.count > 4 else { return nil }
+    let live = Int(data.prefix(4).withUnsafeBytes { $0.loadUnaligned(as: UInt32.self).littleEndian })
+    guard live > 0, 4 + live <= data.count,
+          let s = String(data: data.subdata(in: 4..<(4 + live)), encoding: .isoLatin1),
+          let r = s.range(of: "voicePTTShortcut_keyCodes", options: .backwards) else { return nil }
     let tail = s[r.upperBound...].prefix(24)
     guard let open = tail.firstIndex(of: "["), let close = tail.firstIndex(of: "]"), open < close else { return nil }
     let codes = tail[tail.index(after: open)..<close].split(separator: ",")
@@ -227,7 +224,7 @@ final class Engine {
             if (ready && waited >= holdDelay) || waited >= maxSwitchWait {
                 forwarded = true
                 post(m.forwardKey, down: true)
-                log("forward down after \(Int(waited * 1000))ms ready=\(ready) \(focusDesc())")
+                log("forward \(m.forwardKey.enName) down after \(Int(waited * 1000))ms ready=\(ready) \(focusDesc())")
             } else {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) { forwardWhenReady() }
             }
