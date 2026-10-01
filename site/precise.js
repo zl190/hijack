@@ -1,121 +1,113 @@
 (() => {
   'use strict';
-  const isChinese = document.documentElement.lang.toLowerCase().startsWith('zh');
-  const labels = isChinese ? {
-    capsule: '微信语音输入', playing: '演示中…', replay: '▶ 播放演示', play: '▶ 播放演示',
-    copying: '正在复制…', copied: '已复制，粘贴到终端运行。',
-    copyFallback: '已选中命令，请按 ⌘C 或 Ctrl+C 复制。'
-  } : {
-    capsule: 'WeType dictation', playing: 'Playing…', replay: '↻ Replay', play: '▶ Play the switch',
-    copying: 'Copying…', copied: 'Copied. Paste into Terminal to install.',
-    copyFallback: 'The command is selected. Press ⌘C or Ctrl+C to copy.'
-  };
-  const stages = isChinese ? [
-    { source: '鼠须管', status: '正在使用鼠须管输入。', text: '在这里输入…' },
-    { source: '微信输入法', status: '按住按键，已切到微信输入法。', text: '正在听你说话…', capsule: '微信语音输入' },
-    { source: '微信输入法', status: '已松开，等待微信输入法提交文字。', text: '周五下午三点开会。', capsule: '正在完成语音输入…' },
-    { source: '鼠须管', status: '文字已提交，已恢复鼠须管。', text: '周五下午三点开会。' }
-  ] : [
-    { source: 'ABC', status: 'Typing with ABC.', text: 'Say the next sentence out loud.' },
-    { source: 'WeType', status: 'Key held. Switched to WeType.', text: 'Listening…', capsule: 'WeType dictation' },
-    { source: 'WeType', status: 'Key released. WeType is finishing.', text: 'Let’s move the review to Friday.', capsule: 'Finishing dictation…' },
-    { source: 'ABC', status: 'Text submitted. ABC restored.', text: 'Let’s move the review to Friday.' }
+
+  const language = new URLSearchParams(location.search).get('lang') === 'en' ? 'en' : 'zh';
+  const copy = window.HIJACK_LOCALES[language];
+  document.documentElement.lang = language === 'zh' ? 'zh-CN' : 'en';
+  document.querySelectorAll('[data-i18n]').forEach(node => { node.textContent = copy[node.dataset.i18n]; });
+  for (const attribute of ['aria-label', 'title', 'alt', 'content', 'src']) {
+    document.querySelectorAll(`[data-i18n-${attribute}]`).forEach(node => {
+      node.setAttribute(attribute, copy[node.getAttribute(`data-i18n-${attribute}`)]);
+    });
+  }
+  const languageLink = document.querySelector('.language-link');
+  languageLink.href = `?lang=${language === 'zh' ? 'en' : 'zh'}${location.hash}`;
+  languageLink.lang = language === 'zh' ? 'en' : 'zh-CN';
+  languageLink.textContent = language === 'zh' ? 'English' : '中文';
+  languageLink.setAttribute('aria-label', language === 'zh' ? 'English version' : '中文版');
+  document.querySelector('.brand').href = `?lang=${language}`;
+  const phases = [
+    { id: 'typing', duration: 700, source: copy.rime, status: copy.typingStatus, text: copy.placeholder, active: 'typing', direction: 'idle', detail: copy.previous },
+    { id: 'speaking', duration: 1800, source: copy.wetype, status: copy.speakingStatus, text: copy.listening, active: 'voice', direction: 'out', detail: copy.previous },
+    { id: 'restored', cueDuration: 950, source: copy.rime, status: copy.restoredStatus, text: copy.sample, active: 'typing', direction: 'back', detail: copy.continueTyping }
   ];
-  const appWindow = document.querySelector('.app-window');
-  const button = document.querySelector('#play');
-  const capsuleLabel = document.querySelector('#capsule-label');
-  let timers = [];
-  function setPlayButton(disabled, text) {
-    if (!button) return;
-    button.disabled = disabled;
-    button.textContent = text;
-  }
-  function showStage(index) {
-    const stage = stages[index];
-    appWindow.dataset.stage = String(index);
-    if (isChinese) appWindow.dataset.view = 'demo';
-    document.querySelector('#current-source').textContent = stage.source;
-    document.querySelector('#demo-status').textContent = stage.status;
-    document.querySelector('#sample-text').textContent = stage.text;
-    if (capsuleLabel) capsuleLabel.textContent = stage.capsule || labels.capsule;
-    const activeStep = isChinese ? (index === 1 || index === 2 ? 1 : 0) : index;
-    if (isChinese) {
-      document.querySelector('.source-steps').dataset.direction = ['idle', 'out', 'waiting', 'back'][index];
-      document.querySelector('#typing-detail').textContent = index === 3 ? '继续打字' : '原输入法';
-      document.querySelector('#voice-detail').textContent = '语音输入';
-    }
-    document.querySelectorAll('[data-step]').forEach(item => {
-      if (Number(item.dataset.step) === activeStep) item.setAttribute('aria-current', 'step');
+  const frame = document.querySelector('.app-window');
+  const source = document.querySelector('#current-source');
+  const status = document.querySelector('#demo-status');
+  const sample = document.querySelector('#sample-text');
+  const steps = document.querySelector('.source-steps');
+  const stepItems = [...steps.querySelectorAll('[data-step]')];
+  const replayButton = document.querySelector('#replay-switch');
+  const backButton = document.querySelector('#back-to-meme');
+  const typingDetail = document.querySelector('#typing-detail');
+  let timer;
+
+  function render(phase, cover = false) {
+    frame.dataset.stage = phase.id;
+    frame.dataset.view = cover ? 'cover' : 'demo';
+    source.textContent = phase.source;
+    status.textContent = phase.status;
+    sample.textContent = phase.text;
+    steps.dataset.direction = cover ? 'idle' : (phase.direction || 'idle');
+    typingDetail.textContent = phase.detail;
+    for (const item of stepItems) {
+      if (!cover && item.dataset.step === phase.active) item.setAttribute('aria-current', 'step');
       else item.removeAttribute('aria-current');
-      item.querySelector('.step-select')?.setAttribute('aria-pressed', String(Number(item.dataset.step) === activeStep));
-    });
-  }
-  function clearTimers() { timers.forEach(clearTimeout); timers = []; }
-  function playFrom(startIndex) {
-    clearTimers();
-    setPlayButton(true, labels.playing);
-    showStage(startIndex);
-    const sequence = isChinese ? [0, 1, 3] : [0, 1, 2, 3];
-    const durations = [700, 1800, 2000];
-    let elapsed = 0;
-    for (let position = sequence.indexOf(startIndex) + 1; position < sequence.length; position += 1) {
-      const index = sequence[position];
-      elapsed += durations[sequence[position - 1]];
-      timers.push(setTimeout(() => {
-        showStage(index);
-        if (index === stages.length - 1) {
-          setPlayButton(false, labels.replay);
-        }
-      }, elapsed));
     }
   }
-  button?.addEventListener('click', () => {
-    playFrom(isChinese ? 0 : 1);
-    document.querySelector('[data-go-stage="0"]')?.focus();
-  });
-  function showCover() {
-    showStage(0);
-    appWindow.dataset.view = 'cover';
-    document.querySelectorAll('[data-step]').forEach(item => {
-      item.removeAttribute('aria-current');
-      item.querySelector('.step-select')?.setAttribute('aria-pressed', 'false');
-    });
+
+  function stop() {
+    clearTimeout(timer);
+    timer = undefined;
   }
-  document.querySelectorAll('[data-go-stage]').forEach(stepButton => {
-    stepButton.addEventListener('click', () => {
-      playFrom(Number(stepButton.dataset.goStage));
-    });
-  });
-  document.querySelector('#replay-switch')?.addEventListener('click', () => playFrom(0));
-  document.querySelector('#back-to-meme')?.addEventListener('click', () => {
-    clearTimers();
-    showCover();
-    setPlayButton(false, labels.play);
-    (button || document.querySelector('[data-go-stage="0"]'))?.focus();
-  });
-  window.addEventListener('pagehide', clearTimers);
-  window.addEventListener('pageshow', event => {
-    if (event.persisted) {
-      clearTimers(); if (isChinese) showCover(); else showStage(0); setPlayButton(false, labels.play);
+
+  function reset() {
+    stop();
+    render(phases[0], true);
+  }
+
+  function play() {
+    stop();
+    function advance(position) {
+      const phase = phases[position];
+      render(phase);
+      if (phase.duration) {
+        timer = setTimeout(() => advance(position + 1), phase.duration);
+      } else if (phase.cueDuration) {
+        timer = setTimeout(() => { steps.dataset.direction = 'idle'; }, phase.cueDuration);
+      }
     }
+    advance(0);
+  }
+
+  replayButton.addEventListener('click', play);
+  backButton.addEventListener('click', () => {
+    reset();
+    replayButton.focus();
   });
-  document.querySelectorAll('[data-copy]').forEach(copyButton => {
-    copyButton.addEventListener('click', async () => {
-      const command = document.getElementById(copyButton.dataset.copy);
-      const status = document.querySelector('#copy-status');
-      status.textContent = labels.copying;
+  window.addEventListener('pagehide', stop);
+  window.addEventListener('pageshow', event => { if (event.persisted) reset(); });
+
+  const copyButtons = [...document.querySelectorAll('[data-copy]')];
+  const copyStatus = document.querySelector('#copy-status');
+  copyButtons.forEach(button => {
+    button.addEventListener('click', async () => {
+      const command = document.getElementById(button.dataset.copy);
+      copyStatus.textContent = copy.copying;
+      button.disabled = true;
       try {
         if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
         await navigator.clipboard.writeText(command.textContent.trim());
-        status.textContent = labels.copied;
+        copyButtons.forEach(item => { item.textContent = copy.copy; });
+        button.textContent = copy.copiedLabel;
+        copyStatus.textContent = copy.copied;
       } catch {
-        const range = document.createRange(); range.selectNodeContents(command);
-        const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
-        status.textContent = labels.copyFallback;
+        const range = document.createRange();
+        range.selectNodeContents(command);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+        copyStatus.textContent = copy.copyFallback;
+      } finally {
+        button.disabled = false;
       }
     });
   });
-  const compact = window.matchMedia('(max-width: 760px)');
-  const setGuide = () => { document.querySelector('#install-guide').open = !compact.matches; };
-  setGuide(); compact.addEventListener('change', setGuide);
+
+  const guide = document.querySelector('#install-guide');
+  guide.open = !window.matchMedia('(max-width: 760px)').matches || location.hash === '#install';
+  document.querySelectorAll('a[href="#install"]').forEach(link => {
+    link.addEventListener('click', () => { guide.open = true; });
+  });
+  window.addEventListener('hashchange', () => { if (location.hash === '#install') guide.open = true; });
 })();

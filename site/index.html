@@ -7,8 +7,8 @@
   <meta name="description" content="Your tools. Your rules. Borrow the capabilities you love from different apps and make them part of your own workflow. A small macOS utility with a bigger idea.">
   <title>Hijack — Your tools. Your rules.</title>
   <link rel="icon" type="image/png" href="assets/Hijack-1024.png">
-  <link rel="stylesheet" href="styles.css">
-  <script src="script.js" defer></script>
+  <link rel="stylesheet" href="styles.css?v=957a760098ac">
+  <script src="script.js?v=a647e1342cab" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -65,7 +65,7 @@
         <article class="scenario"><div class="scenario-top"><span class="scenario-number">02 / UNDERSTAND</span><span class="availability">Concept</span></div><p class="scenario-kicker">STAY WITH YOUR CONTEXT</p><h3>A new language.<br>The same train of thought.</h3><p>You’re deep in an article when a passage stops you. Imagine borrowing a translator for just that passage, keeping your place, your notes, and the thread of what you were reading.</p><div class="snippet snippet-flow"><span class="snippet-label">A POSSIBLE BORROW</span><div><span>Your reading app</span><b aria-hidden="true">→</b><strong>Translation</strong><b aria-hidden="true">↩</b></div></div><p class="concept-note">An idea to explore. Not available in Hijack today.</p><a href="#demo" class="scenario-link" data-demo-link="translate">Explore the concept <span aria-hidden="true">↗</span></a></article>
         <article class="scenario"><div class="scenario-top"><span class="scenario-number">03 / COLLECT</span><span class="availability">Concept</span></div><p class="scenario-kicker">CONNECT YOUR OWN TOOLS</p><h3>Text in a picture.<br>A place in your thinking.</h3><p>A screenshot has the sentence you need. Imagine borrowing another app’s text recognition, then taking the words into the notebook you already trust. Every tool plays its part.</p><div class="snippet snippet-flow"><span class="snippet-label">A POSSIBLE BORROW</span><div><span>Image</span><b aria-hidden="true">→</b><strong>Borrowed OCR</strong><b aria-hidden="true">→</b><span>Your notes</span></div></div><p class="concept-note">An idea to explore. Not available in Hijack today.</p><a href="#demo" class="scenario-link" data-demo-link="ocr">Explore the concept <span aria-hidden="true">↗</span></a></article>
       </div>
-      <p class="section-footnote">Hijack currently supports borrowing WeType voice input. Translation and OCR illustrate the broader idea; they are not shipped features or promised integrations.</p>
+      <p class="section-footnote">Hijack supports borrowing voice input. Translation and OCR illustrate the broader idea; they are not shipped features or promised integrations.</p>
     </section>
 
     <section class="how-section" id="how-it-works" aria-labelledby="how-title"><div class="wrap how-layout"><div><p class="eyebrow">THE PATTERN / BORROW A CAPABILITY</p><h2 id="how-title">Borrow what helps.<br>Keep your flow.</h2><p class="how-intro">A simple idea for making software your own: let each app contribute the part you need.</p></div><ol class="steps"><li><span class="step-number">1</span><div><h3>Start with your way</h3><p>Your editor, your keyboard, your notebook. Keep the environment you’ve made your own.</p></div><kbd>⌘</kbd></li><li><span class="step-number">2</span><div><h3>Borrow the useful part</h3><p>A voice, a translation, a piece of text. Bring a useful capability into the moment that needs it.</p></div><span class="return-symbol" aria-hidden="true">↗</span></li><li><span class="step-number">3</span><div><h3>Carry on with your work</h3><p>Take the result back into your flow. You choose how the pieces fit together.</p></div><span class="return-symbol" aria-hidden="true">↩</span></li></ol></div></section>
@@ -79,7 +79,7 @@
           <p class="eyebrow">START WITH ONE SMALL BORROW</p>
           <h2 id="install-title">Make yourself<br> at home.</h2>
           <p>Start with one useful capability.<br>Make it part of your own routine.</p>
-          <span class="install-meta">Apple silicon · macOS 13+ · WeType voice</span>
+          <span class="install-meta">Apple silicon · macOS 13+ · Voice input tools</span>
         </div>
         <div class="install-content">
           <details class="install-guide" id="install-guide">
@@ -89,7 +89,7 @@
               <p class="install-help">Install the prebuilt app with either command below. No source checkout or developer tools needed.</p>
               <ul class="requirements">
                 <li>An Apple silicon Mac running macOS 13 or later.</li>
-                <li>WeType installed, with its push-to-talk voice key set.</li>
+                <li>A supported voice input tool installed.</li>
               </ul>
               <div class="command-block">
                 <div class="command-header"><span>INSTALL WITH CURL</span><button type="button" data-copy-command="curl-command" data-copy-status="curl-status" aria-label="Copy curl command">Copy</button></div>
@@ -102,10 +102,10 @@
               </div>
               <p class="copy-status" id="brew-status" role="status" aria-live="polite"></p>
               <p class="install-help">The curl installer downloads the latest GitHub release into <strong>/Applications/Hijack.app</strong> and opens it. On first launch, allow Hijack in System Settings → Privacy &amp; Security → Accessibility.</p>
-              <p class="install-help">The current release supports the WeType voice example. Translation and text capture are concepts.</p>
+              <p class="install-help">Tested: WeType, Sogou IME, Doubao IME, and Handy. Also supported, testing pending: Wispr Flow, Openless, and Typeless. Translation and text capture are concepts.</p>
               <a class="release-link" href="https://github.com/zl190/hijack/releases">View releases on GitHub <span aria-hidden="true">↗</span></a>
               <details><summary>Where are the settings?</summary><p>Click the hat in your menu bar to set your trigger, launch at login, and language. If the icon is hidden, open Hijack again to reach its settings.</p></details>
-              <details><summary>Who processes my voice?</summary><p>Hijack does not record, store, or upload audio. It switches input sources and forwards trigger-key events. WeType handles speech recognition; consult its privacy policy for audio processing, network transfer, and retention.</p></details>
+              <details><summary>Who processes my voice?</summary><p>Hijack does not record, store, or upload audio. Your selected voice tool handles speech recognition; consult its privacy policy for audio processing, network transfer, and retention.</p></details>
             </div>
           </details>
         </div>

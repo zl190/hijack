@@ -1,146 +1,44 @@
-# Homepage delivery
+# Homepage delivery and review
 
-## Contract
+## Scope and data contract
 
-- Input: product behavior in `Hijack.swift`, requirements and installation in `README.md` / `install.sh`, approved icons in `assets/`.
-- Output: an English static homepage in `site/`, ready to serve as a directory.
-- Side effects: website files and documentation only. No changes to native behavior, user input sources, permissions, installed applications, deployment, or remote Git state.
-- Guarantees: no runtime dependencies or external requests; demonstration is clearly labeled; scenario switching cancels pending demonstration callbacks; repeated demos reset cleanly; copy failures offer manual selection; the core page remains useful without JavaScript.
+Inputs: product behavior in `Hijack.swift`, published installation instructions, approved Hijack artwork, and the owner's 2026-10-01 voice-tool support report. Outputs: static pages in `site/` and this documentation. Side effects are limited to those files and a local branch checkpoint; native code, installers, installed apps, deployment, and remote Git state are unchanged.
 
-## Composition and claims
+The single focused page, localized in Chinese and English explain temporary voice-tool use followed by restoration of the previous input source. The broader page retains explicitly labelled translation/OCR concepts. All editor text is illustrative. No page captures audio, runs installation commands, or sends analytics.
 
-Primary action: understand capability borrowing as a way to compose a personal workflow, explore three parallel capability examples, and reach truthful local installation instructions.
+## HCI and implementation review — 2026-10-01
 
-Attention path: autonomy statement → three capability demos → three capability-borrowing stories → general borrowing pattern → preferences → installation.
+Diagnosis: incremental edits had left competing CSS overrides, different English/Chinese phase models, and clickable microphone/source circles that resembled recording controls. The support block repeated category labels, while whole-element fading reduced text legibility. Installation disclosures reset on viewport changes. The broader demo cancelled timers on page exit without recovering its disabled play button after a back/forward-cache restore.
 
-The three sibling stories describe borrowing capabilities: voice, translation, and OCR. Voice is the working example. Translation and OCR are explicit concepts, not shipped features or commitments. The demo examples do not assert tested integration with specific editors or email clients. The icon's tipping-hat meaning carries into the closing line.
+Decisions and resulting behavior:
 
-User direction: broaden the story beyond three text-entry tasks; use an English interface. Core proposition: apps provide capabilities, users compose their workflow. WeType is one example of a borrowed capability, not the product’s defining scope. Voice, translation, and text capture sit side by side in the hero; per-example availability distinguishes the current build from concepts.
+- One shared playback action: the central Hijack button with a visible 播放演示 label. The circles communicate state and are not interactive.
+- One phase model in both focused languages: typing → voice input → restored. The native waiting behavior remains unchanged; the illustration omits the waiting interval.
+- Directional arrows appear only when relevant. The return cue clears after 950ms, including with reduced motion; faint paired idle arcs preserve the round-trip idea. Hijack hops 22px sideways and 12px upward. Cover/editor geometry stays stable.
+- CSS is organized by component, language, motion, and breakpoint; superseded appended overrides are removed. One cancellable timer controls focused playback and cue cleanup.
+- The support list groups input methods and standalone apps into separate columns, with four tested checkmarks and one legend. Text stays readable while the inactive microphone and surface are dimmed.
+- Replay, return, navigation, and disclosures support keyboard use. The return target is 44×44px; compact copy targets are at least 44px tall.
+- Disclosure defaults are applied once. User choices survive resizing; installation links open the commands.
+- Both scripts recover from back/forward-cache restoration. A single focused HTML template and locale dictionary prevent design drift between languages. Content fingerprints keep HTML, CSS, and JavaScript versions aligned.
 
-Reuse decision: adapted the repository's existing icon artwork and product/installation language from commit `cb1ab6a`. Built the thin explanatory page with native HTML/CSS/JS because no frontend stack, package boundary, or existing site is present. No external component framework needed.
+Accessibility references used for review: [button semantics](https://www.w3.org/WAI/ARIA/apg/patterns/button/), [minimum contrast](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html), and [target size](https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html). This is a targeted review, not a full accessibility certification.
 
-## Initial version verification
+## Verification
 
-Verified in the Codex in-app browser on 2026-10-01 at `http://127.0.0.1:4173`:
+Browser checks on the current focused pages:
 
-- Pass: rendered desktop and mobile layouts; DOM overflow checks at 320, 390, and 1440 CSS pixels returned viewport width equal to document scroll width, with no overflowing elements.
-- Pass: demo transitions ABC → WeType → ABC and enables replay after completion.
-- Pass: changing from an active Email demo to Notes cancels prior callbacks, leaving Shuangpin and the Notes placeholder intact after the old timer would have completed.
-- Pass: Tab from the final example button reaches Play demo; Enter starts the demonstration.
-- Pass: Copy command displays success; installation navigation and privacy disclosure open their intended content.
-- Pass: all five displayed images loaded; no browser console warnings/errors were reported during the pass.
-- Pass: static link/asset resolution, unique IDs, one H1, English-only HTML/JS interface text, both concept disclaimers, `node --check site/script.js`, and `git diff --check`.
-- Not exercised: clipboard denial/manual-copy fallback and a browser with JavaScript disabled. The fallback was source-reviewed; static HTML contains the complete core narrative and installation instructions.
-- Not applicable: account/session/private-data states; the homepage has no accounts, private content, saved state, or remote writes.
+- Chinese layout at 320px and 390px has no horizontal overflow. At 320px, cover and completed editor both measure 162.0859375px tall.
+- Keyboard activation starts playback; the source reaches WeType then returns to Squirrel. Returning to the cover restores central-button focus. The return hit target is 44×44px.
+- Outbound and return arrows follow the selected phase; the idle cover retains both faint directional arcs.
+- The compact support list fits, install navigation expands commands, copying gives Chinese success feedback, and a manually collapsed disclosure remains collapsed after viewport reset.
+- English playback completes all three phases and restores Rime. The same central button restarts playback. Language navigation works.
 
-Native behavior in real target applications was not retested; demo text is illustrative and the app itself was not modified.
+Independent actual-script VM checks pass for both 700ms/1800ms sequences, the 950ms return cue, rapid replay cancellation, cover reset/focus, and persisted pagehide/pageshow recovery in both scripts. Both circles have no interaction handlers. Reduced-motion cue cleanup was reviewed explicitly.
 
-No native build needed: Swift code and installation scripts are unchanged. No deploy requested. Original checkout stays untouched; the homepage lives on `codex/hijack-homepage` in an isolated Codex-owned worktree.
+Static checks cover JavaScript syntax, HTML nesting and unique IDs, one H1 per page, local asset/fragment references, command equality, content fingerprints, and whitespace. The old Chinese URL redirects to the shared template; English and Chinese use identical element structure and behavior. Native integration tests were not rerun; the seven-tool support evidence comes from the owner. Clipboard denial and disabled-JavaScript browser execution were not exercised; manual-copy fallback and static content were source-reviewed. The in-app browser did not reproduce an actual back/forward-cache restore, so that lifecycle recovery was validated by the VM harness.
 
-## Capability-first revision
+## Installation and privacy evidence
 
-The page now defines Hijack through the general borrowing pattern. WeType is the first full hero story, with its own headline and narrative, alongside translation and text-capture stories. The persistent product-level line is “Your tools. Your rules.” Each selection changes the hero headline, description, primary action, availability label, and demo together. Demo data now owns capability, availability, result, and status strings per example; switching examples cancels the previous run. No native integrations were added.
+Release instructions were checked read-only against main commit `03b1eb4`, the published installer at https://raw.githubusercontent.com/zl190/hijack/main/install.sh, the Homebrew cask at https://raw.githubusercontent.com/zl190/homebrew-tap/main/Casks/hijack.rb, and release v1.0.0. Installers were not executed. The reviewed Swift source switches input sources and forwards trigger events; it does not capture, store, or upload audio. The selected voice tool's own policy governs speech processing and retention.
 
-Revision checks passed in the browser: selecting Translation replaces the full hero and points its primary action to the general borrowing pattern; selecting Text capture during playback cancels the earlier run and retains the correct concept label, context, and idle state. Enter starts the text-capture demo. Layout has no horizontal overflow at 320 and 390 CSS pixels. The installation copy continues to identify the current build as WeType voice only. `node --check` and whitespace checks passed. The earlier native-app and clipboard-failure limitations still apply.
-
-## Compact portrait layout
-
-Diagnosis: at 390 × 844, the previous page was 5,257 CSS pixels tall. The three repeated scenario cards occupied 1,858 pixels, despite all three stories already being available in the hero switcher.
-
-At widths up to 900 pixels, the page now presents the selected hero story and demo, the short product statement, and installation in a native details disclosure. Repeated scenario cards, expanded pattern, and preference summaries are omitted from this compact reading path. The header links directly to the story switcher; hidden desktop actions cannot point users to hidden sections. The existing Settings FAQ remains available inside installation.
-
-Verification:
-- 390 px: 1,099 px default document height, compared with 5,257 px before (about 79% shorter).
-- 320 px: 1,097 px document height for the translation story; no horizontal overflow.
-- Story switching retains the correct headline, availability, and demo.
-- Installation expands and collapses; command is visible and copying succeeds.
-- 1440 px: full desktop sections remain visible, installation opens by default, no horizontal overflow.
-- Narrow/wide transitions update the disclosure default; users can open or close it directly between transitions.
-
-No new native capability, release, or deployment is included in this revision.
-
-## Release-instructions review correction
-
-Diagnosis: the homepage’s installation copy was based on `cb1ab6a`, which built from source. Main commit `03b1eb4` changed `install.sh` to download a prebuilt release, added `install-from-source.sh`, and documented curl/Homebrew installation. The isolated homepage branch was rebased onto the updated `origin/main` before this correction.
-
-The original installation content audit failed all four checks: missing curl command, missing Homebrew command, incorrect Command Line Tools prerequisite, and incorrect source-checkout prerequisite.
-
-Read-only verification on 2026-10-01:
-- Published installer: https://raw.githubusercontent.com/zl190/hijack/main/install.sh
-- Homebrew cask: https://raw.githubusercontent.com/zl190/homebrew-tap/main/Casks/hijack.rb
-- GitHub release: https://github.com/zl190/hijack/releases/tag/v1.0.0, with `Hijack.zip` (2,027,613 bytes).
-- Both installer and cask require Apple silicon; README/cask require macOS 13+.
-- Reviewed the complete unchanged `Hijack.swift`: it switches input sources, forwards trigger-key events, observes the voice capsule, and logs event/focus metadata. It has no audio capture, storage, or upload code. WeType’s server-side audio processing and retention were not independently verified, so the FAQ directs users to its privacy policy and does not claim local-only recognition.
-
-Changes: two prebuilt installation commands with independent copy feedback; no developer-tool/source-checkout prerequisites; explicit Available/Concept selector badges; independent-project/non-affiliation footer; compact workflow disclosure on narrow screens; privacy answer scoped specifically to audio. The installer scripts and app were not executed or changed.
-
-Verified in the live preview:
-- Both command blocks match the published README exactly; clipboard contents match each command after the asynchronous write completes.
-- Installer disclosure, privacy FAQ, and compact workflow explanation expand correctly.
-- Available/Concept labels appear in the selectors before any interaction; affiliation disclaimer remains visible on narrow screens.
-- 390 px collapsed page height: 1,207 px. At 320 px with installation expanded and at 1440 px desktop width, document scroll width equals viewport width.
-- Desktop installation defaults open; compact defaults closed. No console warnings/errors reported.
-- `node --check site/script.js`, HTML structure/link checks, and `git diff --check` pass. Install commands were verified read-only and were not executed.
-
-## Focused alternative / precise.html
-
-User request: create another precise version explaining only the current implemented function. Preserve the existing broad homepage.
-
-Contract: inputs are the current Swift behavior, release installation instructions, and existing icon assets. Outputs are `site/precise.html`, `site/precise.css`, and `site/precise.js`; no app, installer, or existing homepage behavior changes. The page contains no speculative translation/OCR features. The sample dictation is timer-driven and never accesses the microphone.
-
-Composition: one explicit proposition → input-source state demonstration → installation commands and privacy. The four visible stages distinguish release from restoration; the input source remains WeType while dictation finishes. Both the headline copy and demonstration state that the previously selected source is restored.
-
-Verification:
-- Browser playback: holding shows WeType; release/finishing still shows WeType; submitted text restores ABC and enables replay.
-- Both clipboard commands match the published README exactly; installer scripts were not executed.
-- Installation and privacy disclosures work.
-- No horizontal overflow at 320, 390, or 1440 CSS pixels. Collapsed mobile page height at 390px: 1,202px.
-- No browser warnings/errors reported. JavaScript syntax, HTML nesting/IDs/local-link checks, and whitespace checks pass.
-- Original `site/index.html`, `site/script.js`, and `site/styles.css` remain unchanged from the prior commit.
-- Clipboard denial fallback and disabled-JavaScript browser execution were not exercised; static markup retains the entire four-step explanation and manual-copy commands.
-
-## Simplified Chinese focused homepage
-
-User request: add a Chinese version of the focused homepage. Added `site/precise-zh.html` with translated copy, metadata, accessibility labels, installation guidance, and privacy explanation. Both languages share the demonstration logic and styles, with scoped Chinese typography and reciprocal language links. The installation command strings are unchanged.
-
-Verification: the Chinese demonstration retains WeType after key release while text is being submitted, then restores ABC. Chinese clipboard feedback works. Navigation to English and English playback still work. The Chinese layout has no horizontal overflow at 320 and 390 CSS pixels; at 390px its collapsed document height is 1,206px. HTML structure, IDs, local links, command equality, JavaScript syntax, and whitespace checks pass. No native behavior or deployment is included.
-
-## Chinese copy and meme cover
-
-The Chinese hero now reads “语音输入，自己的输入法，我全都要。” The example source is 鼠须管 (Squirrel for macOS). The workflow has three cards; the last card shows WeType while text is being submitted and then returns to 鼠须管. Repetitive slogans were removed and practical setup/privacy information retained in shorter copy.
-
-The user-selected meme is the initial cover. The final requested button text is “▶ 播放演示”, including replay. The play button overlays the bottom-right corner of the full image. Clicking replaces the cover with the existing editor animation. Verified in-browser: cover and button visible; release stage still shows WeType; completed stage restores 鼠须管; the final button remains available. At 390px the full image and button fit and document width equals viewport width. JavaScript syntax and whitespace checks passed.
-
-## Stable frame and interactive steps
-
-Cover and demo now share the image aspect ratio. An icon-only return control is positioned at the left-side vertical midpoint, following the user's decision to adopt the conventional previous-slide placement. It has no circle or shadow and appears only after playback completes. The play button appears only on the cover. Three step buttons start playback from their corresponding input-source state. The release step shows submission in progress before restoring the previous source. The cover clears step selection.
-
-Browser verification: cover and playback both measured 238.296875px at the default viewport, and cover/step selection both measured 162.0859375px at 320px. The return arrow's vertical center matched the frame's center. At 320px there is no horizontal overflow, all three steps can be selected, the release step reaches the restored state, and returning to the cover clears the active step. Returning during playback cancels it and restores the enabled play button.
-
-## Voice indicator and step playback refinement
-
-The Chinese demo now draws an unboxed animated waveform, centered in the bottom status area. It contains no microphone or text: speaking animates nine rounded bars, submission collapses them into a pulsing line, and completion hides them. Reduced-motion mode disables these animations. The middle step uses a microphone icon instead of the WeType name; the current-source display still identifies WeType.
-
-Clicking any step now plays the remaining sequence. Clicking the first step shows the original source, then advances through holding, submission, and restoration. Playback clears prior timers before restarting. The return arrow is at the left midpoint and only appears after the completed state. Verified in the browser: first-step click reached the speaking state with nine waveform bars and no return arrow, then restored 鼠须管 and revealed the arrow; returning restored the cover, cleared the selected step, and showed the play button. No browser errors were reported. JavaScript syntax and whitespace checks passed.
-
-## Two-card input-source switcher
-
-The Chinese workflow now has two interactive cards: the previous input method and voice input. Two arrows between them show outbound and return motion with a short overshoot-and-settle animation; the selected card also springs into place. Submission keeps the voice card selected until text is committed, then the original input method becomes active. Reduced-motion preferences disable the bounce. Browser verification confirmed WeType / voice-card selection while submitting, then 鼠须管 / original-card selection with the return-arrow animation.
-
-The cover's play button is now a small translucent dark pill. The Chinese footer keeps only the project/license line, per user request. Verified the simplified footer in the browser; JavaScript syntax and whitespace checks pass.
-
-## Circular switcher and synchronized icon motion
-
-User refinements replace the two cards with circles, add curved outbound/return arrows and the Hijack icon between them, and replace the Squirrel text in the left control with its official app icon. The arrows retain an anticipation/overshoot/settle motion; Hijack squashes, hops, and settles in the matching direction. Reduced-motion preferences suppress motion. Chinese playback now runs source → voice → restored source without a separate waiting scene; English retains its four states. The redundant cover play button is removed, while either circle starts playback. The return control is an SVG chevron that appears on frame hover or keyboard focus after completion; touch layouts keep it visible.
-
-Browser verification: clicking the first circle reached voice input with `hijack-hop-out`, then restored Squirrel with `hijack-hop-back`; the removed play button is absent, and the return control is hidden until hover/focus. JavaScript syntax and whitespace checks pass.
-
-## Clickable Hijack and face-label cover
-
-The central Hijack icon now has a 44px replay button with independent hover/focus spring motion and pressed feedback. Clicking it restarts the full Chinese sequence. Removed the redundant demonstration heading, and added the user-requested Hijack face-label cover while retaining the prior image asset.
-
-The inactive voice circle is dimmed to 40% opacity, rising to 70% on hover/focus and 100% when active. It remains clickable. The Hijack face label uses small tilted lettering centered on the face. Browser checks confirmed the central replay button starts voice playback and returns to the original source.
-
-## Voice-tool support list
-
-The owner supplied a seven-tool compatibility list and identified four as personally tested. Added a compact, two-group list to the Chinese installation section: tested (WeType, Sogou IME, Doubao IME, Handy) and supported/pending test (Wispr Flow, Openless, Typeless). Removed the obsolete WeType-only requirement and generalized the title, prerequisite, and voice-processing explanation. No analytics or external requests were added.
+The work remains on the isolated `codex/hijack-homepage` branch. No publication or deployment is included. Asset provenance and local serving instructions are maintained in `site/README.md`; superseded design notes remain in Git history.

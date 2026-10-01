@@ -99,6 +99,7 @@
   document.querySelectorAll('[data-demo-link]').forEach(link => link.addEventListener('click', () => { selectScene(link.dataset.demoLink); play.focus({ preventScroll: true }); }));
   play.addEventListener('click', playDemo);
   window.addEventListener('pagehide', clear);
+  window.addEventListener('pageshow', event => { if (event.persisted) selectScene(current); });
   document.querySelectorAll('[data-copy-command]').forEach(button => {
     button.addEventListener('click', async () => {
       const command = document.getElementById(button.dataset.copyCommand);
@@ -117,8 +118,10 @@
   // Keep the brief mobile page readable; users expand installation when they need it.
   const compactLayout = window.matchMedia('(max-width: 900px)');
   const installGuide = document.querySelector('#install-guide');
-  const setGuideDefault = () => { installGuide.open = !compactLayout.matches; };
-  setGuideDefault();
-  compactLayout.addEventListener('change', setGuideDefault);
+  installGuide.open = !compactLayout.matches || location.hash === '#install';
+  document.querySelectorAll('a[href="#install"]').forEach(link => {
+    link.addEventListener('click', () => { installGuide.open = true; });
+  });
+  window.addEventListener('hashchange', () => { if (location.hash === '#install') installGuide.open = true; });
   selectScene(current);
 })();
