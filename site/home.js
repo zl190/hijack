@@ -13,7 +13,7 @@
   const languageLink = document.querySelector('.language-link');
   languageLink.href = `?lang=${language === 'zh' ? 'en' : 'zh'}${location.hash}`;
   languageLink.lang = language === 'zh' ? 'en' : 'zh-CN';
-  languageLink.textContent = language === 'zh' ? 'English' : '中文';
+  languageLink.querySelector('.language-label').textContent = language === 'zh' ? 'English' : '中文';
   languageLink.setAttribute('aria-label', language === 'zh' ? 'English version' : '中文版');
   document.querySelector('.brand').href = `?lang=${language}`;
   const phases = [

@@ -12,7 +12,7 @@ python3 -m http.server 4173 --bind 127.0.0.1 --directory site
 
 `locales.js` owns localized text, accessible labels, metadata, demo messages, and cover-image references. `data-i18n` marks text and `data-i18n-*` marks translated attributes. `home.js` applies the dictionary and runs one shared phase sequence. Both languages use the same markup, components, styles, and controls. New copy needs matching keys in both dictionaries; structural edits happen only in `index.html`.
 
-`concept.html` preserves the earlier broader capability concept page: voice input is available; translation and OCR are explicitly concepts. It uses `styles.css` and `script.js`. No packages, build step, external fonts, analytics, or runtime network APIs are required.
+`concept.html` preserves the earlier broader capability concept page: voice input is available; translation and OCR are explicitly concepts. It uses `styles.css` and `script.js`. Local preview needs no packages. Production uses an explicit asset-copy build and Wrangler; there are no external fonts, analytics, or runtime network APIs.
 
 ## Demonstration contract
 
@@ -39,3 +39,9 @@ HTML references use `?v=` followed by the first 12 hexadecimal characters of eac
 See `docs/homepage.md` for the current review and validation record. Earlier design iterations are preserved in Git history.
 
 English image localization: `assets/hijack-why-not-both-en.png`, made with the built-in image tool from the approved Chinese cover. Prompt: preserve all framing, people, expressions, colors, and the small tilted Hijack face label; replace only the top title with “Voice input + Rime” and the bottom subtitle with “Why not both?”. This is a localized asset in the same template, not a separate page design.
+
+## Production
+
+Canonical URL: https://hijack.ylab3.com/. `wrangler.jsonc` owns the `hijack-site` Worker and custom domain. `npm ci && npm run check` validates scripts, fingerprints and a dry-run deployment; `npm run deploy:cf` builds and publishes. `scripts/build-site.mjs` copies only the approved homepage, locale dictionary, redirects, current images and brand assets into `dist/`. Draft concept pages and superseded artwork remain in Git but are not published.
+
+The app directory entry belongs to the `zl190/ylab-gallery` repository, at `registry/sites/hijack.json`. Its cover is an exact copy of this site's `assets/og.png`, with source and projection hashes recorded there.

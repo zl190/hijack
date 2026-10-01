@@ -28,13 +28,16 @@ a:focus-visible, button:focus-visible, summary:focus-visible { outline: 3px soli
 /* Page shell and main reading path. */
 .header { height: 94px; border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; gap: 20px; }
 .brand { display: flex; align-items: center; font-size: 27px; font-weight: 730; letter-spacing: -1px; }
-.brand img { margin-right: 10px; }
-.brand>span { color: var(--accent); }
-nav { display: flex; align-items: center; gap: 28px; font-size: 12px; }
-nav a { display: inline-flex; align-items: center; min-height: 44px; }
+.brand>img:first-child { margin-right: 10px; }
+.brand .brand-wordmark { width: 82px; height: auto; margin: 0; }
+
+nav { display: flex; align-items: center; gap: 18px; font-size: 12px; }
+nav a { white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 44px; border-radius: 8px; transition: color .16s ease, background-color .16s ease; }
+nav a:not(.nav-install) { padding: 0 5px; }
+.action-icon { display: block; flex-shrink: 0; width: 16px; height: 16px; }
 nav a:hover { color: var(--accent); }
-nav a>span[aria-hidden] { margin-left: 8px; }
-.nav-install { border: 1px solid #bbc3b1; border-radius: 6px; padding: 11px 14px; }
+.nav-install { padding: 0 15px; background: var(--ink); color: var(--paper); font-weight: 550; }
+nav .nav-install:hover { background: #414b38; color: var(--paper); }
 .hero { display: grid; grid-template-columns: 1.05fr 1fr; gap: 55px; align-items: center; padding: 77px 0 70px; }
 .eyebrow { display: flex; align-items: center; gap: 8px; font-size: 10px; letter-spacing: 1.6px; font-weight: 650; line-height: 1.6; }
 .eyebrow>span[aria-hidden] { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
@@ -42,7 +45,7 @@ h1 { font-size: clamp(30px, 3.6vw, 48px); line-height: 1.3; font-weight: 730; le
 h1 em { font-style: normal; color: var(--accent); }
 .intro { font-size: 16px; line-height: 1.8; color: #62695c; max-width: 465px; }
 .intro strong { color: var(--ink); font-weight: 600; }
-.primary { display: inline-flex; gap: 30px; align-items: center; margin-top: 27px; padding: 15px 19px; background: var(--ink); color: #fff; border-radius: 6px; font-size: 13px; font-weight: 550; }
+.primary { display: inline-flex; gap: 18px; align-items: center; margin-top: 27px; padding: 15px 19px; background: var(--ink); color: #fff; border-radius: 8px; font-size: 13px; font-weight: 550; }
 .primary:hover { background: #414b38; }
 .compatibility { font-size: 11px; line-height: 1.8; color: var(--muted); margin-top: 15px; }
 .footer { padding: 23px 0 28px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; gap: 22px; font-size: 11px; color: var(--muted); line-height: 1.8; }
@@ -133,7 +136,7 @@ h2 { font-size: 30px; line-height: 1.2; letter-spacing: -.9px; font-weight: 600;
 summary { cursor: pointer; font-size: 13px; padding: 14px 0; line-height: 1.5; min-height: 44px; }
 .install-guide>summary { display: flex; align-items: center; justify-content: space-between; font-size: 14px; font-weight: 550; padding-top: 0; list-style: none; }
 .install-guide>summary::-webkit-details-marker { display: none; }
-.install-guide[open]>summary>span[aria-hidden] { transform: rotate(90deg); }
+.install-guide[open]>summary>.icon-disclosure { transform: rotate(90deg); }
 .command { border: 1px solid #506143; background: #20281a; border-radius: 5px; overflow: hidden; margin-bottom: 12px; }
 .command-title { display: flex; align-items: center; justify-content: space-between; padding: 6px 11px; border-bottom: 1px solid #3c4c30; color: #bbceab; font-size: 10px; letter-spacing: .4px; }
 .command-title button { min-width: 56px; min-height: 36px; background: #3c4d30; color: #e5eddd; border: 1px solid #61734f; border-radius: 4px; font-size: 12px; padding: 4px 8px; }
@@ -143,7 +146,7 @@ code { font-family: var(--mono); }
 .copy-status { min-height: 19px; font-size: 12px; line-height: 1.7; color: #d2e1c4; }
 .permission { font-size: 12px; line-height: 1.85; margin: 8px 0 12px; color: #c4d1b7; }
 .permission strong { font-weight: 550; color: #e4eddb; }
-.release-link { display: inline-flex; align-items: center; min-height: 44px; font-size: 12px; text-decoration: underline; text-underline-offset: 3px; padding-bottom: 12px; }
+.release-link { display: inline-flex; align-items: center; gap: 7px; min-height: 44px; font-size: 12px; text-decoration: underline; text-underline-offset: 3px; padding-bottom: 12px; }
 .privacy { border-top: 1px solid #546147; }
 .privacy p { color: #c4d1b7; font-size: 12px; line-height: 1.9; padding-bottom: 8px; }
 .install :is(a, button, summary):focus-visible { outline-color: #d0ddb9; }
@@ -211,12 +214,12 @@ html[lang="zh-CN"] .eyebrow { letter-spacing: 1.5px; }
 }
 @media(max-width:760px) {
   .shell { width: calc(100% - 40px); }
-  .header { height: 67px; }
+  .header { height: 67px; gap: 8px; }
   .brand { font-size: 24px; }
-  .brand img { width: 30px; height: 30px; margin-right: 8px; }
-  nav { gap: 12px; font-size: 11px; }
-  .nav-install { padding: 10px 11px; }
-  nav a>span[aria-hidden] { margin-left: 3px; }
+  .brand>img:first-child { width: 30px; height: 30px; margin-right: 8px; }
+  .brand .brand-wordmark { width: 73px; height: auto; }
+  nav { gap: 8px; font-size: 11px; }
+  .nav-install { padding: 0 11px; }
   .hero { grid-template-columns: 1fr; gap: 28px; padding: 32px 0 28px; }
   .eyebrow { letter-spacing: 1.25px; }
   h1 { font-size: clamp(30px, 8.5vw, 42px); letter-spacing: -.9px; margin: 17px 0 19px; }
@@ -238,9 +241,12 @@ html[lang="zh-CN"] .eyebrow { letter-spacing: 1.5px; }
   .footer { display: block; padding-top: 18px; padding-bottom: 23px; }
   .footer p { margin-top: 5px; max-width: 360px; }
 }
-@media(max-width:370px) {
-  .shell { width: calc(100% - 32px); }
+@media(max-width:440px) {
   .header nav>a:first-child { display: none; }
+}
+@media(max-width:370px) {
+  .language-link .icon-language { display: none; }
+  .shell { width: calc(100% - 32px); }
   h1 { font-size: 29px; }
   .intro { font-size: 13px; }
   .source-label { gap: 5px; }

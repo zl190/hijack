@@ -6,16 +6,25 @@
   <meta name="theme-color" content="#f5f3ee">
   <meta name="description" content="语音输入，然后切回原来的输入法" data-i18n-content="description">
   <title data-i18n="pageTitle">Hijack — 语音输入，说完切回原输入法</title>
+  <link rel="canonical" href="https://hijack.ylab3.com/">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://hijack.ylab3.com/">
+  <meta property="og:title" content="Hijack — Why not both?">
+  <meta property="og:description" content="Voice input, then back to your preferred input method.">
+  <meta property="og:image" content="https://hijack.ylab3.com/assets/og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
   <link rel="icon" href="assets/Hijack-1024.png" type="image/png">
-  <link rel="stylesheet" href="home.css?v=f5e30d7782b0">
+  <link rel="stylesheet" href="home.css?v=288cf391272b">
   <script src="locales.js?v=68920f84b3f3" defer></script>
-  <script src="home.js?v=a108fe22ac36" defer></script>
+  <script src="home.js?v=f8e389ed66eb" defer></script>
 </head>
 <body>
   <a class="skip" href="#main"><span data-i18n="skip">跳到正文</span></a>
   <header class="shell header">
-    <a class="brand" href="?lang=zh" aria-label="Hijack 首页" data-i18n-aria-label="home"><img src="assets/Hijack-1024.png" width="36" height="36" alt="">Hijack<span>.</span></a>
-    <nav aria-label="主导航" data-i18n-aria-label="nav"><a href="https://github.com/zl190/hijack">GitHub <span aria-hidden="true">↗</span></a><a class="language-link" href="?lang=en" lang="en" aria-label="English version">English</a><a class="nav-install" href="#install"><span data-i18n="install">安装 Hijack</span> <span aria-hidden="true">↓</span></a></nav>
+    <a class="brand" href="?lang=zh" aria-label="Hijack 首页" data-i18n-aria-label="home"><img src="assets/Hijack-1024.png" width="36" height="36" alt=""><img class="brand-wordmark" src="assets/brand/hijack-wordmark.svg" width="82" height="26" alt="Hijack"></a>
+    <nav aria-label="主导航" data-i18n-aria-label="nav"><a href="https://github.com/zl190/hijack">GitHub <svg class="action-icon icon-external" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14 4h6v6M20 4 10 14M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg></a><a class="language-link" href="?lang=en" lang="en" aria-label="English version"><svg class="action-icon icon-language" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a18 18 0 0 1 0 18 18 18 0 0 1 0-18"/></svg><span class="language-label">English</span></a><a class="nav-install" href="#install"><span data-i18n="install">安装 Hijack</span> <svg class="action-icon icon-down" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 4v16m-6-6 6 6 6-6"/></svg></a></nav>
   </header>
 
   <main id="main" class="shell">
@@ -24,7 +33,7 @@
         <p class="eyebrow"><span aria-hidden="true"></span><span data-i18n="eyebrow">macOS 菜单栏工具</span></p>
         <h1 id="title"><span data-i18n="headlineVoice">语音输入，</span><br><span data-i18n="headlineTyping">偏爱的输入法，</span><br><em><span data-i18n="headlineBoth">我全都要。</span></em></h1>
         <p class="intro"><span data-i18n="intro">语音输入，然后切回</span><strong><span data-i18n="introStrong">原来的输入法</span></strong></p>
-        <a class="primary" href="#install"><span data-i18n="install">安装 Hijack</span> <span aria-hidden="true">↗</span></a>
+        <a class="primary" href="#install"><span data-i18n="install">安装 Hijack</span><svg class="action-icon icon-down" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 4v16m-6-6 6 6 6-6"/></svg></a>
         <p class="compatibility"><span data-i18n="requirements">Apple 芯片 · macOS 13+ · 需安装语音输入工具</span></p>
       </div>
 
@@ -94,13 +103,13 @@
       </div>
       <div class="install-right">
         <details id="install-guide" class="install-guide">
-          <summary><span data-i18n="commands">查看安装命令</span> <span aria-hidden="true">↗</span></summary>
+          <summary><span data-i18n="commands">查看安装命令</span><svg class="action-icon icon-disclosure" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m9 5 7 7-7 7"/></svg></summary>
           <div class="guide-body">
             <div class="command"><div class="command-title"><span>CURL</span><button type="button" data-copy="curl" aria-label="复制 curl 命令" data-i18n-aria-label="copyCurl"><span data-i18n="copy">复制</span></button></div><pre><code id="curl">curl -fsSL https://raw.githubusercontent.com/zl190/hijack/main/install.sh | sh</code></pre></div>
             <div class="command"><div class="command-title"><span><span data-i18n="homebrew">或使用 HOMEBREW</span></span><button type="button" data-copy="brew" aria-label="复制 Homebrew 命令" data-i18n-aria-label="copyBrew"><span data-i18n="copy">复制</span></button></div><pre><code id="brew">brew install --cask zl190/tap/hijack</code></pre></div>
             <p class="copy-status" id="copy-status" role="status" aria-live="polite"></p>
             <p class="permission"><span data-i18n="permissionStart">首次使用，在</span><strong><span data-i18n="permissionPath">系统设置 → 隐私与安全性 → 辅助功能</span></strong><span data-i18n="permissionEnd">中开启 Hijack。点菜单栏图标可设置快捷键。</span></p>
-            <a class="release-link" href="https://github.com/zl190/hijack/releases"><span data-i18n="releases">查看发布版本</span> <span aria-hidden="true">↗</span></a>
+            <a class="release-link" href="https://github.com/zl190/hijack/releases"><span data-i18n="releases">查看发布版本</span> <svg class="action-icon icon-external" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14 4h6v6M20 4 10 14M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg></a>
           </div>
         </details>
         <details class="privacy"><summary><span data-i18n="privacyTitle">语音由谁处理？</span></summary><p><span data-i18n="privacy">由你使用的语音工具处理。Hijack 不录音，也不保存或上传音频。语音数据如何处理，请查看对应工具的隐私政策。</span></p></details>
