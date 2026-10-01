@@ -78,16 +78,6 @@ hijack log -f            # follow the log
 
 `status`, `sources`, and `get` take `--json`.
 
-## Website and brand
-
-The bilingual homepage is served at [hijack.ylab3.com](https://hijack.ylab3.com) by Cloudflare Workers Static Assets. [apps.ylab3.com](https://apps.ylab3.com) lists the app. Website source and local preview instructions are in [`site/`](site/README.md); reusable wordmarks and usage notes are in [`site/assets/brand/`](site/assets/brand/README.md).
-
-```sh
-npm ci
-npm run check
-npm run deploy:cf
-```
-
 ## License
 
 MIT. Third-party homepage imagery has separate provenance documented in [`site/README.md`](site/README.md).
