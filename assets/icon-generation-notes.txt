@@ -1,0 +1,23 @@
+# Hijack icon generation
+
+Mode: built-in image_gen.
+
+## App icon prompt
+
+Use case: logo-brand.
+Create one finished macOS app icon for Hijack, a small utility that lets people borrow other apps' capabilities and choose their own way of using them. Core metaphor: tipping one's hat in salute to one's own way. Friendly independent agency, witty understated elegance.
+Design: an exceptionally simple bold iconic tilted hat being tipped, with a small classic computer pointer arrow immediately beneath and subtly integrated with the brim, suggesting the user lifting the hat. The hat is the dominant silhouette, the pointer secondary. Just two strong geometric shapes, generous negative space, no facial features, no person, no extra decorative motifs. The overall silhouette should remain readable as a tiny monochrome menu-bar icon. Avoid looking like an incognito spy logo: no glasses, no face, no detective details, no band detailing.
+App icon rendering: one centered ivory sculptural emblem on a deep graphite macOS rounded-square tile. Very restrained tactile satin relief and soft edge lighting, refined simple desktop utility aesthetic. Strong silhouette and balanced ample padding. Front view, no perspective tilt of the tile. Transparent outside rounded tile. Square 1024 by 1024 composition. No typography, letters, labels, interface mockup, presentation board, watermark, or multiple variants. Only the finished individual app icon.
+
+## Menu icon prompt
+
+Use case: logo-brand. The reference is the app icon for Hijack. Create its companion macOS menu-bar template icon. Preserve the distinctive tilted-hat-plus-pointer identity and overall spatial relationship. Extract ONLY the emblem, remove rounded square completely. Redraw as an extremely clean single-color solid BLACK silhouette on a truly transparent background, no white fill or white backdrop. Hat and pointer must be bold, simple flat filled shapes with a clear transparent gap between them. Simplify crown contours for legibility at 18pt; slightly enlarge pointer proportion relative to hat so it survives downscaling. Do not depict band details or inner contours in hat. No gradient, texture, shadow, embossing, stroke outline, gray decoration, text, border, mockup, multiple icons, or presentation sheet. One centered symbol filling 80 percent of a square canvas. Must visually read as tipping one's hat with a computer pointer. Produce individual transparent PNG master.
+
+## Transparency correction
+
+Edit this menu-bar logo. Remove ALL of the gray-and-white checkerboard background, including any white smears, and replace it with an actual transparent alpha channel. The checkerboard is an unwanted painted backdrop, not real transparency. Keep only the two pure black solid silhouettes: tilted hat and computer pointer. Preserve their contour, layout and proportions. All pixels outside these two silhouettes must have zero alpha. No checkerboard pixels in output. No backdrop, shadow, shading, texture or text. Flat solid black icon, actual transparent PNG.
+
+## Export
+
+PNG exports: app 1024×1024; menu 18×18 and 36×36; menu master 1254×1254. Menu image should be configured as a template image in the macOS app.
+

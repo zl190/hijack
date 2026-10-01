@@ -1,26 +1,27 @@
-# ime-voice
+# Hijack
 
-按住右 Option，用微信输入法（WeType）语音输入；松开后切回原来的输入法。
+Hold a key to dictate with WeType (微信输入法) from any input source; your previous input source comes back when you're done.
 
-## 安装
+按住一个键，用微信输入法说话；说完自动切回原来的输入法。
 
-需要 [Karabiner-Elements](https://karabiner-elements.pqrs.org/)、微信输入法（语音快捷键设为按住右 Option）、Xcode Command Line Tools。
+## Install
+
+Needs Xcode Command Line Tools and WeType with its push-to-talk voice key set.
 
 ```sh
-git clone https://github.com/zl190/ime-voice.git
-cd ime-voice && ./install.sh
+git clone https://github.com/zl190/hijack.git
+cd hijack && ./install.sh
 ```
 
-Karabiner-Elements → Complex Modifications → Add predefined rule → ime-voice → Enable。
+Allow Hijack in System Settings › Privacy & Security › Accessibility.
 
-## 调整
+## Settings
 
-`karabiner-rule.json`：
+Click the menu bar icon (or open Hijack again if the icon is hidden): trigger key, launch at login, menu bar icon, language.
 
-- `basic.to_if_held_down_threshold_milliseconds`：按住多久开始录音（默认 200）
-- `ime-voice end 2.5`：松开后几秒切回
+The trigger key follows WeType's voice key by default.
 
-其他输入法：`ime-voice begin <输入源 ID>`（不维护）。
+Other voice input sources (unmaintained): `defaults write com.zl190.hijack voiceInputSource <id>`
 
 ## License
 
