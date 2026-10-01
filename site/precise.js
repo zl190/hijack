@@ -2,8 +2,8 @@
   'use strict';
   const isChinese = document.documentElement.lang.toLowerCase().startsWith('zh');
   const labels = isChinese ? {
-    capsule: '微信语音输入', playing: '演示中…', replay: '↻ 再看一次', play: '▶ 播放切换演示',
-    copying: '正在复制…', copied: '已复制。在终端中粘贴即可安装。',
+    capsule: '微信语音输入', playing: '演示中…', replay: '↻ 再看一次', play: '▶ 播放演示',
+    copying: '正在复制…', copied: '已复制，粘贴到终端运行。',
     copyFallback: '已选中命令，请按 ⌘C 或 Ctrl+C 复制。'
   } : {
     capsule: 'WeType dictation', playing: 'Playing…', replay: '↻ Replay', play: '▶ Play the switch',
@@ -11,10 +11,10 @@
     copyFallback: 'The command is selected. Press ⌘C or Ctrl+C to copy.'
   };
   const stages = isChinese ? [
-    { source: '鼠须管', status: '正在使用鼠须管输入。', text: '下一句话，用说的。' },
+    { source: '鼠须管', status: '正在使用鼠须管输入。', text: '在这里输入…' },
     { source: '微信输入法', status: '按住按键，已切到微信输入法。', text: '正在听你说话…', capsule: '微信语音输入' },
-    { source: '微信输入法', status: '已松开，等待微信输入法提交文字。', text: '把方案评审调整到周五吧。', capsule: '正在完成语音输入…' },
-    { source: '鼠须管', status: '文字已提交，已恢复鼠须管。', text: '把方案评审调整到周五吧。' }
+    { source: '微信输入法', status: '已松开，等待微信输入法提交文字。', text: '周五下午三点开会。', capsule: '正在完成语音输入…' },
+    { source: '鼠须管', status: '文字已提交，已恢复鼠须管。', text: '周五下午三点开会。' }
   ] : [
     { source: 'ABC', status: 'Typing with ABC.', text: 'Say the next sentence out loud.' },
     { source: 'WeType', status: 'Key held. Switched to WeType.', text: 'Listening…', capsule: 'WeType dictation' },
@@ -34,7 +34,7 @@
     const activeStep = isChinese ? Math.min(index, 2) : index;
     if (isChinese) {
       document.querySelector('#return-source').textContent = index === 2 ? stage.source : stages[0].source;
-      document.querySelector('#return-detail').textContent = index === 2 ? '等待文字提交…' : index === 3 ? '已恢复，继续打字' : '文字提交后恢复';
+      document.querySelector('#return-detail').textContent = index === 2 ? '等待文字提交…' : index === 3 ? '已恢复，继续打字' : '文字上屏后切回';
     }
     document.querySelectorAll('[data-step]').forEach(item => {
       if (Number(item.dataset.step) === activeStep) item.setAttribute('aria-current', 'step');
