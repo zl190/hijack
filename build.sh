@@ -21,6 +21,7 @@ else
   done
   iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/Hijack.icns"
 fi
+mkdir -p "$APP/Contents/Library/LaunchAgents" && cp assets/com.zl190.hijack.relauncher.plist "$APP/Contents/Library/LaunchAgents/"
 cp assets/HijackMenuTemplate.png "assets/HijackMenuTemplate@2x.png" "$APP/Contents/Resources/"
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

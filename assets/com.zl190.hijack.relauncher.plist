@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Reopens Hijack after an installer (brew, the curl script, a source build) replaces it in /Applications.
+     Runs when Hijack's executable changes (launchd doesn't fire for /Applications itself); acts only when
+     the binary is new and Hijack isn't running, so quitting Hijack never starts it. Registered by the app via SMAppService. -->
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.zl190.hijack.relauncher</string>
+  <key>AssociatedBundleIdentifiers</key><array><string>com.zl190.hijack</string></array>
+  <key>ProgramArguments</key><array>
+    <string>/bin/sh</string><string>-c</string>
+    <string>sleep 2
+b=/Applications/Hijack.app/Contents/MacOS/Hijack
+[ -x "$b" ] || exit 0
+f="$HOME/Library/Application Support/Hijack/installed-binary"
+s=$(/usr/bin/stat -f %i:%m "$b")
+[ "$s" = "$(cat "$f" 2>/dev/null)" ] &amp;&amp; exit 0
+mkdir -p "${f%/*}" &amp;&amp; echo "$s" &gt; "$f"
+/usr/bin/pgrep -x Hijack &gt;/dev/null || /usr/bin/open -g /Applications/Hijack.app</string>
+  </array>
+  <key>WatchPaths</key><array><string>/Applications/Hijack.app/Contents/MacOS/Hijack</string></array>
+  <key>ThrottleInterval</key><integer>5</integer>
+</dict></plist>

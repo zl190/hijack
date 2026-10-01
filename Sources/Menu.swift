@@ -17,6 +17,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Pick up icon/Dock changes made from the CLI or a hand edit.
         Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in Config.shared.reload(); self?.applyAppearance() }
         engine.start()
+        // Reopens Hijack after an installer replaces it (brew can't: its install sandbox denies launching apps).
+        // The system keeps the plist from registration time, so re-register when the bundled one changes.
+        let plist = "com.zl190.hijack.relauncher.plist"
+        let relauncher = SMAppService.agent(plistName: plist)
+        let current = (try? Data(contentsOf: Bundle.main.bundleURL.appendingPathComponent("Contents/Library/LaunchAgents/" + plist)))?.base64EncodedString()
+        if relauncher.status != .enabled || UserDefaults.standard.string(forKey: "relauncherPlist") != current {
+            try? relauncher.unregister()
+            if (try? relauncher.register()) != nil { UserDefaults.standard.set(current, forKey: "relauncherPlist") }
+        }
         if !AXIsProcessTrusted() {   // first run: the window explains what's missing; the system prompt adds us to the list
             SettingsWindowController.show()
             let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
