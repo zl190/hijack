@@ -50,7 +50,10 @@ let namedKeys: [NamedKey] = [
     NamedKey(id: "right_shift", code: 60, zh: "右 Shift", en: "Right Shift", device: 0x04, flag: .maskShift),
     NamedKey(id: "left_shift", code: 56, zh: "左 Shift", en: "Left Shift", device: 0x02, flag: .maskShift),
     NamedKey(id: "fn", code: 63, zh: "Fn", en: "Fn", device: 0, flag: .maskSecondaryFn),
-] + [("f13", 105), ("f14", 107), ("f15", 113), ("f16", 106), ("f17", 64), ("f18", 79), ("f19", 80), ("f20", 90), ("space", 49)]
+] + [("f13", 105), ("f14", 107), ("f15", 113), ("f16", 106), ("f17", 64), ("f18", 79), ("f19", 80), ("f20", 90), ("space", 49),
+       ("a", 0), ("s", 1), ("d", 2), ("f", 3), ("h", 4), ("g", 5), ("z", 6), ("x", 7), ("c", 8), ("v", 9), ("b", 11),
+       ("q", 12), ("w", 13), ("e", 14), ("r", 15), ("y", 16), ("t", 17), ("o", 31), ("u", 32), ("i", 34), ("p", 35),
+       ("l", 37), ("j", 38), ("k", 40), ("n", 45), ("m", 46), ("return", 36), ("tab", 48), ("escape", 53)]
     .map { NamedKey(id: $0.0, code: $0.1, zh: $0.0.uppercased(), en: $0.0.uppercased(), device: 0, flag: nil) }
 
 // Menu quick picks; anything else goes in the config file.
@@ -85,6 +88,30 @@ struct KeySpec: Equatable {
         return d
     }
     var quickID: String? { mods.isEmpty ? named.map(\.id) : nil }
+
+    // "option_left+space", "ctrl+shift+d" (Handy / Tauri-style bindings)
+    init?(binding: String) {
+        var mods: Set<Mod> = [], code: Int?
+        for raw in binding.lowercased().split(separator: "+").map(String.init) {
+            let base = raw.replacingOccurrences(of: "_left", with: "").replacingOccurrences(of: "_right", with: "")
+            switch base {
+            case "option", "alt": mods.insert(.option)
+            case "command", "cmd", "super", "meta": mods.insert(.command)
+            case "ctrl", "control": mods.insert(.ctrl)
+            case "shift": mods.insert(.shift)
+            case "fn": mods.insert(.fn)
+            default: code = KeySpec.named(raw)?.code ?? KeySpec.named(base)?.code
+            }
+        }
+        if let code { self.init(code: code, mods: mods) ; return }
+        if binding.lowercased() == "fn" { self = KeySpec.named("fn")!; return }
+        // A lone side-specific modifier, e.g. "option_right" → right_option
+        let parts = binding.lowercased().split(separator: "_").map(String.init)
+        guard parts.count == 2, ["left", "right"].contains(parts[1]) else { return nil }
+        let base = ["alt": "option", "cmd": "command", "ctrl": "control"][parts[0]] ?? parts[0]
+        guard let k = KeySpec.named("\(parts[1])_\(base)") else { return nil }
+        self = k
+    }
 }
 
 // WeType keeps its push-to-talk key in a private MMKV store; read it (never write it).
@@ -112,6 +139,25 @@ func weTypeVoiceKey() -> KeySpec? {
         key.mods = Set(Mod.allCases.filter { value & $0.nsBit != 0 })
     }
     return key
+}
+
+// Voice apps with their own global hotkey: no input-source switch, Hijack just presses their key.
+// In the config, voiceInput "app:<bundle id>"; their key is detected from their settings when we know how.
+struct VoiceApp { let bundle: String; let name: String; let detect: () -> KeySpec? }
+let voiceApps: [VoiceApp] = [
+    VoiceApp(bundle: "com.pais.handy", name: "Handy", detect: handyVoiceKey),
+]
+
+// Handy: settings_store.json, bindings.transcribe.current_binding like "option_left+space".
+func handyVoiceKey() -> KeySpec? {
+    let url = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent("Library/Application Support/com.pais.handy/settings_store.json")
+    guard let data = try? Data(contentsOf: url),
+          let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+    let settings = root["settings"] as? [String: Any] ?? root
+    guard let binding = ((settings["bindings"] as? [String: Any])?["transcribe"] as? [String: Any])?["current_binding"] as? String
+    else { return nil }
+    return KeySpec(binding: binding)
 }
 
 // MARK: input sources
@@ -276,11 +322,13 @@ final class Model {
     var c: Config { Config.shared.reload(); return Config.shared }
 
     var voiceID: String { c.voiceInput }
-    var voiceName: String { sourceName(voiceID) }
+    var app: VoiceApp? { voiceID.hasPrefix("app:") ? voiceApps.first { "app:" + $0.bundle == voiceID } : nil }
+    var isApp: Bool { voiceID.hasPrefix("app:") }
+    var voiceName: String { app?.name ?? (isApp ? String(voiceID.dropFirst(4)) : sourceName(voiceID)) }
     var isWeType: Bool { voiceID == weTypeID }
     // Voice key precedence: the user's explicit choice, else auto-detected (WeType only), else Right Option.
     var userVoiceKey: KeySpec? { c.voiceKey }
-    var detectedVoiceKey: KeySpec? { isWeType ? weTypeVoiceKey() : nil }
+    var detectedVoiceKey: KeySpec? { isWeType ? weTypeVoiceKey() : app?.detect() }
     var forwardKey: KeySpec { userVoiceKey ?? detectedVoiceKey ?? KeySpec.named("right_option")! }
     // Trigger precedence: the user's explicit choice, else follow the voice key.
     var customTrigger: KeySpec? { c.trigger }
@@ -308,8 +356,24 @@ final class Engine {
             e.type = .flagsChanged
             e.flags = down ? CGEventFlags(rawValue: flag.rawValue | n.device) : []
         } else {
+            // A combo: modifiers go down before the key and come up after it, like real hands.
+            let mods = Mod.allCases.filter { key.mods.contains($0) }
+            if down { for (i, mod) in mods.enumerated() { postModifier(mod, down: true, held: Set(mods.prefix(i + 1))) } }
             e.flags = key.flags
+            e.setIntegerValueField(.eventSourceUserData, value: marker)
+            e.post(tap: .cghidEventTap)
+            if !down { for (i, mod) in mods.enumerated().reversed() { postModifier(mod, down: false, held: Set(mods.prefix(i))) } }
+            return
         }
+        e.setIntegerValueField(.eventSourceUserData, value: marker)
+        e.post(tap: .cghidEventTap)
+    }
+
+    func postModifier(_ mod: Mod, down: Bool, held: Set<Mod>) {
+        let code: Int = [.ctrl: 59, .option: 58, .shift: 56, .command: 55, .fn: 63][mod]!
+        guard let e = CGEvent(keyboardEventSource: nil, virtualKey: CGKeyCode(code), keyDown: down) else { return }
+        e.type = .flagsChanged
+        e.flags = held.reduce(into: CGEventFlags()) { $0.insert($1.flag) }
         e.setIntegerValueField(.eventSourceUserData, value: marker)
         e.post(tap: .cghidEventTap)
     }
@@ -319,6 +383,17 @@ final class Engine {
         pressedAt = Date()
         sawWindow = false
         let cur = currentID()
+        if m.isApp {   // a voice app: no input-source switch, just press its key
+            if trigger == m.forwardKey { passthrough = true; log("down: trigger is \(m.voiceName)'s own key, pass through"); return true }
+            passthrough = false
+            log("down: \(m.voiceName) \(focusDesc())")
+            let gen = generation
+            DispatchQueue.main.asyncAfter(deadline: .now() + m.c.holdDelay) { [self] in
+                guard physicalDown, gen == generation else { log("released before forward"); return }
+                forwarded = true; post(m.forwardKey, down: true); log("forward \(m.forwardKey.name) down")
+            }
+            return false
+        }
         // Already in the voice method and the trigger is its own key: let it see the real key.
         if cur == m.voiceID && trigger == m.forwardKey {
             passthrough = true; log("down: already voice IME, pass through"); return true
@@ -347,6 +422,7 @@ final class Engine {
     func released() -> Bool {
         if passthrough { passthrough = false; log("up: pass through"); return true }
         if forwarded { post(m.forwardKey, down: false); forwarded = false; log("forward up \(focusDesc())") }
+        if m.isApp { return false }   // nothing to switch back
         let gen = generation, released = Date()
         var capsuleGone: Date?
         func restoreWhenDone() {
@@ -493,9 +569,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         for c in voiceCandidates() {
             _ = add(c.name, #selector(setVoiceSource(_:)), state: c.id == m.voiceID, to: sources).representedObject = c.id
         }
+        let installed = voiceApps.filter { NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0.bundle) != nil }
+        if !installed.isEmpty {
+            sources.addItem(.separator())
+            for a in installed {
+                _ = add(a.name, #selector(setVoiceSource(_:)), state: m.voiceID == "app:" + a.bundle, to: sources).representedObject = "app:" + a.bundle
+            }
+        }
         add(L("语音输入法：\(m.voiceName)", "Voice input: \(m.voiceName)"), nil).submenu = sources
         let found = m.detectedVoiceKey?.name ?? L("没读到", "not found")
-        let autoTitle = m.isWeType ? L("自动检测（\(found)）", "Auto-detect (\(found))") : L("默认（右 Option）", "Default (Right Option)")
+        let autoTitle = (m.isWeType || m.app != nil) ? L("自动检测（\(found)）", "Auto-detect (\(found))") : L("默认（右 Option）", "Default (Right Option)")
         add(L("它的语音键：\(m.forwardKey.name)", "Its voice key: \(m.forwardKey.name)"), nil).submenu =
             keyMenu(current: m.userVoiceKey, auto: autoTitle, action: #selector(setVoiceKey(_:)))
         menu.addItem(.separator())
