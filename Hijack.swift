@@ -1,4 +1,4 @@
-// Hijack — hold a key to dictate with WeType from any input source; the previous input source
+// Hijack — hold a key to dictate with a voice input method (default WeType) from any input source; the previous input source
 // comes back after release. Everything is set from its menu (menu bar icon, or open the app again).
 // Other voice IMEs (unmaintained): defaults write com.zl190.hijack voiceInputSource <id>
 // Build: ./install.sh
@@ -9,8 +9,8 @@ import ServiceManagement
 
 let appName = "Hijack"
 let restoreDelay = 5.0   // longest wait after release before switching back
-let fallbackDelay = 2.5  // used when WeType's capsule can't be watched
-let capsuleGrace = 0.15  // after WeType's capsule disappears, wait this long, then switch back
+let fallbackDelay = 2.5  // used when the voice input method shows no window to watch
+let capsuleGrace = 0.15  // after its voice window disappears, wait this long, then switch back
 let holdDelay = 0.2      // minimum hold before WeType gets the key (a quick tap does nothing)
 let maxSwitchWait = 1.0  // give up waiting for the input source switch after this long
 let marker: Int64 = 0x5357424B               // tags events we post ourselves
@@ -75,6 +75,28 @@ func currentID() -> String? {
     return Unmanaged<CFString>.fromOpaque(raw).takeUnretainedValue() as String
 }
 
+func source(_ id: String) -> TISInputSource? {
+    let filter = [kTISPropertyInputSourceID as String: id] as CFDictionary
+    return (TISCreateInputSourceList(filter, false)?.takeRetainedValue() as? [TISInputSource])?.first
+}
+func prop(_ src: TISInputSource, _ key: CFString) -> String? {
+    guard let raw = TISGetInputSourceProperty(src, key) else { return nil }
+    return Unmanaged<CFString>.fromOpaque(raw).takeUnretainedValue() as String
+}
+func sourceName(_ id: String) -> String { source(id).flatMap { prop($0, kTISPropertyLocalizedName) } ?? id }
+// Enabled, selectable input methods (not plain keyboard layouts) — candidates for the voice source.
+func voiceCandidates() -> [(id: String, name: String)] {
+    let all = TISCreateInputSourceList(nil, false)?.takeRetainedValue() as? [TISInputSource] ?? []
+    return all.compactMap { src in
+        guard let id = prop(src, kTISPropertyInputSourceID),
+              prop(src, kTISPropertyInputSourceCategory) == (kTISCategoryKeyboardInputSource as String),
+              prop(src, kTISPropertyInputSourceType) != (kTISTypeKeyboardLayout as String),
+              let raw = TISGetInputSourceProperty(src, kTISPropertyInputSourceIsSelectCapable),
+              CFBooleanGetValue(Unmanaged<CFBoolean>.fromOpaque(raw).takeUnretainedValue()) else { return nil }
+        return (id, prop(src, kTISPropertyLocalizedName) ?? id)
+    }
+}
+
 func select(_ id: String) -> Bool {
     let filter = [kTISPropertyInputSourceID as String: id] as CFDictionary
     guard let list = TISCreateInputSourceList(filter, false)?.takeRetainedValue() as? [TISInputSource],
@@ -91,13 +113,14 @@ func switchTo(_ id: String, _ label: String) {
     }
 }
 
-// WeType shows its voice capsule until the dictated text is finally committed (rough text first,
-// then the tidied version). Switching away before that drops the uncommitted text, so the capsule
-// disappearing is the "done" signal. Owner/bounds need no Screen Recording. nil = WeType not running.
-func voiceCapsuleVisible() -> Bool? {
-    guard let pid = NSWorkspace.shared.runningApplications.first(where: {
-        ($0.bundleIdentifier ?? "").hasPrefix("com.tencent.inputmethod.wetype") || ($0.localizedName ?? "").contains("微信输入法")
-    })?.processIdentifier else { return nil }
+// A voice input method (WeType: its capsule) keeps a window on screen until the dictated text is
+// finally committed (rough text first, then the tidied version). Switching away before that drops the
+// uncommitted text, so that window disappearing is the "done" signal. Owner/bounds need no Screen
+// Recording. nil = the input method's process isn't running.
+func voiceWindowVisible(_ sourceID: String) -> Bool? {
+    guard let bundle = source(sourceID).flatMap({ prop($0, kTISPropertyBundleID) }),
+          let pid = NSWorkspace.shared.runningApplications.first(where: { $0.bundleIdentifier == bundle })?.processIdentifier
+    else { return nil }
     let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
     return list.contains { ($0[kCGWindowOwnerPID as String] as? Int32) == pid }
 }
@@ -132,14 +155,23 @@ final class Model {
     static let shared = Model()
     let defaults = UserDefaults.standard
 
-    var voiceKey: ModKey? { weTypeVoiceKey() }
+    var voiceID: String {
+        get { defaults.string(forKey: "voiceInputSource") ?? weTypeID }
+        set { defaults.set(newValue == weTypeID ? nil : newValue, forKey: "voiceInputSource") }
+    }
+    var voiceName: String { sourceName(voiceID) }
+    var isWeType: Bool { voiceID == weTypeID }
+    // The voice method's own push-to-talk key: read from WeType, chosen by the user for others.
+    var voiceKey: ModKey? {
+        if isWeType, let k = weTypeVoiceKey() { return k }
+        return (defaults.object(forKey: "voiceKey.\(voiceID)") as? Int).flatMap(ModKey.by(code:))
+    }
     var forwardKey: ModKey { voiceKey ?? ModKey.all[0] }
     var customTrigger: ModKey? {
         get { (defaults.object(forKey: "triggerKey") as? Int).flatMap(ModKey.by(code:)) }
         set { defaults.set(newValue.map { Int($0.code) }, forKey: "triggerKey") }
     }
     var trigger: ModKey { customTrigger ?? forwardKey }
-    var voiceID: String { defaults.string(forKey: "voiceInputSource") ?? weTypeID }
     var showIcon: Bool {
         get { defaults.object(forKey: "showMenuBarIcon") as? Bool ?? true }
         set { defaults.set(newValue, forKey: "showMenuBarIcon") }
@@ -156,6 +188,7 @@ final class Engine {
     var forwarded = false
     var passthrough = false
     var pressedAt = Date()
+    var sawWindow = false   // the voice method showed a window during this press
     var tap: CFMachPort?
 
     func post(_ key: ModKey, down: Bool) {
@@ -169,8 +202,9 @@ final class Engine {
     func pressed() -> Bool {
         generation += 1
         pressedAt = Date()
+        sawWindow = false
         let cur = currentID()
-        // Already in WeType and the trigger is WeType's own key: let WeType see the real key.
+        // Already in the voice method and the trigger is its own key: let it see the real key.
         if cur == m.voiceID && m.trigger == m.forwardKey {
             passthrough = true; log("down: already voice IME, pass through"); return true
         }
@@ -203,10 +237,11 @@ final class Engine {
         func restoreWhenDone() {
             guard gen == generation else { return }
             let waited = Date().timeIntervalSince(released)
-            let visible = voiceCapsuleVisible()
-            if capsuleGone == nil && visible == false { capsuleGone = Date(); log("capsule gone after \(Int(waited * 1000))ms") }
+            let visible = voiceWindowVisible(m.voiceID)
+            if visible == true { sawWindow = true }
+            if sawWindow && capsuleGone == nil && visible == false { capsuleGone = Date(); log("voice window gone after \(Int(waited * 1000))ms") }
             let graceDone = capsuleGone.map { Date().timeIntervalSince($0) >= capsuleGrace } ?? false
-            guard graceDone || waited >= (visible == nil ? fallbackDelay : restoreDelay) else {
+            guard graceDone || waited >= (sawWindow ? restoreDelay : fallbackDelay) else {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { restoreWhenDone() }; return
             }
             guard currentID() == m.voiceID, let prev = previous else { return }
@@ -303,21 +338,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             (to ?? menu).addItem(i); return i
         }
         if AXIsProcessTrusted() {
-            _ = add(L("按住 \(m.trigger.name) 用微信输入法说话", "Hold \(m.trigger.name) to dictate with WeType"), nil)
+            _ = add(L("按住 \(m.trigger.name) 用\(m.voiceName)说话", "Hold \(m.trigger.name) to dictate with \(m.voiceName)"), nil)
         } else {
             _ = add(L("需要辅助功能权限，点这里去允许…", "Needs Accessibility permission — allow…"), #selector(openAccessibility))
         }
         menu.addItem(.separator())
 
         let keys = NSMenu()
-        _ = add(L("跟随微信（\(m.forwardKey.name)）", "Same as WeType (\(m.forwardKey.name))"), #selector(setTrigger(_:)), state: m.customTrigger == nil, tag: -1, to: keys)
+        _ = add(L("跟随语音键（\(m.forwardKey.name)）", "Same as voice key (\(m.forwardKey.name))"), #selector(setTrigger(_:)), state: m.customTrigger == nil, tag: -1, to: keys)
         keys.addItem(.separator())
         for k in ModKey.all where k != m.forwardKey {
             _ = add(k.name, #selector(setTrigger(_:)), state: m.customTrigger == k, tag: Int(k.code), to: keys)
         }
         let keyItem = add(L("触发键：\(m.trigger.name)", "Trigger key: \(m.trigger.name)"), nil)
         keyItem.submenu = keys
-        _ = add(L("微信的语音键：\(m.voiceKey?.name ?? "没读到，按右 Option 处理")", "WeType voice key: \(m.voiceKey?.name ?? "not found, assuming Right Option")"), nil)
+        let sources = NSMenu()
+        for c in voiceCandidates() {
+            let i = add(c.name, #selector(setVoiceSource(_:)), state: c.id == m.voiceID, to: sources)
+            i.representedObject = c.id
+        }
+        add(L("语音输入法：\(m.voiceName)", "Voice input: \(m.voiceName)"), nil).submenu = sources
+        if m.isWeType && weTypeVoiceKey() != nil {
+            _ = add(L("它的语音键：\(m.forwardKey.name)（自动读取）", "Its voice key: \(m.forwardKey.name) (detected)"), nil)
+        } else {
+            let vk = NSMenu()
+            for k in ModKey.all {
+                _ = add(k.name, #selector(setVoiceKey(_:)), state: m.forwardKey == k, tag: Int(k.code), to: vk)
+            }
+            add(L("它的语音键：\(m.forwardKey.name)", "Its voice key: \(m.forwardKey.name)"), nil).submenu = vk
+        }
         menu.addItem(.separator())
 
         _ = add(L("开机启动", "Launch at login"), #selector(toggleLogin), state: SMAppService.mainApp.status == .enabled)
@@ -341,6 +390,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc func toggleLogin() {
         if SMAppService.mainApp.status == .enabled { try? SMAppService.mainApp.unregister() }
         else { try? SMAppService.mainApp.register() }
+    }
+    @objc func setVoiceSource(_ sender: NSMenuItem) {
+        if let id = sender.representedObject as? String { m.voiceID = id; log("voice source set to \(id)") }
+    }
+    @objc func setVoiceKey(_ sender: NSMenuItem) {
+        m.defaults.set(sender.tag, forKey: "voiceKey.\(m.voiceID)")
+        log("voice key for \(m.voiceID) set to \(m.forwardKey.name)")
     }
     @objc func setLanguage(_ sender: NSMenuItem) {
         UserDefaults.standard.set(sender.representedObject as? String, forKey: "language")
