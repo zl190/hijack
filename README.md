@@ -64,6 +64,14 @@ hijack log -f            # follow the log
 
 `status`, `sources`, and `get` take `--json`.
 
+## Homepage
+
+The static homepage lives in [`site/`](site/README.md). Preview it from this repository:
+
+```sh
+python3 -m http.server 4173 --bind 127.0.0.1 --directory site
+```
+
 ## License
 
 MIT
