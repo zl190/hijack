@@ -11,10 +11,10 @@
     copyFallback: 'The command is selected. Press ⌘C or Ctrl+C to copy.'
   };
   const stages = isChinese ? [
-    { source: 'ABC', status: '正在使用 ABC 输入。', text: '下一句话，用说的。' },
+    { source: '鼠须管', status: '正在使用鼠须管输入。', text: '下一句话，用说的。' },
     { source: '微信输入法', status: '按住按键，已切到微信输入法。', text: '正在听你说话…', capsule: '微信语音输入' },
     { source: '微信输入法', status: '已松开，等待微信输入法提交文字。', text: '把方案评审调整到周五吧。', capsule: '正在完成语音输入…' },
-    { source: 'ABC', status: '文字已提交，已恢复 ABC。', text: '把方案评审调整到周五吧。' }
+    { source: '鼠须管', status: '文字已提交，已恢复鼠须管。', text: '把方案评审调整到周五吧。' }
   ] : [
     { source: 'ABC', status: 'Typing with ABC.', text: 'Say the next sentence out loud.' },
     { source: 'WeType', status: 'Key held. Switched to WeType.', text: 'Listening…', capsule: 'WeType dictation' },
