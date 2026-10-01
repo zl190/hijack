@@ -160,6 +160,19 @@ func handyVoiceKey() -> KeySpec? {
     return KeySpec(binding: binding)
 }
 
+// Voice input methods we know: their voice key when it can't be read from settings, and helper apps
+// that own the voice UI (Sogou dictates in a separate "voice assistant" process).
+struct KnownIME { let bundle: String; let defaultKey: String?; let helpers: [String] }
+let knownIMEs: [KnownIME] = [
+    KnownIME(bundle: "com.tencent.inputmethod.wetype", defaultKey: nil, helpers: []),   // detected from its settings
+    KnownIME(bundle: "com.sogou.inputmethod.sogou", defaultKey: "left_option", helpers: ["com.sogou.voiceassistant"]),
+    KnownIME(bundle: "com.bytedance.inputmethod.doubaoime", defaultKey: "fn", helpers: []),
+]
+func knownIME(_ sourceID: String) -> KnownIME? {
+    guard let bundle = source(sourceID).flatMap({ prop($0, kTISPropertyBundleID) }) else { return nil }
+    return knownIMEs.first { $0.bundle == bundle }
+}
+
 // MARK: input sources
 
 func currentID() -> String? {
@@ -211,11 +224,12 @@ func switchTo(_ id: String, _ label: String) {
 // uncommitted text, so that window disappearing is the "done" signal. Owner/bounds need no Screen
 // Recording. nil = the input method's process isn't running.
 func voiceWindowVisible(_ sourceID: String) -> Bool? {
-    guard let bundle = source(sourceID).flatMap({ prop($0, kTISPropertyBundleID) }),
-          let pid = NSWorkspace.shared.runningApplications.first(where: { $0.bundleIdentifier == bundle })?.processIdentifier
-    else { return nil }
+    guard let bundle = source(sourceID).flatMap({ prop($0, kTISPropertyBundleID) }) else { return nil }
+    let owners = Set([bundle] + (knownIME(sourceID)?.helpers ?? []))
+    let pids = Set(NSWorkspace.shared.runningApplications.filter { owners.contains($0.bundleIdentifier ?? "") }.map(\.processIdentifier))
+    guard !pids.isEmpty else { return nil }
     let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
-    return list.contains { ($0[kCGWindowOwnerPID as String] as? Int32) == pid }
+    return list.contains { pids.contains(($0[kCGWindowOwnerPID as String] as? Int32) ?? -1) }
 }
 
 // What has keyboard focus right now (app + control role) — for diagnosing focus changes in the logs.
@@ -251,7 +265,7 @@ final class Config {
     static let shared = Config()
     var trigger: KeySpec?          // nil = "follow" the voice key
     var voiceInput = weTypeID
-    var voiceKey: KeySpec?         // nil = "auto" (detected for WeType)
+    var voiceKeys: [String: KeySpec] = [:]   // per voice input; missing = "auto" (detected, or a known default)
     var showMenuBarIcon = true
     var language = "system"
     var holdDelay = 0.2            // minimum hold before the voice method gets its key
@@ -275,15 +289,18 @@ final class Config {
         loadedAt = mtime
         trigger = (d["trigger"] as? String) == "follow" || d["trigger"] == nil ? nil : KeySpec(json: d["trigger"])
         voiceInput = d["voiceInput"] as? String ?? weTypeID
-        voiceKey = (d["voiceKey"] as? String) == "auto" || d["voiceKey"] == nil ? nil : KeySpec(json: d["voiceKey"])
+        voiceKeys = [:]
+        for (id, v) in d["voiceKeys"] as? [String: Any] ?? [:] {
+            if let k = KeySpec(json: v) { voiceKeys[id] = k } else if (v as? String) != "auto" { log("config: unknown voiceKeys[\(id)] \(v)") }
+        }
+        if let old = KeySpec(json: d["voiceKey"]), voiceKeys[voiceInput] == nil { voiceKeys[voiceInput] = old }   // older single "voiceKey"
         showMenuBarIcon = d["showMenuBarIcon"] as? Bool ?? true
         language = d["language"] as? String ?? "system"
         holdDelay = d["holdDelay"] as? Double ?? 0.2
         restoreTimeout = d["restoreTimeout"] as? Double ?? 5.0
         fallbackDelay = d["fallbackDelay"] as? Double ?? 2.5
-        if !force { log("config: reloaded (trigger \(trigger?.name ?? "follow"), voiceKey \(voiceKey?.name ?? "auto"), voiceInput \(voiceInput))") }
+        if !force { log("config: reloaded (trigger \(trigger?.name ?? "follow"), voiceInput \(voiceInput), voiceKeys \(voiceKeys.mapValues(\.name)))") }
         if d["trigger"] != nil, (d["trigger"] as? String) != "follow", trigger == nil { log("config: unknown trigger \(d["trigger"]!), following the voice key") }
-        if d["voiceKey"] != nil, (d["voiceKey"] as? String) != "auto", voiceKey == nil { log("config: unknown voiceKey \(d["voiceKey"]!), using auto") }
     }
 
     func save() {
@@ -295,7 +312,7 @@ final class Config {
             return String(data: d, encoding: .utf8) ?? "null"
         }
         let pairs: [(String, Any)] = [
-            ("trigger", trigger?.json ?? "follow"), ("voiceInput", voiceInput), ("voiceKey", voiceKey?.json ?? "auto"),
+            ("trigger", trigger?.json ?? "follow"), ("voiceInput", voiceInput), ("voiceKeys", voiceKeys.mapValues(\.json)),
             ("showMenuBarIcon", showMenuBarIcon), ("language", language),
             ("holdDelay", holdDelay), ("restoreTimeout", restoreTimeout), ("fallbackDelay", fallbackDelay),
         ]
@@ -310,7 +327,7 @@ final class Config {
         let u = UserDefaults.standard
         voiceInput = u.string(forKey: "voiceInputSource") ?? weTypeID
         trigger = (u.object(forKey: "triggerKey") as? Int).map { KeySpec(code: $0) }
-        voiceKey = (u.object(forKey: "voiceKey.\(voiceInput)") as? Int).map { KeySpec(code: $0) }
+        if let k = (u.object(forKey: "voiceKey.\(voiceInput)") as? Int).map({ KeySpec(code: $0) }) { voiceKeys[voiceInput] = k }
         showMenuBarIcon = u.object(forKey: "showMenuBarIcon") as? Bool ?? true
         language = u.string(forKey: "language") ?? "system"
         log("config: created \(configURL.path)")
@@ -327,8 +344,12 @@ final class Model {
     var voiceName: String { app?.name ?? (isApp ? String(voiceID.dropFirst(4)) : sourceName(voiceID)) }
     var isWeType: Bool { voiceID == weTypeID }
     // Voice key precedence: the user's explicit choice, else auto-detected (WeType only), else Right Option.
-    var userVoiceKey: KeySpec? { c.voiceKey }
-    var detectedVoiceKey: KeySpec? { isWeType ? weTypeVoiceKey() : app?.detect() }
+    var userVoiceKey: KeySpec? { c.voiceKeys[voiceID] }
+    var detectedVoiceKey: KeySpec? {
+        if isWeType { return weTypeVoiceKey() }
+        if let app { return app.detect() }
+        return knownIME(voiceID)?.defaultKey.flatMap(KeySpec.named)
+    }
     var forwardKey: KeySpec { userVoiceKey ?? detectedVoiceKey ?? KeySpec.named("right_option")! }
     // Trigger precedence: the user's explicit choice, else follow the voice key.
     var customTrigger: KeySpec? { c.trigger }
@@ -577,10 +598,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         }
         add(L("语音输入法：\(m.voiceName)", "Voice input: \(m.voiceName)"), nil).submenu = sources
-        let found = m.detectedVoiceKey?.name ?? L("没读到", "not found")
-        let autoTitle = (m.isWeType || m.app != nil) ? L("自动检测（\(found)）", "Auto-detect (\(found))") : L("默认（右 Option）", "Default (Right Option)")
-        add(L("它的语音键：\(m.forwardKey.name)", "Its voice key: \(m.forwardKey.name)"), nil).submenu =
-            keyMenu(current: m.userVoiceKey, auto: autoTitle, action: #selector(setVoiceKey(_:)))
+        // Where the voice key comes from, shown plainly so a guess never looks like a detection.
+        let readable = m.isWeType || m.app != nil                 // we can read its settings
+        let known = m.detectedVoiceKey
+        let autoTitle: String, note: String
+        switch (readable, known) {
+        case (true, let k?):  autoTitle = L("自动检测（\(k.name)）", "Auto-detect (\(k.name))")
+                              note = L("从 \(m.voiceName) 的设置读取", "Read from \(m.voiceName)'s settings")
+        case (true, nil):     autoTitle = L("自动检测（没读到）", "Auto-detect (not found)")
+                              note = L("⚠︎ 没读到 \(m.voiceName) 的设置，请手动选择", "⚠︎ Couldn't read \(m.voiceName)'s settings — pick its key")
+        case (false, let k?): autoTitle = L("默认（\(k.name)）", "Default (\(k.name))")
+                              note = L("未从 \(m.voiceName) 的设置读取，请与它的设置核对", "Not read from \(m.voiceName) — check it matches its settings")
+        case (false, nil):    autoTitle = L("未检测到", "Not detected")
+                              note = L("⚠︎ 读不到 \(m.voiceName) 的语音键，请手动选择", "⚠︎ Can't detect \(m.voiceName)'s voice key — pick it")
+        }
+        let unsure = m.userVoiceKey == nil && (known == nil || !readable)
+        let vkMenu = keyMenu(current: m.userVoiceKey, auto: autoTitle, action: #selector(setVoiceKey(_:)))
+        let info = NSMenuItem(title: m.userVoiceKey != nil ? L("你选的键", "Your choice") : note, action: nil, keyEquivalent: "")
+        info.isEnabled = false
+        vkMenu.insertItem(info, at: 0); vkMenu.insertItem(.separator(), at: 1)
+        add((unsure && known == nil ? "⚠︎ " : "") + L("它的语音键：\(m.forwardKey.name)", "Its voice key: \(m.forwardKey.name)")
+            + (unsure && known != nil ? L("（默认）", " (default)") : ""), nil).submenu = vkMenu
         menu.addItem(.separator())
 
         _ = add(L("开机启动", "Launch at login"), #selector(toggleLogin), state: SMAppService.mainApp.status == .enabled)
@@ -607,12 +645,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         log("trigger set to \(m.trigger.name)")
     }
     @objc func setVoiceKey(_ sender: NSMenuItem) {
-        let c = Config.shared; c.reload(); c.voiceKey = pick(sender); c.save()
+        let c = Config.shared; c.reload(); c.voiceKeys[c.voiceInput] = pick(sender); c.save()
         log("voice key set to \(m.forwardKey.name)")
     }
     @objc func setVoiceSource(_ sender: NSMenuItem) {
         guard let id = sender.representedObject as? String else { return }
-        let c = Config.shared; c.reload(); c.voiceInput = id; c.voiceKey = nil; c.save()
+        let c = Config.shared; c.reload(); c.voiceInput = id; c.save()
         log("voice source set to \(id)")
     }
     @objc func setLanguage(_ sender: NSMenuItem) {

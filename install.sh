@@ -9,5 +9,5 @@ pkill -x Hijack 2>/dev/null || true
 rm -rf /Applications/Hijack.app
 mv "$TMP/Hijack.app" /Applications/
 xattr -dr com.apple.quarantine /Applications/Hijack.app 2>/dev/null || true
-open /Applications/Hijack.app
+open /Applications/Hijack.app || { sleep 2; open /Applications/Hijack.app; }   # LaunchServices can fail right after a replace (-609)
 echo "Hijack installed. Allow it in System Settings > Privacy & Security > Accessibility."
