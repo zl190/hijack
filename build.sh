@@ -7,7 +7,7 @@ cd "$(dirname "$0")"
 VERSION="${HIJACK_VERSION:-$(cat VERSION)}"
 APP=build/Hijack.app
 rm -rf build && mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-swiftc -O -target arm64-apple-macos13 Hijack.swift -o "$APP/Contents/MacOS/Hijack"
+swiftc -O -target arm64-apple-macos13 Sources/*.swift -o "$APP/Contents/MacOS/Hijack"
 ICONSET="$(mktemp -d)/Hijack.iconset"; mkdir -p "$ICONSET"
 for sz in 16 32 128 256 512; do
   sips -z $sz $sz assets/Hijack-1024.png --out "$ICONSET/icon_${sz}x${sz}.png" >/dev/null

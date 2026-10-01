@@ -1,0 +1,196 @@
+import AppKit
+import ApplicationServices
+import Carbon
+import ServiceManagement
+
+// MARK: menu (the whole UI)
+
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
+    let engine = Engine()
+    let m = Model.shared
+    let menu = NSMenu()
+    var item: NSStatusItem?
+
+    func applicationDidFinishLaunching(_ n: Notification) {
+        menu.delegate = self
+        updateIcon()
+        engine.start()
+        if !AXIsProcessTrusted() {   // system prompt also adds us to the Accessibility list
+            let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+            _ = AXIsProcessTrustedWithOptions(opts)
+        }
+    }
+
+    // Opening the app again (Finder / Spotlight / LaunchBar) pops the menu at the pointer,
+    // so it stays reachable with the menu bar icon hidden.
+    func applicationShouldHandleReopen(_ s: NSApplication, hasVisibleWindows: Bool) -> Bool {
+        NSApp.activate(ignoringOtherApps: true)
+        menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
+        return false
+    }
+
+    func updateIcon() {
+        if Config.shared.showMenuBarIcon, item == nil {
+            let it = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+            let icon = Bundle.main.image(forResource: "HijackMenuTemplate")
+                ?? NSImage(systemSymbolName: "mic", accessibilityDescription: appName)
+            icon?.isTemplate = true                  // follows light/dark menu bar
+            icon?.size = NSSize(width: 18, height: 18)
+            it.button?.image = icon
+            it.menu = menu
+            item = it
+        } else if !Config.shared.showMenuBarIcon, let it = item {
+            NSStatusBar.system.removeStatusItem(it); item = nil
+        }
+    }
+
+    // Rebuilt every time it opens, so it always shows the live state.
+    // Rebuilt every time it opens, so it always shows the live state.
+    // Layout: status · how you dictate (mode, shortcut) · dictation source (+ its key, its start style) · app.
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        Config.shared.reload()
+        menu.removeAllItems()
+        @discardableResult
+        func add(_ title: String, _ action: Selector? = nil, on: Bool = false, to: NSMenu? = nil, value: String? = nil, indent: Int = 0) -> NSMenuItem {
+            let i = NSMenuItem(title: title, action: action, keyEquivalent: "")
+            i.target = self; i.state = on ? .on : .off; i.representedObject = value; i.indentationLevel = indent
+            (to ?? menu).addItem(i); return i
+        }
+        func header(_ title: String, to: NSMenu? = nil) {
+            if #available(macOS 14.0, *) { (to ?? menu).addItem(NSMenuItem.sectionHeader(title: title)) }
+            else { add(title, to: to) }
+        }
+        let c = m.c, name = m.voiceName, key = m.trigger.name
+
+        // Status — derived from the same state the engine uses.
+        if !AXIsProcessTrusted() {
+            add(L("⚠︎ 需要辅助功能权限，点这里去允许…", "⚠︎ Needs Accessibility permission — Allow…"), #selector(openAccessibility))
+        } else if m.toggleMode {
+            add(L("点按 \(key) 用\(name)听写，再点停止", "Tap \(key) to dictate with \(name), tap again to stop"))
+        } else {
+            add(L("按住 \(key) 用\(name)听写", "Hold \(key) to dictate with \(name)"))
+        }
+        let readable = m.isWeType || m.app != nil
+        if m.userVoiceKey == nil && (m.detectedVoiceKey == nil || !readable) {
+            add(m.detectedVoiceKey.map { L("⚠︎ \(name)里的语音键用的是默认值 \($0.name)，请确认一致", "⚠︎ \(name)'s voice key is assumed to be \($0.name) — make sure it matches") }
+                ?? L("⚠︎ 读不到\(name)里的语音键，请在「语音来源」里选", "⚠︎ Can't detect \(name)'s voice key — pick it under Dictation Source"))
+        }
+        menu.addItem(.separator())
+
+        // How you dictate
+        header(L("听写方式", "How You Dictate"))
+        add(L("按住说话", "Hold to Talk"), #selector(setTriggerMode(_:)), on: !m.toggleMode, value: "hold")
+        add(L("点按开始，再点停止（免按）", "Tap to Start, Tap to Stop"), #selector(setTriggerMode(_:)), on: m.toggleMode, value: "toggle")
+        if m.toggleMode {
+            add(L("按任意键也可停止", "Any Key Also Stops"), #selector(toggleStopOnAnyKey), on: c.stopOnAnyKey, indent: 1)
+        }
+        let keys = NSMenu()
+        add(L("同\(name)里的语音键（\(m.forwardKey.name)）", "Same as \(name)'s Voice Key (\(m.forwardKey.name))"), #selector(setTrigger(_:)), on: m.customTrigger == nil, to: keys, value: "auto")
+        keys.addItem(.separator())
+        for id in quickKeys { let k = KeySpec.named(id)!; add(k.name, #selector(setTrigger(_:)), on: m.customTrigger == k, to: keys, value: id) }
+        if let t = m.customTrigger, t.quickID.map(quickKeys.contains) != true { add(t.name, on: true, to: keys) }
+        keys.addItem(.separator())
+        add(L("其他按键…", "Other Key…"), #selector(openConfig), to: keys)
+        add(L("快捷键：\(key)", "Shortcut: \(key)")).submenu = keys
+        menu.addItem(.separator())
+
+        // Dictation source — only voice tools that are installed; its key and start style live here too.
+        let src = NSMenu()
+        var listed = Set<String>()
+        for ime in knownIMEs where source(ime.sourceID) != nil {
+            add(sourceName(ime.sourceID), #selector(setVoiceSource(_:)), on: m.voiceID == ime.sourceID, to: src, value: ime.sourceID)
+            listed.insert(ime.sourceID)
+        }
+        for a in voiceApps where NSWorkspace.shared.urlForApplication(withBundleIdentifier: a.bundle) != nil {
+            add(a.name, #selector(setVoiceSource(_:)), on: m.voiceID == "app:" + a.bundle, to: src, value: "app:" + a.bundle)
+            listed.insert("app:" + a.bundle)
+        }
+        if !listed.contains(m.voiceID) { add(L("\(name)（设置文件）", "\(name) (config file)"), on: true, to: src) }
+        src.addItem(.separator())
+        header(L("\(name)里的语音键", "\(name)'s Voice Key"), to: src)
+        let found = m.detectedVoiceKey
+        let autoTitle: String = {
+            guard let k = found else { return L("自动检测（没读到）", "Auto-Detect (Not Found)") }
+            return readable ? L("\(k.name)（自动检测）", "\(k.name) (Detected)") : L("\(k.name)（默认，未验证）", "\(k.name) (Default, Unverified)")
+        }()
+        add(autoTitle, #selector(setVoiceKey(_:)), on: m.userVoiceKey == nil, to: src, value: "auto")
+        for id in quickKeys where KeySpec.named(id) != found {
+            let k = KeySpec.named(id)!; add(k.name, #selector(setVoiceKey(_:)), on: m.userVoiceKey == k, to: src, value: id)
+        }
+        if let u = m.userVoiceKey, u.quickID.map(quickKeys.contains) != true { add(u.name, on: true, to: src) }
+        add(L("其他…", "Other…"), #selector(openConfig), to: src)
+        // Start style: only when the source can't simply be held (or the user changed it).
+        if m.voiceStyle != "hold" || c.voiceStyles[m.voiceID] != nil {
+            src.addItem(.separator())
+            header(L("\(name)的启动方式", "\(name) Starts Listening On"), to: src)
+            let names = ["hold": L("按住", "Hold"), "tap": L("单击", "Single Tap"), "doubleTap": L("双击", "Double Tap")]
+            for code in ["hold", "tap", "doubleTap"] {
+                add(names[code]!, #selector(setVoiceStyle(_:)), on: m.voiceStyle == code, to: src, value: code)
+            }
+        }
+        add(L("语音来源：\(name)", "Dictation Source: \(name)")).submenu = src
+        menu.addItem(.separator())
+
+        // App
+        add(L("开机启动", "Open at Login"), #selector(toggleLogin), on: SMAppService.mainApp.status == .enabled)
+        add(L("在菜单栏显示图标", "Show in Menu Bar"), #selector(toggleIcon), on: c.showMenuBarIcon)
+        let langs = NSMenu()
+        for (code, title) in [("system", L("跟随系统", "System")), ("en", "English"), ("zh", "中文")] {
+            add(title, #selector(setLanguage(_:)), on: c.language == code, to: langs, value: code)
+        }
+        add(L("语言", "Language")).submenu = langs
+        let edit = add(L("编辑配置文件…", "Edit Config File…"), #selector(openConfig))
+        edit.keyEquivalent = ","; edit.keyEquivalentModifierMask = .command
+        menu.addItem(.separator())
+        menu.addItem(NSMenuItem(title: L("退出 \(appName)", "Quit \(appName)"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+    }
+
+    // Menu actions edit the config file (the source of truth).
+    func pick(_ sender: NSMenuItem) -> KeySpec? {
+        (sender.representedObject as? String).flatMap { $0 == "auto" ? nil : KeySpec.named($0) }
+    }
+    @objc func setTrigger(_ sender: NSMenuItem) {
+        let c = Config.shared; c.reload(); c.trigger = pick(sender); c.save()
+        log("trigger set to \(m.trigger.name)")
+    }
+    @objc func setVoiceKey(_ sender: NSMenuItem) {
+        let c = Config.shared; c.reload(); c.voiceKeys[c.voiceInput] = pick(sender); c.save()
+        log("voice key set to \(m.forwardKey.name)")
+    }
+    @objc func setTriggerMode(_ sender: NSMenuItem) {
+        let c = Config.shared; c.reload(); c.triggerMode = sender.representedObject as? String ?? "hold"; c.save()
+        log("trigger mode set to \(c.triggerMode)")
+    }
+    @objc func toggleStopOnAnyKey() {
+        let c = Config.shared; c.reload(); c.stopOnAnyKey.toggle(); c.save()
+    }
+    @objc func setVoiceStyle(_ sender: NSMenuItem) {
+        let c = Config.shared; c.reload()
+        let v = sender.representedObject as? String
+        c.voiceStyles[c.voiceInput] = v == "auto" ? nil : v; c.save()
+        log("voice style for \(c.voiceInput) set to \(m.voiceStyle)")
+    }
+    @objc func setVoiceSource(_ sender: NSMenuItem) {
+        guard let id = sender.representedObject as? String else { return }
+        let c = Config.shared; c.reload(); c.voiceInput = id; c.save()
+        log("voice source set to \(id)")
+    }
+    @objc func setLanguage(_ sender: NSMenuItem) {
+        let c = Config.shared; c.reload(); c.language = sender.representedObject as? String ?? "system"; c.save()
+    }
+    @objc func toggleIcon() {
+        let c = Config.shared; c.reload(); c.showMenuBarIcon.toggle(); c.save(); updateIcon()
+    }
+    @objc func toggleLogin() {
+        if SMAppService.mainApp.status == .enabled { try? SMAppService.mainApp.unregister() }
+        else { try? SMAppService.mainApp.register() }
+    }
+    @objc func openConfig() {
+        Config.shared.reload()
+        if !FileManager.default.fileExists(atPath: configURL.path) { Config.shared.save() }
+        NSWorkspace.shared.open(configURL)
+    }
+    @objc func openAccessibility() {
+        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+    }
+}
