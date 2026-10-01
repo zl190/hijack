@@ -111,7 +111,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         add(L("按住说话", "Hold to Talk"), #selector(setTriggerMode(_:)), on: !m.toggleMode, value: "hold")
         add(L("点按开始，再点停止（免按）", "Tap to Start, Tap to Stop"), #selector(setTriggerMode(_:)), on: m.toggleMode, value: "toggle")
         if m.toggleMode {   // how to stop, as a plain description (the switch itself lives in Settings → Dictation)
-            add(c.stopOnAnyKey ? L("再点一下，或按任意键停止", "Tap again or press any key to stop") : L("再点一下停止", "Tap again to stop"), indent: 1)
+            let hint = add(c.stopOnAnyKey ? L("再点一下，或按任意键停止", "Tap again or press any key to stop") : L("再点一下停止", "Tap again to stop"))
+            hint.attributedTitle = NSAttributedString(string: hint.title, attributes: [   // a description, aligned with the titles above
+                .font: NSFont.menuFont(ofSize: NSFont.smallSystemFontSize), .foregroundColor: NSColor.secondaryLabelColor])
         }
         let keys = NSMenu()
         add(L("同\(name)里的语音键（\(m.forwardKey.name)）", "Same as \(name)'s Voice Key (\(m.forwardKey.name))"), #selector(setTrigger(_:)), on: m.customTrigger == nil, to: keys, value: "auto")
@@ -166,6 +168,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         add(L("语言", "Language")).submenu = langs
         let settings = add(L("设置…", "Settings…"), #selector(openSettings))
         settings.keyEquivalent = ","; settings.keyEquivalentModifierMask = .command
+        if #available(macOS 27.0, *) { settings.preferredImageVisibility = .hidden }   // no auto icon: keep titles aligned
         add(L("编辑配置文件…", "Edit Config File…"), #selector(openConfig))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: L("退出 \(appName)", "Quit \(appName)"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
