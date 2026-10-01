@@ -38,4 +38,4 @@ HTML references use `?v=` followed by the first 12 hexadecimal characters of eac
 
 See `docs/homepage.md` for the current review and validation record. Earlier design iterations are preserved in Git history.
 
-English image localization: `assets/hijack-want-it-all-en.png`, made with the built-in image tool from the approved Chinese cover. Prompt: preserve all framing, people, expressions, colors, and the small tilted Hijack face label; replace only the top title with “Voice input + Rime” and the bottom subtitle with “I want it all”. This is a localized asset in the same template, not a separate page design.
+English image localization: `assets/hijack-why-not-both-en.png`, made with the built-in image tool from the approved Chinese cover. Prompt: preserve all framing, people, expressions, colors, and the small tilted Hijack face label; replace only the top title with “Voice input + Rime” and the bottom subtitle with “Why not both?”. This is a localized asset in the same template, not a separate page design.
