@@ -7,6 +7,9 @@ import ApplicationServices
 import Carbon
 import ServiceManagement
 
+// `hijack <command>` runs the CLI and exits; anything else starts the app.
+if let code = runCLI(Array(CommandLine.arguments.dropFirst())) { exit(code) }
+
 let app = NSApplication.shared
 let delegate = AppDelegate()
 app.delegate = delegate

@@ -20,6 +20,7 @@ final class Engine {
     var active = false                // a voice session is running (hold: key held · toggle: between taps)
     var swallowUp: Int?               // key that stopped a toggle session: also eat its key-up
     var paused = false                // the settings window is recording a key: let every key through
+    var waitingReported = false
 
     // Live progress for the settings window's "Try it" area.
     func report(_ phase: String, _ detail: String = "") {
@@ -188,6 +189,7 @@ final class Engine {
 
     func start() {
         guard AXIsProcessTrusted() else {
+            if !waitingReported { AppState.write(trusted: false, tapActive: false); waitingReported = true }
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { self.start() }   // wait for the grant
             return
         }
@@ -198,10 +200,11 @@ final class Engine {
             callback: { _, type, event, ctx in
                 Unmanaged<Engine>.fromOpaque(ctx!).takeUnretainedValue().handle(type, event)
             }, userInfo: me)
-        else { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { self.start() }; return }
+        else { AppState.write(trusted: true, tapActive: false); DispatchQueue.main.asyncAfter(deadline: .now() + 1) { self.start() }; return }
         self.tap = tap
         CFRunLoopAddSource(CFRunLoopGetMain(), CFMachPortCreateRunLoopSource(nil, tap, 0), .commonModes)
         CGEvent.tapEnable(tap: tap, enable: true)
+        AppState.write(trusted: true, tapActive: true)
         log("started: trigger \(m.trigger.name), forward \(m.forwardKey.name), voice \(m.voiceID)")
     }
 }

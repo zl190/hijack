@@ -49,6 +49,21 @@ The menu bar icon (or opening Hijack again) has quick picks for the common setti
 
 Edits apply on the next key press; no restart. Logs: `~/Library/Logs/Hijack.log`.
 
+## Command line
+
+`hijack` is the same app run from the terminal (Homebrew puts it on your PATH; the install scripts link it into `~/.local/bin`):
+
+```sh
+hijack status            # what Hijack is doing, and whether it can
+hijack doctor            # check everything; exits 1 if something is broken
+hijack sources           # installed voice sources and their talk keys
+hijack get [setting]     # read settings
+hijack set mode toggle   # change a setting (validated)
+hijack log -f            # follow the log
+```
+
+`status`, `sources`, and `get` take `--json`.
+
 ## License
 
 MIT

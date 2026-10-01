@@ -14,6 +14,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationDidFinishLaunching(_ n: Notification) {
         menu.delegate = self
         applyAppearance()
+        // Pick up icon/Dock changes made from the CLI or a hand edit.
+        Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in Config.shared.reload(); self?.applyAppearance() }
         engine.start()
         if !AXIsProcessTrusted() {   // first run: the window explains what's missing; the system prompt adds us to the list
             SettingsWindowController.show()
