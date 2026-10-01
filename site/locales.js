@@ -1,7 +1,7 @@
 /* Text and image localizations for the single focused homepage. */
 window.HIJACK_LOCALES = {
   "zh": {
-    "description": "按住快捷键，用语音输入，松开切回原来的输入法。",
+    "description": "语音输入，然后切回原来的输入法",
     "pageTitle": "Hijack — 语音输入，说完切回原输入法",
     "skip": "跳到正文",
     "home": "Hijack 首页",
@@ -11,8 +11,8 @@ window.HIJACK_LOCALES = {
     "headlineVoice": "语音输入，",
     "headlineTyping": "自己的输入法，",
     "headlineBoth": "我全都要。",
-    "intro": "按住快捷键，用语音输入，松开切回",
-    "introStrong": "原来的输入法。",
+    "intro": "语音输入，然后切回",
+    "introStrong": "原来的输入法",
     "requirements": "Apple 芯片 · macOS 13+ · 需安装语音输入工具",
     "demo": "输入法切换演示",
     "coverAlt": "语音输入 + 鼠须管：我全都要。",
@@ -65,7 +65,7 @@ window.HIJACK_LOCALES = {
     "continueTyping": "继续打字"
   },
   "en": {
-    "description": "Hold your shortcut for voice input. Release to return to your own input method.",
+    "description": "Dictate, then switch back to your previous input method.",
     "pageTitle": "Hijack — Voice input, then back to your input method",
     "skip": "Skip to content",
     "home": "Hijack home",
@@ -75,8 +75,8 @@ window.HIJACK_LOCALES = {
     "headlineVoice": "Voice input.",
     "headlineTyping": "My input method.",
     "headlineBoth": "I want it all.",
-    "intro": "Hold your shortcut for voice input. Release to return to ",
-    "introStrong": "your own input method.",
+    "intro": "Dictate, then switch back to ",
+    "introStrong": "your previous input method",
     "requirements": "Apple silicon · macOS 13+ · Requires a voice tool",
     "demo": "Input-source switching demo",
     "coverAlt": "Voice input + Rime: I want it all.",
