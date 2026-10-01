@@ -315,3 +315,11 @@ html[lang="zh-CN"] .source-steps--toggle { grid-template-columns: minmax(0, 1fr)
 .source-steps--toggle [data-step="1"]:focus-within { opacity: .7; }
 .source-steps--toggle [data-step="1"][aria-current="step"] { opacity: 1; }
 @media(prefers-reduced-motion:reduce) { .source-steps--toggle [data-step="1"] { transition: none; } }
+
+.supported-tools { margin-top: 24px; padding-top: 18px; border-top: 1px solid #546147; }
+.supported-tools h3 { margin: 0 0 12px; font-size: 12px; font-weight: 550; color: #e4eddb; }
+.supported-tools dl { margin: 0; }
+.supported-tools dl>div + div { margin-top: 12px; }
+.supported-tools dt { font-size: 10px; line-height: 1.7; color: #a8bd94; }
+.supported-tools dd { margin: 3px 0 0; font-size: 11px; line-height: 1.9; color: #e0e9d8; text-wrap: pretty; }
+@media(max-width:760px) { .supported-tools { margin-top: 18px; padding-top: 15px; } }

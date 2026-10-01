@@ -140,3 +140,7 @@ Browser verification: clicking the first circle reached voice input with `hijack
 The central Hijack icon now has a 44px replay button with independent hover/focus spring motion and pressed feedback. Clicking it restarts the full Chinese sequence. Removed the redundant demonstration heading, and added the user-requested Hijack face-label cover while retaining the prior image asset.
 
 The inactive voice circle is dimmed to 40% opacity, rising to 70% on hover/focus and 100% when active. It remains clickable. The Hijack face label uses small tilted lettering centered on the face. Browser checks confirmed the central replay button starts voice playback and returns to the original source.
+
+## Voice-tool support list
+
+The owner supplied a seven-tool compatibility list and identified four as personally tested. Added a compact, two-group list to the Chinese installation section: tested (WeType, Sogou IME, Doubao IME, Handy) and supported/pending test (Wispr Flow, Openless, Typeless). Removed the obsolete WeType-only requirement and generalized the title, prerequisite, and voice-processing explanation. No analytics or external requests were added.

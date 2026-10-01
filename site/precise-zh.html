@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f5f3ee">
   <meta name="description" content="按住快捷键，用语音输入，松开切回原来的输入法。">
-  <title>Hijack — 借用微信语音，说完切回原输入法</title>
+  <title>Hijack — 语音输入，说完切回原输入法</title>
   <link rel="icon" href="assets/Hijack-1024.png" type="image/png">
   <link rel="stylesheet" href="precise.css">
   <script src="precise.js" defer></script>
@@ -24,7 +24,7 @@
         <h1 id="title">语音输入，<br>自己的输入法，<br><em>我全都要。</em></h1>
         <p class="intro">按住快捷键，用语音输入，松开切回<strong>原来的输入法。</strong></p>
         <a class="primary" href="#install">安装 Hijack <span aria-hidden="true">↗</span></a>
-        <p class="compatibility">Apple 芯片 · macOS 13+ · 需安装语音输入法（目前仅支持微信输入法）</p>
+        <p class="compatibility">Apple 芯片 · macOS 13+ · 需安装语音输入工具</p>
       </div>
 
       <div class="demo" aria-label="输入法切换演示">
@@ -48,7 +48,15 @@
     </section>
 
     <section class="install" id="install" aria-labelledby="install-title">
-      <div class="install-intro"><h2 id="install-title">安装 Hijack</h2><p>先安装语音输入法，设置好语音输入快捷键，再安装 Hijack。</p></div>
+      <div class="install-intro"><h2 id="install-title">安装 Hijack</h2><p>先安装语音输入工具，设置好语音输入快捷键，再安装 Hijack。</p>
+        <div class="supported-tools" aria-labelledby="supported-title">
+          <h3 id="supported-title">支持的语音工具</h3>
+          <dl>
+            <div><dt>已实测</dt><dd>微信输入法 · 搜狗输入法 · 豆包输入法 · Handy</dd></div>
+            <div><dt>支持，待实测</dt><dd>Wispr Flow · Openless · Typeless</dd></div>
+          </dl>
+        </div>
+      </div>
       <div class="install-right">
         <details id="install-guide" class="install-guide">
           <summary>查看安装命令 <span aria-hidden="true">↗</span></summary>
@@ -60,7 +68,7 @@
             <a class="release-link" href="https://github.com/zl190/hijack/releases">查看发布版本 <span aria-hidden="true">↗</span></a>
           </div>
         </details>
-        <details class="privacy"><summary>语音由谁处理？</summary><p>微信输入法。Hijack 只负责切换输入法和转发按键，不录音，也不保存或上传音频。语音数据如何处理，请查看微信输入法的隐私政策。</p></details>
+        <details class="privacy"><summary>语音由谁处理？</summary><p>由你使用的语音工具处理。Hijack 不录音，也不保存或上传音频。语音数据如何处理，请查看对应工具的隐私政策。</p></details>
       </div>
     </section>
   </main>
