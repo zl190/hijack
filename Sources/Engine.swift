@@ -72,7 +72,7 @@ final class Engine {
         pressedAt = Date()
         sawWindow = false
         let cur = currentID()
-        if m.isApp {   // a voice app: no input-source switch, just press its key
+        if !m.provider.switchesInputSource {   // a voice app: no input-source switch, just press its key
             if trigger == m.forwardKey && !m.toggleMode && m.voiceStyle == "hold" { passthrough = true; log("down: trigger is \(m.voiceName)'s own key, pass through"); return true }
             passthrough = false
             log("down: \(m.voiceName) \(focusDesc())")
@@ -111,13 +111,13 @@ final class Engine {
     func released() -> Bool {
         if passthrough { passthrough = false; log("up: pass through"); return true }
         if forwarded { endVoice(); forwarded = false; log("forward end (\(m.voiceStyle)) \(focusDesc())") }
-        if m.isApp { return false }   // nothing to switch back
+        if !m.provider.switchesInputSource { return false }   // nothing to switch back
         let gen = generation, released = Date()
         var capsuleGone: Date?
         func restoreWhenDone() {
             guard gen == generation else { return }
             let waited = Date().timeIntervalSince(released)
-            let visible = voiceWindowVisible(m.voiceID)
+            let visible = m.provider.isBusy()
             if visible == true { sawWindow = true }
             if sawWindow && capsuleGone == nil && visible == false { capsuleGone = Date(); log("voice window gone after \(Int(waited * 1000))ms") }
             let graceDone = capsuleGone.map { Date().timeIntervalSince($0) >= capsuleGrace } ?? false

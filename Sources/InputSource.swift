@@ -20,19 +20,6 @@ func prop(_ src: TISInputSource, _ key: CFString) -> String? {
     return Unmanaged<CFString>.fromOpaque(raw).takeUnretainedValue() as String
 }
 func sourceName(_ id: String) -> String { source(id).flatMap { prop($0, kTISPropertyLocalizedName) } ?? id }
-// Enabled, selectable input methods (not plain keyboard layouts) — candidates for the voice source.
-func voiceCandidates() -> [(id: String, name: String)] {
-    let all = TISCreateInputSourceList(nil, false)?.takeRetainedValue() as? [TISInputSource] ?? []
-    return all.compactMap { src in
-        guard let id = prop(src, kTISPropertyInputSourceID),
-              prop(src, kTISPropertyInputSourceCategory) == (kTISCategoryKeyboardInputSource as String),
-              prop(src, kTISPropertyInputSourceType) != (kTISTypeKeyboardLayout as String),
-              let raw = TISGetInputSourceProperty(src, kTISPropertyInputSourceIsSelectCapable),
-              CFBooleanGetValue(Unmanaged<CFBoolean>.fromOpaque(raw).takeUnretainedValue()) else { return nil }
-        return (id, prop(src, kTISPropertyLocalizedName) ?? id)
-    }
-}
-
 func select(_ id: String) -> Bool {
     let filter = [kTISPropertyInputSourceID as String: id] as CFDictionary
     guard let list = TISCreateInputSourceList(filter, false)?.takeRetainedValue() as? [TISInputSource],

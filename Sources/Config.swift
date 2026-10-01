@@ -93,22 +93,16 @@ final class Model {
     var c: Config { Config.shared.reload(); return Config.shared }
 
     var voiceID: String { c.voiceInput }
-    var app: VoiceApp? { voiceID.hasPrefix("app:") ? voiceApps.first { "app:" + $0.bundle == voiceID } : nil }
-    var isApp: Bool { voiceID.hasPrefix("app:") }
-    var voiceName: String { app?.name ?? (isApp ? String(voiceID.dropFirst(4)) : sourceName(voiceID)) }
-    var isWeType: Bool { voiceID == weTypeID }
-    // Voice key precedence: the user's explicit choice, else auto-detected (WeType only), else Right Option.
+    var provider: VoiceProvider { voiceProvider(for: voiceID) }
+    var voiceName: String { provider.name }
+    // Voice key precedence: the user's explicit choice, else what the provider detects (or its default).
     var userVoiceKey: KeySpec? { c.voiceKeys[voiceID] }
-    var detectedVoiceKey: KeySpec? {
-        if isWeType { return weTypeVoiceKey() }
-        if let app { return app.detect() }
-        return knownIME(voiceID)?.defaultKey.flatMap(KeySpec.named)
-    }
+    var detectedVoiceKey: KeySpec? { provider.detected().key }
     var forwardKey: KeySpec { userVoiceKey ?? detectedVoiceKey ?? KeySpec.named("right_option")! }
     // Trigger precedence: the user's explicit choice, else follow the voice key.
     var customTrigger: KeySpec? { c.trigger }
     var trigger: KeySpec { customTrigger ?? forwardKey }
     var toggleMode: Bool { c.triggerMode == "toggle" }
-    var detectedStyle: String? { isWeType ? weTypeVoice()?.style : nil }
+    var detectedStyle: String? { provider.detected().style }
     var voiceStyle: String { c.voiceStyles[voiceID] ?? detectedStyle ?? "hold" }
 }

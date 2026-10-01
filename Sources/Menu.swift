@@ -70,7 +70,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         } else {
             add(L("按住 \(key) 用\(name)听写", "Hold \(key) to dictate with \(name)"))
         }
-        let readable = m.isWeType || m.app != nil
+        let readable = m.provider.readsSettings
         if m.userVoiceKey == nil && (m.detectedVoiceKey == nil || !readable) {
             add(m.detectedVoiceKey.map { L("⚠︎ \(name)里的语音键用的是默认值 \($0.name)，请确认一致", "⚠︎ \(name)'s voice key is assumed to be \($0.name) — make sure it matches") }
                 ?? L("⚠︎ 读不到\(name)里的语音键，请在「语音来源」里选", "⚠︎ Can't detect \(name)'s voice key — pick it under Dictation Source"))
@@ -97,13 +97,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Dictation source — only voice tools that are installed; its key and start style live here too.
         let src = NSMenu()
         var listed = Set<String>()
-        for ime in knownIMEs where source(ime.sourceID) != nil {
-            add(sourceName(ime.sourceID), #selector(setVoiceSource(_:)), on: m.voiceID == ime.sourceID, to: src, value: ime.sourceID)
-            listed.insert(ime.sourceID)
-        }
-        for a in voiceApps where NSWorkspace.shared.urlForApplication(withBundleIdentifier: a.bundle) != nil {
-            add(a.name, #selector(setVoiceSource(_:)), on: m.voiceID == "app:" + a.bundle, to: src, value: "app:" + a.bundle)
-            listed.insert("app:" + a.bundle)
+        for p in installedProviders() {
+            add(p.name, #selector(setVoiceSource(_:)), on: m.voiceID == p.id, to: src, value: p.id)
+            listed.insert(p.id)
         }
         if !listed.contains(m.voiceID) { add(L("\(name)（设置文件）", "\(name) (config file)"), on: true, to: src) }
         src.addItem(.separator())

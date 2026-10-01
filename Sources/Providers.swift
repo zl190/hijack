@@ -38,14 +38,64 @@ func weTypeVoice() -> (key: KeySpec, style: String)? {
     if let k = shortcut("voiceToggleShortcut") { return (k, (varint("voiceToggleShortcut_tapCount") ?? 1) >= 2 ? "doubleTap" : "tap") }
     return nil
 }
-func weTypeVoiceKey() -> KeySpec? { weTypeVoice()?.key }
 
-// Voice apps with their own global hotkey: no input-source switch, Hijack just presses their key.
-// In the config, voiceInput "app:<bundle id>"; their key is detected from their settings when we know how.
-struct VoiceApp { let bundle: String; let name: String; let detect: () -> KeySpec? }
-let voiceApps: [VoiceApp] = [
-    VoiceApp(bundle: "com.pais.handy", name: "Handy", detect: handyVoiceKey),
-]
+// MARK: providers — everything specific to one voice tool lives behind this interface.
+
+/// A voice tool Hijack can drive: an input method (switch to it, press its voice key, switch back)
+/// or an app with its own global hotkey (just press that hotkey).
+protocol VoiceProvider {
+    var id: String { get }                  // value of "voiceInput" in the config
+    var name: String { get }
+    var isInstalled: Bool { get }
+    var switchesInputSource: Bool { get }
+    var readsSettings: Bool { get }         // detected() comes from its own settings, not a built-in guess
+    func detected() -> (key: KeySpec?, style: String?)
+    func isBusy() -> Bool?                  // its voice UI is on screen; nil = can't tell
+}
+
+struct InputMethodProvider: VoiceProvider {
+    let sourceID: String
+    var defaultKey: String? = nil           // when its settings can't be read
+    var helpers: [String] = []              // apps that own its voice UI (Sogou: a separate voice assistant)
+    var reader: (() -> (key: KeySpec, style: String)?)? = nil
+
+    var id: String { sourceID }
+    var name: String { sourceName(sourceID) }
+    var isInstalled: Bool { source(sourceID) != nil }
+    var switchesInputSource: Bool { true }
+    var readsSettings: Bool { reader != nil }
+    func detected() -> (key: KeySpec?, style: String?) {
+        if let reader { let r = reader(); return (r?.key, r?.style) }
+        return (defaultKey.flatMap(KeySpec.named), nil)
+    }
+    // Its voice window stays up until the dictated text is finally committed (rough text first, then the
+    // tidied version); switching away earlier drops the uncommitted text. Owner/bounds need no Screen Recording.
+    func isBusy() -> Bool? {
+        guard let bundle = source(sourceID).flatMap({ prop($0, kTISPropertyBundleID) }) else { return nil }
+        let owners = Set([bundle] + helpers)
+        let pids = Set(NSWorkspace.shared.runningApplications.filter { owners.contains($0.bundleIdentifier ?? "") }.map(\.processIdentifier))
+        guard !pids.isEmpty else { return nil }
+        let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
+        return list.contains { pids.contains(($0[kCGWindowOwnerPID as String] as? Int32) ?? -1) }
+    }
+}
+
+struct AppProvider: VoiceProvider {
+    let bundle: String
+    var appName: String? = nil
+    var reader: (() -> KeySpec?)? = nil
+
+    var id: String { "app:" + bundle }
+    var name: String {
+        appName ?? NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundle)
+            .map { FileManager.default.displayName(atPath: $0.path).replacingOccurrences(of: ".app", with: "") } ?? bundle
+    }
+    var isInstalled: Bool { NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundle) != nil }
+    var switchesInputSource: Bool { false }
+    var readsSettings: Bool { reader != nil }
+    func detected() -> (key: KeySpec?, style: String?) { (reader?(), nil) }
+    func isBusy() -> Bool? { nil }
+}
 
 // Handy: settings_store.json, bindings.transcribe.current_binding like "option_left+space".
 func handyVoiceKey() -> KeySpec? {
@@ -59,28 +109,17 @@ func handyVoiceKey() -> KeySpec? {
     return KeySpec(binding: binding)
 }
 
-// Voice input methods we know: their voice key when it can't be read from settings, and helper apps
-// that own the voice UI (Sogou dictates in a separate "voice assistant" process).
-struct KnownIME { let bundle: String; let sourceID: String; let defaultKey: String?; let helpers: [String] }
-let knownIMEs: [KnownIME] = [
-    KnownIME(bundle: "com.tencent.inputmethod.wetype", sourceID: "com.tencent.inputmethod.wetype.pinyin", defaultKey: nil, helpers: []),   // detected from its settings
-    KnownIME(bundle: "com.sogou.inputmethod.sogou", sourceID: "com.sogou.inputmethod.sogou.pinyin", defaultKey: "left_option", helpers: ["com.sogou.voiceassistant"]),
-    KnownIME(bundle: "com.bytedance.inputmethod.doubaoime", sourceID: "com.bytedance.inputmethod.doubaoime.pinyin", defaultKey: "fn", helpers: []),
+// The voice tools Hijack knows. Order = menu order. Adding one is adding a line here.
+let builtInProviders: [VoiceProvider] = [
+    InputMethodProvider(sourceID: weTypeID, reader: weTypeVoice),
+    InputMethodProvider(sourceID: "com.sogou.inputmethod.sogou.pinyin", defaultKey: "left_option", helpers: ["com.sogou.voiceassistant"]),
+    InputMethodProvider(sourceID: "com.bytedance.inputmethod.doubaoime.pinyin", defaultKey: "fn"),
+    AppProvider(bundle: "com.pais.handy", appName: "Handy", reader: handyVoiceKey),
 ]
-func knownIME(_ sourceID: String) -> KnownIME? {
-    guard let bundle = source(sourceID).flatMap({ prop($0, kTISPropertyBundleID) }) else { return nil }
-    return knownIMEs.first { $0.bundle == bundle }
-}
 
-// A voice input method (WeType: its capsule) keeps a window on screen until the dictated text is
-// finally committed (rough text first, then the tidied version). Switching away before that drops the
-// uncommitted text, so that window disappearing is the "done" signal. Owner/bounds need no Screen
-// Recording. nil = the input method's process isn't running.
-func voiceWindowVisible(_ sourceID: String) -> Bool? {
-    guard let bundle = source(sourceID).flatMap({ prop($0, kTISPropertyBundleID) }) else { return nil }
-    let owners = Set([bundle] + (knownIME(sourceID)?.helpers ?? []))
-    let pids = Set(NSWorkspace.shared.runningApplications.filter { owners.contains($0.bundleIdentifier ?? "") }.map(\.processIdentifier))
-    guard !pids.isEmpty else { return nil }
-    let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
-    return list.contains { pids.contains(($0[kCGWindowOwnerPID as String] as? Int32) ?? -1) }
+/// The provider for a config value; unknown ones get a generic input method or app.
+func voiceProvider(for id: String) -> VoiceProvider {
+    if let p = builtInProviders.first(where: { $0.id == id }) { return p }
+    return id.hasPrefix("app:") ? AppProvider(bundle: String(id.dropFirst(4))) : InputMethodProvider(sourceID: id)
 }
+func installedProviders() -> [VoiceProvider] { builtInProviders.filter(\.isInstalled) }
