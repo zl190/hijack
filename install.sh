@@ -3,10 +3,12 @@
 set -e
 cd "$(dirname "$0")"
 APP=/Applications/Hijack.app
+BIN="$(mktemp -d)/Hijack"
+swiftc -O Hijack.swift -o "$BIN"          # build first: a failed build leaves the installed app alone
 pkill -x Hijack 2>/dev/null || true
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-swiftc -O Hijack.swift -o "$APP/Contents/MacOS/Hijack"
+mv "$BIN" "$APP/Contents/MacOS/Hijack"
 # icons: app icon (.icns from the 1024 master) + menu bar template
 ICONSET="$(mktemp -d)/Hijack.iconset"; mkdir -p "$ICONSET"
 for sz in 16 32 128 256 512; do

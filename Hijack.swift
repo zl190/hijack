@@ -144,6 +144,7 @@ final class Engine {
     var physicalDown = false
     var forwarded = false
     var passthrough = false
+    var pressedAt = Date()
     var tap: CFMachPort?
 
     func post(_ key: ModKey, down: Bool) {
@@ -156,6 +157,7 @@ final class Engine {
 
     func pressed() -> Bool {
         generation += 1
+        pressedAt = Date()
         let cur = currentID()
         // Already in WeType and the trigger is WeType's own key: let WeType see the real key.
         if cur == m.voiceID && m.trigger == m.forwardKey {
@@ -163,7 +165,7 @@ final class Engine {
         }
         passthrough = false
         if let cur, cur != m.voiceID { previous = cur }
-        log("down: \(cur ?? "?")")
+        log("down: \(cur ?? "?") front=\(NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?")")
         if cur != m.voiceID { switchTo(m.voiceID, "switch to") }
         let gen = generation, start = Date()
         func forwardWhenReady() {
@@ -196,7 +198,7 @@ final class Engine {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { restoreWhenDone() }; return
             }
             guard currentID() == m.voiceID, let prev = previous else { return }
-            log("restore after \(Int(waited * 1000))ms")
+            log("restore after \(Int(waited * 1000))ms, held \(Int(released.timeIntervalSince(pressedAt)))s, front=\(NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?")")
             switchTo(prev, "restore")
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { restoreWhenDone() }
