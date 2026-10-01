@@ -113,6 +113,12 @@ The user-selected meme is the initial cover. The final requested button text is 
 
 ## Stable frame and interactive steps
 
-Cover and demo now share the image aspect ratio. An icon-only return control is positioned at the right-side vertical midpoint per the user's placement request; it cancels pending playback and returns to the cover. The play button appears only on the cover. Three step buttons select the input-source state directly. The release step shows submission in progress before restoring the previous source. The cover clears step selection.
+Cover and demo now share the image aspect ratio. An icon-only return control is positioned at the left-side vertical midpoint, following the user's decision to adopt the conventional previous-slide placement. It has no circle or shadow and appears only after playback completes. The play button appears only on the cover. Three step buttons start playback from their corresponding input-source state. The release step shows submission in progress before restoring the previous source. The cover clears step selection.
 
 Browser verification: cover and playback both measured 238.296875px at the default viewport, and cover/step selection both measured 162.0859375px at 320px. The return arrow's vertical center matched the frame's center. At 320px there is no horizontal overflow, all three steps can be selected, the release step reaches the restored state, and returning to the cover clears the active step. Returning during playback cancels it and restores the enabled play button.
+
+## Voice indicator and step playback refinement
+
+The Chinese demo now draws an unboxed animated waveform, centered in the bottom status area. It contains no microphone or text: speaking animates nine rounded bars, submission collapses them into a pulsing line, and completion hides them. Reduced-motion mode disables these animations. The middle step uses a microphone icon instead of the WeType name; the current-source display still identifies WeType.
+
+Clicking any step now plays the remaining sequence. Clicking the first step shows the original source, then advances through holding, submission, and restoration. Playback clears prior timers before restarting. The return arrow is at the left midpoint and only appears after the completed state. Verified in the browser: first-step click reached the speaking state with nine waveform bars and no return arrow, then restored 鼠须管 and revealed the arrow; returning restored the cover, cleared the selected step, and showed the play button. No browser errors were reported. JavaScript syntax and whitespace checks passed.

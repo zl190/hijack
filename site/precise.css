@@ -190,11 +190,20 @@ html[lang="zh-CN"] .footer { line-height: 1.9; }
 }
 
 .has-cover { position: relative; aspect-ratio: 1672 / 941; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
-.has-cover .editor { min-height: 0; padding: 10px 16px; }
+.has-cover .editor { min-height: 0; padding: 10px 16px 10px 58px; }
 .has-cover .document-label { display: none; }
 .has-cover .document-line { margin-bottom: 6px; }
 .has-cover .demo-controls { position: relative; }
-.has-cover .voice-capsule { top: 50%; bottom: auto; left: 50%; right: auto; transform: translate(-50%, -50%); padding: 7px 13px; gap: 10px; }
+/* Voice activity is drawn as a live waveform, with no container or icon. */
+.voice-waveform { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); height: 30px; align-items: center; gap: 4px; }
+.has-cover[data-stage="1"] .voice-waveform,
+.has-cover[data-stage="2"] .voice-waveform { display: flex; }
+.voice-waveform span { display: block; width: 3px; height: var(--bar-height); border-radius: 3px; background: #667b53; transform-origin: center; transition: height .25s ease; }
+.has-cover[data-stage="1"] .voice-waveform span { animation: voice-activity .65s ease-in-out var(--delay) infinite alternate; }
+.has-cover[data-stage="2"] .voice-waveform span { height: 3px; animation: voice-submitting 1s ease-in-out var(--delay) infinite alternate; }
+@keyframes voice-activity { from { transform: scaleY(.3); } to { transform: scaleY(1); } }
+@keyframes voice-submitting { from { opacity: .35; } to { opacity: 1; } }
+@media(prefers-reduced-motion:reduce) { .has-cover .voice-waveform span { animation: none; transition: none; } }
 .mic-icon { display: block; width: 15px; height: 15px; flex-shrink: 0; }
 .has-cover[data-stage="1"] #demo-status,
 .has-cover[data-stage="2"] #demo-status { opacity: 0; }
@@ -208,9 +217,10 @@ html[lang="zh-CN"] .has-cover .demo-controls { flex-wrap: nowrap; }
 .has-cover[data-view="cover"] .demo-controls { position: absolute; right: 0; bottom: 0; left: 0; justify-content: flex-end; border: 0; pointer-events: none; }
 .has-cover[data-view="cover"] #play { pointer-events: auto; background: #fffefa; color: #252923; border-color: #c6cebd; min-width: 60px; box-shadow: 0 2px 8px #0002; }
 
-.back-to-meme { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); z-index: 2; width: 34px; height: 34px; border: 1px solid #c6cebd; border-radius: 50%; padding: 0; background: #fffefa; color: #626f54; font-size: 18px; box-shadow: 0 2px 8px #0001; }
-.has-cover[data-view="cover"] .back-to-meme { display: none; }
-.back-to-meme:hover { color: var(--accent); }
+.back-to-meme { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); z-index: 2; width: 32px; height: 32px; border: 0; padding: 0; background: transparent; color: #909b86; opacity: .65; font-size: 18px; }
+.has-cover[data-view="cover"] .back-to-meme,
+.has-cover:not([data-stage="3"]) .back-to-meme { display: none; }
+.back-to-meme:hover, .back-to-meme:focus-visible { color: #626f54; opacity: 1; }
 
 .has-cover:not([data-view="cover"]) #play { display: none; }
 
@@ -218,3 +228,5 @@ html[lang="zh-CN"] .has-cover .demo-controls { flex-wrap: nowrap; }
 .step-select { display: flex; flex-direction: column; align-items: center; gap: 5px; width: 100%; height: 100%; border: 0; border-radius: inherit; padding: 11px 3px 10px; background: transparent; color: inherit; }
 .step-select:hover { background: #e9eddf; }
 @media(max-width:760px) { .step-select { padding: 9px 2px; } }
+
+.step-icon .mic-icon { width: 18px; height: 18px; }

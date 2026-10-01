@@ -45,18 +45,27 @@
     });
   }
   function clearTimers() { timers.forEach(clearTimeout); timers = []; }
-  button.addEventListener('click', () => {
+  function playFrom(startIndex) {
     clearTimers();
     button.disabled = true;
     button.textContent = labels.playing;
-    showStage(1);
-    document.querySelector('#back-to-meme')?.focus();
-    timers.push(setTimeout(() => showStage(2), 1800));
-    timers.push(setTimeout(() => {
-      showStage(3);
-      button.disabled = false;
-      button.textContent = labels.replay;
-    }, 3800));
+    showStage(startIndex);
+    const durations = [700, 1800, 2000];
+    let elapsed = 0;
+    for (let index = startIndex + 1; index < stages.length; index += 1) {
+      elapsed += durations[index - 1];
+      timers.push(setTimeout(() => {
+        showStage(index);
+        if (index === stages.length - 1) {
+          button.disabled = false;
+          button.textContent = labels.replay;
+        }
+      }, elapsed));
+    }
+  }
+  button.addEventListener('click', () => {
+    playFrom(isChinese ? 0 : 1);
+    document.querySelector('[data-go-stage="0"]')?.focus();
   });
   function showCover() {
     showStage(0);
@@ -68,12 +77,7 @@
   }
   document.querySelectorAll('[data-go-stage]').forEach(stepButton => {
     stepButton.addEventListener('click', () => {
-      clearTimers();
-      const index = Number(stepButton.dataset.goStage);
-      showStage(index);
-      button.disabled = false;
-      button.textContent = labels.play;
-      if (index === 2) timers.push(setTimeout(() => showStage(3), 1800));
+      playFrom(Number(stepButton.dataset.goStage));
     });
   });
   document.querySelector('#back-to-meme')?.addEventListener('click', () => {
