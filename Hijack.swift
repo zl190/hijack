@@ -118,28 +118,38 @@ struct KeySpec: Equatable {
 // MMKV layout: a little-endian UInt32 with the live data length, then the data; updates are appended,
 // so the last occurrence inside the live range is current. Bytes past that length are stale leftovers.
 // Values are [length][bytes]: keyCodes is a string like "[61]", modifiers a varint of NSEvent flags.
-func weTypeVoiceKey() -> KeySpec? {
+// Push-to-talk ("voicePTTShortcut_*") wins; if only the tap-to-toggle shortcut ("voiceToggleShortcut_*") is
+// set, use that with tap or double-tap (tapCount). Returns the key and how to press it.
+func weTypeVoice() -> (key: KeySpec, style: String)? {
     let url = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent("Library/Application Support/WeType/mmkv/wetype.settings")
     guard let data = try? Data(contentsOf: url), data.count > 4 else { return nil }
     let live = Int(data.prefix(4).withUnsafeBytes { $0.loadUnaligned(as: UInt32.self).littleEndian })
     guard live > 0, 4 + live <= data.count,
-          let s = String(data: data.subdata(in: 4..<(4 + live)), encoding: .isoLatin1),
-          let r = s.range(of: "voicePTTShortcut_keyCodes", options: .backwards) else { return nil }
-    let tail = s[r.upperBound...].prefix(24)
-    guard let open = tail.firstIndex(of: "["), let close = tail.firstIndex(of: "]"), open < close else { return nil }
-    let codes = tail[tail.index(after: open)..<close].split(separator: ",")
-        .compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }
-    guard codes.count == 1 else { return nil }
-    var key = KeySpec(code: codes[0])
-    if !key.modifierOnly, let m = s.range(of: "voicePTTShortcut_modifiers", options: .backwards) {
-        let bytes = Array(s[m.upperBound...].unicodeScalars.prefix(6).map { Int($0.value) })
+          let s = String(data: data.subdata(in: 4..<(4 + live)), encoding: .isoLatin1) else { return nil }
+    func varint(_ name: String) -> Int? {
+        guard let r = s.range(of: name, options: .backwards) else { return nil }
         var value = 0, shift = 0
-        for b in bytes.dropFirst() { value |= (b & 0x7f) << shift; shift += 7; if b & 0x80 == 0 { break } }
-        key.mods = Set(Mod.allCases.filter { value & $0.nsBit != 0 })
+        for b in s[r.upperBound...].unicodeScalars.prefix(6).map({ Int($0.value) }).dropFirst() {
+            value |= (b & 0x7f) << shift; shift += 7; if b & 0x80 == 0 { break }
+        }
+        return value
     }
-    return key
+    func shortcut(_ prefix: String) -> KeySpec? {
+        guard let r = s.range(of: prefix + "_keyCodes", options: .backwards) else { return nil }
+        let tail = s[r.upperBound...].prefix(24)
+        guard let open = tail.firstIndex(of: "["), let close = tail.firstIndex(of: "]"), open < close else { return nil }
+        let codes = tail[tail.index(after: open)..<close].split(separator: ",").compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }
+        guard codes.count == 1 else { return nil }
+        var key = KeySpec(code: codes[0])
+        if !key.modifierOnly, let mods = varint(prefix + "_modifiers") { key.mods = Set(Mod.allCases.filter { mods & $0.nsBit != 0 }) }
+        return key
+    }
+    if let k = shortcut("voicePTTShortcut") { return (k, "hold") }
+    if let k = shortcut("voiceToggleShortcut") { return (k, (varint("voiceToggleShortcut_tapCount") ?? 1) >= 2 ? "doubleTap" : "tap") }
+    return nil
 }
+func weTypeVoiceKey() -> KeySpec? { weTypeVoice()?.key }
 
 // Voice apps with their own global hotkey: no input-source switch, Hijack just presses their key.
 // In the config, voiceInput "app:<bundle id>"; their key is detected from their settings when we know how.
@@ -266,6 +276,8 @@ final class Config {
     var trigger: KeySpec?          // nil = "follow" the voice key
     var voiceInput = weTypeID
     var voiceKeys: [String: KeySpec] = [:]   // per voice input; missing = "auto" (detected, or a known default)
+    var triggerMode = "hold"                 // "hold": hold to talk · "toggle": tap to start, tap again to stop
+    var voiceStyles: [String: String] = [:]  // per voice input: how it wants its key — "hold" | "tap" | "doubleTap"
     var showMenuBarIcon = true
     var language = "system"
     var holdDelay = 0.2            // minimum hold before the voice method gets its key
@@ -295,6 +307,8 @@ final class Config {
         }
         if let old = KeySpec(json: d["voiceKey"]), voiceKeys[voiceInput] == nil { voiceKeys[voiceInput] = old }   // older single "voiceKey"
         showMenuBarIcon = d["showMenuBarIcon"] as? Bool ?? true
+        triggerMode = (d["triggerMode"] as? String) == "toggle" ? "toggle" : "hold"
+        voiceStyles = (d["voiceStyles"] as? [String: String] ?? [:]).filter { ["hold", "tap", "doubleTap"].contains($0.value) }
         language = d["language"] as? String ?? "system"
         holdDelay = d["holdDelay"] as? Double ?? 0.2
         restoreTimeout = d["restoreTimeout"] as? Double ?? 5.0
@@ -313,6 +327,7 @@ final class Config {
         }
         let pairs: [(String, Any)] = [
             ("trigger", trigger?.json ?? "follow"), ("voiceInput", voiceInput), ("voiceKeys", voiceKeys.mapValues(\.json)),
+            ("triggerMode", triggerMode), ("voiceStyles", voiceStyles),
             ("showMenuBarIcon", showMenuBarIcon), ("language", language),
             ("holdDelay", holdDelay), ("restoreTimeout", restoreTimeout), ("fallbackDelay", fallbackDelay),
         ]
@@ -354,6 +369,9 @@ final class Model {
     // Trigger precedence: the user's explicit choice, else follow the voice key.
     var customTrigger: KeySpec? { c.trigger }
     var trigger: KeySpec { customTrigger ?? forwardKey }
+    var toggleMode: Bool { c.triggerMode == "toggle" }
+    var detectedStyle: String? { isWeType ? weTypeVoice()?.style : nil }
+    var voiceStyle: String { c.voiceStyles[voiceID] ?? detectedStyle ?? "hold" }
 }
 
 // MARK: key handling
@@ -369,7 +387,27 @@ final class Engine {
     var sawWindow = false   // the voice method showed a window during this press
     var tap: CFMachPort?
 
-    var trigger = KeySpec(code: 61)   // snapshot per press, so a config change mid-press can't strand it
+    var trigger = KeySpec(code: 61)   // snapshot per session, so a config change mid-session can't strand it
+    var active = false                // a voice session is running (hold: key held · toggle: between taps)
+
+    // Turn the session into what the voice method expects: hold its key, or tap / double-tap it.
+    func tapKey(after delay: Double = 0) {
+        let key = m.forwardKey
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [self] in
+            post(key, down: true)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) { [self] in post(key, down: false) }
+        }
+    }
+    func startVoice() {
+        switch m.voiceStyle {
+        case "tap": tapKey()
+        case "doubleTap": tapKey(); tapKey(after: 0.12)
+        default: post(m.forwardKey, down: true)
+        }
+    }
+    func endVoice() {
+        if m.voiceStyle == "hold" { post(m.forwardKey, down: false) } else { tapKey() }   // "press any key to finish"
+    }
 
     func post(_ key: KeySpec, down: Bool) {
         guard let e = CGEvent(keyboardEventSource: nil, virtualKey: CGKeyCode(key.code), keyDown: down) else { return }
@@ -405,18 +443,18 @@ final class Engine {
         sawWindow = false
         let cur = currentID()
         if m.isApp {   // a voice app: no input-source switch, just press its key
-            if trigger == m.forwardKey { passthrough = true; log("down: trigger is \(m.voiceName)'s own key, pass through"); return true }
+            if trigger == m.forwardKey && !m.toggleMode && m.voiceStyle == "hold" { passthrough = true; log("down: trigger is \(m.voiceName)'s own key, pass through"); return true }
             passthrough = false
             log("down: \(m.voiceName) \(focusDesc())")
             let gen = generation
             DispatchQueue.main.asyncAfter(deadline: .now() + m.c.holdDelay) { [self] in
-                guard physicalDown, gen == generation else { log("released before forward"); return }
-                forwarded = true; post(m.forwardKey, down: true); log("forward \(m.forwardKey.name) down")
+                guard active, gen == generation else { log("released before forward"); return }
+                forwarded = true; startVoice(); log("forward \(m.forwardKey.name) start (\(m.voiceStyle))")
             }
             return false
         }
         // Already in the voice method and the trigger is its own key: let it see the real key.
-        if cur == m.voiceID && trigger == m.forwardKey {
+        if cur == m.voiceID && trigger == m.forwardKey && !m.toggleMode && m.voiceStyle == "hold" {
             passthrough = true; log("down: already voice IME, pass through"); return true
         }
         passthrough = false
@@ -425,13 +463,13 @@ final class Engine {
         if cur != m.voiceID { switchTo(m.voiceID, "switch to") }
         let gen = generation, start = Date()
         func forwardWhenReady() {
-            guard physicalDown, gen == generation else { log("released before forward"); return }
+            guard active, gen == generation else { log("released before forward"); return }
             let ready = currentID() == m.voiceID
             let waited = Date().timeIntervalSince(start)
             if (ready && waited >= m.c.holdDelay) || waited >= maxSwitchWait {
                 forwarded = true
-                post(m.forwardKey, down: true)
-                log("forward \(m.forwardKey.name) down after \(Int(waited * 1000))ms ready=\(ready) \(focusDesc())")
+                startVoice()
+                log("forward \(m.forwardKey.name) start (\(m.voiceStyle)) after \(Int(waited * 1000))ms ready=\(ready) \(focusDesc())")
             } else {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) { forwardWhenReady() }
             }
@@ -442,7 +480,7 @@ final class Engine {
 
     func released() -> Bool {
         if passthrough { passthrough = false; log("up: pass through"); return true }
-        if forwarded { post(m.forwardKey, down: false); forwarded = false; log("forward up \(focusDesc())") }
+        if forwarded { endVoice(); forwarded = false; log("forward end (\(m.voiceStyle)) \(focusDesc())") }
         if m.isApp { return false }   // nothing to switch back
         let gen = generation, released = Date()
         var capsuleGone: Date?
@@ -471,7 +509,7 @@ final class Engine {
         }
         guard event.getIntegerValueField(.eventSourceUserData) != marker else { return Unmanaged.passUnretained(event) }
         let code = Int(event.getIntegerValueField(.keyboardEventKeycode))
-        if !physicalDown { trigger = m.trigger }      // config is read only between presses
+        if !physicalDown && !active { trigger = m.trigger }   // config is read only between sessions
         guard code == trigger.code else { return Unmanaged.passUnretained(event) }
         let down: Bool
         if trigger.modifierOnly {
@@ -486,8 +524,15 @@ final class Engine {
             down = type == .keyDown
         }
         var pass = passthrough
-        if down && !physicalDown { physicalDown = true; pass = pressed() }
-        else if !down && physicalDown { physicalDown = false; pass = released() }
+        if down && !physicalDown {
+            physicalDown = true
+            if !active { active = true; pass = pressed() }                    // hold or toggle: start
+            else if m.toggleMode { active = false; pass = released() }        // toggle: second tap stops
+        } else if !down && physicalDown {
+            physicalDown = false
+            if active && !m.toggleMode { active = false; pass = released() }  // hold: release stops
+            else if m.toggleMode { pass = false }
+        }
         return pass ? Unmanaged.passUnretained(event) : nil   // key repeats while held are swallowed too
     }
 
@@ -586,6 +631,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         add(L("触发键：\(m.trigger.name)", "Trigger key: \(m.trigger.name)"), nil).submenu =
             keyMenu(current: m.customTrigger, auto: L("跟随语音键（\(m.forwardKey.name)）", "Same as voice key (\(m.forwardKey.name))"), action: #selector(setTrigger(_:)))
+        let modes = NSMenu()
+        for (code, title) in [("hold", L("按住说，松开停", "Hold to talk")), ("toggle", L("免按：点一下开始，再点一下结束", "Hands-free: tap to start, tap again to stop"))] {
+            _ = add(title, #selector(setTriggerMode(_:)), state: m.c.triggerMode == code, to: modes).representedObject = code
+        }
+        add(L("触发方式：\(m.toggleMode ? "免按" : "按住")", "Trigger: \(m.toggleMode ? "hands-free" : "hold")"), nil).submenu = modes
         let sources = NSMenu()
         for c in voiceCandidates() {
             _ = add(c.name, #selector(setVoiceSource(_:)), state: c.id == m.voiceID, to: sources).representedObject = c.id
@@ -617,6 +667,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let info = NSMenuItem(title: m.userVoiceKey != nil ? L("你选的键", "Your choice") : note, action: nil, keyEquivalent: "")
         info.isEnabled = false
         vkMenu.insertItem(info, at: 0); vkMenu.insertItem(.separator(), at: 1)
+        // How the voice method wants its key pressed.
+        vkMenu.addItem(.separator())
+        let styleNames = ["hold": L("按住", "Hold"), "tap": L("点按（免按）", "Tap (hands-free)"), "doubleTap": L("双击", "Double-tap")]
+        let styleAuto = m.detectedStyle.map { L("自动检测（\(styleNames[$0]!)）", "Auto-detect (\(styleNames[$0]!))") } ?? L("默认（按住）", "Default (hold)")
+        _ = add(L("它的按法：", "It wants: ") + styleAuto, #selector(setVoiceStyle(_:)), state: m.c.voiceStyles[m.voiceID] == nil, to: vkMenu).representedObject = "auto"
+        for code in ["hold", "tap", "doubleTap"] {
+            _ = add("    " + styleNames[code]!, #selector(setVoiceStyle(_:)), state: m.c.voiceStyles[m.voiceID] == code, to: vkMenu).representedObject = code
+        }
         add((unsure && known == nil ? "⚠︎ " : "") + L("它的语音键：\(m.forwardKey.name)", "Its voice key: \(m.forwardKey.name)")
             + (unsure && known != nil ? L("（默认）", " (default)") : ""), nil).submenu = vkMenu
         menu.addItem(.separator())
@@ -647,6 +705,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc func setVoiceKey(_ sender: NSMenuItem) {
         let c = Config.shared; c.reload(); c.voiceKeys[c.voiceInput] = pick(sender); c.save()
         log("voice key set to \(m.forwardKey.name)")
+    }
+    @objc func setTriggerMode(_ sender: NSMenuItem) {
+        let c = Config.shared; c.reload(); c.triggerMode = sender.representedObject as? String ?? "hold"; c.save()
+        log("trigger mode set to \(c.triggerMode)")
+    }
+    @objc func setVoiceStyle(_ sender: NSMenuItem) {
+        let c = Config.shared; c.reload()
+        let v = sender.representedObject as? String
+        c.voiceStyles[c.voiceInput] = v == "auto" ? nil : v; c.save()
+        log("voice style for \(c.voiceInput) set to \(m.voiceStyle)")
     }
     @objc func setVoiceSource(_ sender: NSMenuItem) {
         guard let id = sender.representedObject as? String else { return }
