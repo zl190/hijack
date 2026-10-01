@@ -297,3 +297,21 @@ html[lang="zh-CN"] .source-steps--toggle { grid-template-columns: minmax(0, 1fr)
   88% { transform: translateY(-1px) rotate(-1deg) scale(.99, 1.02); }
 }
 @media(prefers-reduced-motion:reduce) { .source-steps--toggle .switch-hijack { animation: none; } }
+
+.switch-trigger { display: grid; place-items: center; width: 44px; height: 44px; padding: 7px; border: 0; border-radius: 12px; background: transparent; cursor: pointer; }
+.switch-trigger:hover, .switch-trigger:focus-visible { animation: hijack-hover .55s cubic-bezier(.37, 0, .63, 1) both; }
+.switch-trigger:active { animation: none; transform: scale(.9); }
+@keyframes hijack-hover {
+  0% { transform: scale(1) rotate(0); }
+  20% { transform: scale(.9, 1.05) rotate(-5deg); }
+  50% { transform: scale(1.2, 1.12) rotate(7deg); }
+  75% { transform: scale(1.06, 1.13) rotate(-2deg); }
+  100% { transform: scale(1.1) rotate(0); }
+}
+@media(prefers-reduced-motion:reduce) { .switch-trigger:hover, .switch-trigger:focus-visible { animation: none; } }
+
+.source-steps--toggle [data-step="1"] { opacity: .4; transition: opacity .22s ease, background-color .22s ease, border-color .22s ease; }
+.source-steps--toggle [data-step="1"]:hover,
+.source-steps--toggle [data-step="1"]:focus-within { opacity: .7; }
+.source-steps--toggle [data-step="1"][aria-current="step"] { opacity: 1; }
+@media(prefers-reduced-motion:reduce) { .source-steps--toggle [data-step="1"] { transition: none; } }

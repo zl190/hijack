@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f5f3ee">
-  <meta name="description" content="按住快捷键，用微信输入法说话。松开切回原来的输入法。">
+  <meta name="description" content="按住快捷键，用语音输入，松开切回原来的输入法。">
   <title>Hijack — 借用微信语音，说完切回原输入法</title>
   <link rel="icon" href="assets/Hijack-1024.png" type="image/png">
   <link rel="stylesheet" href="precise.css">
@@ -22,19 +22,17 @@
       <div class="hero-copy">
         <p class="eyebrow"><span aria-hidden="true"></span>macOS 菜单栏工具</p>
         <h1 id="title">语音输入，<br>自己的输入法，<br><em>我全都要。</em></h1>
-        <p class="intro">按住快捷键，用微信输入法说话。松开切回<strong>原来的输入法。</strong></p>
+        <p class="intro">按住快捷键，用语音输入，松开切回<strong>原来的输入法。</strong></p>
         <a class="primary" href="#install">安装 Hijack <span aria-hidden="true">↗</span></a>
         <p class="compatibility">Apple 芯片 · macOS 13+ · 需安装微信输入法</p>
       </div>
 
       <div class="demo" aria-label="输入法切换演示">
-        <div class="demo-heading"><span>输入法切换</span><span>演示</span></div>
         <div class="app-window has-cover" data-stage="0" data-view="cover">
-          <div class="demo-cover"><img src="assets/hijack-want-it-all.png" width="1672" height="941" alt="语音输入 + 鼠须管：我全都要。"></div>
+          <div class="demo-cover"><img src="assets/hijack-want-it-all-face.png" width="1672" height="941" alt="语音输入 + 鼠须管：我全都要。"></div>
           <div class="window-bar"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="window-name">编辑器</span><span class="source-label">当前输入法 <strong id="current-source">鼠须管</strong></span></div>
           <div class="editor">
             <p class="document-label">会议笔记</p>
-            <p class="document-line">下一步</p>
             <p class="dictated"><span id="sample-text">在这里输入…</span><span class="caret" aria-hidden="true"></span></p>
           </div>
           <button id="back-to-meme" class="back-to-meme" type="button" aria-label="返回封面"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m14 6-6 6 6 6"/></svg></button>
@@ -42,7 +40,7 @@
         </div>
         <ol class="source-steps source-steps--toggle" data-direction="idle" aria-label="输入法切换">
           <li data-step="0"><button class="step-select" type="button" data-go-stage="0" aria-label="平时打字" aria-pressed="false"><span class="step-action">平时打字</span><strong class="step-icon"><img class="squirrel-icon" src="assets/squirrel.png" width="30" height="30" alt="鼠须管"></strong><span class="step-detail" id="typing-detail">原输入法</span></button></li>
-          <li class="switch-arrows" aria-hidden="true"><svg class="arrow-out" viewBox="0 0 56 28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 23C14 5 40 5 52 23m-1-10 1 10-10-2"/></svg><img class="switch-hijack" src="assets/Hijack-1024.png" width="30" height="30" alt=""><svg class="arrow-back" viewBox="0 0 56 28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M52 5C42 23 16 23 4 5m1 10-1-10 10 2"/></svg></li>
+          <li class="switch-arrows"><svg aria-hidden="true" class="arrow-out" viewBox="0 0 56 28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 23C14 5 40 5 52 23m-1-10 1 10-10-2"/></svg><button id="replay-switch" class="switch-trigger" type="button" aria-label="播放切换演示"><img class="switch-hijack" src="assets/Hijack-1024.png" width="30" height="30" alt=""></button><svg aria-hidden="true" class="arrow-back" viewBox="0 0 56 28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M52 5C42 23 16 23 4 5m1 10-1-10 10 2"/></svg></li>
           <li data-step="1"><button class="step-select" type="button" data-go-stage="1" aria-label="按住说话" aria-pressed="false"><span class="step-action">按住说话</span><strong class="step-icon"><svg class="mic-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="语音输入" focusable="false"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></svg></strong><span class="step-detail" id="voice-detail">语音输入</span></button></li>
         </ol>
         <noscript><p class="demo-note">播放演示需要启用 JavaScript。</p></noscript>

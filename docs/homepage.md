@@ -134,3 +134,9 @@ The cover's play button is now a small translucent dark pill. The Chinese footer
 User refinements replace the two cards with circles, add curved outbound/return arrows and the Hijack icon between them, and replace the Squirrel text in the left control with its official app icon. The arrows retain an anticipation/overshoot/settle motion; Hijack squashes, hops, and settles in the matching direction. Reduced-motion preferences suppress motion. Chinese playback now runs source → voice → restored source without a separate waiting scene; English retains its four states. The redundant cover play button is removed, while either circle starts playback. The return control is an SVG chevron that appears on frame hover or keyboard focus after completion; touch layouts keep it visible.
 
 Browser verification: clicking the first circle reached voice input with `hijack-hop-out`, then restored Squirrel with `hijack-hop-back`; the removed play button is absent, and the return control is hidden until hover/focus. JavaScript syntax and whitespace checks pass.
+
+## Clickable Hijack and face-label cover
+
+The central Hijack icon now has a 44px replay button with independent hover/focus spring motion and pressed feedback. Clicking it restarts the full Chinese sequence. Removed the redundant demonstration heading, and added the user-requested Hijack face-label cover while retaining the prior image asset.
+
+The inactive voice circle is dimmed to 40% opacity, rising to 70% on hover/focus and 100% when active. It remains clickable. The Hijack face label uses small tilted lettering centered on the face. Browser checks confirmed the central replay button starts voice playback and returns to the original source.

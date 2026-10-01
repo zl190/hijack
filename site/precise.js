@@ -86,6 +86,7 @@
       playFrom(Number(stepButton.dataset.goStage));
     });
   });
+  document.querySelector('#replay-switch')?.addEventListener('click', () => playFrom(0));
   document.querySelector('#back-to-meme')?.addEventListener('click', () => {
     clearTimers();
     showCover();
