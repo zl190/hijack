@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f3ee">
+  <meta name="description" content="Hold a key to switch temporarily to WeType and dictate. Release it; Hijack waits for dictation to finish, then restores your previous macOS input source.">
+  <title>Hijack — WeType dictation, automatic input-source switching</title>
+  <link rel="icon" href="assets/Hijack-1024.png" type="image/png">
+  <link rel="stylesheet" href="precise.css">
+  <script src="precise.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="shell header">
+    <a class="brand" href="precise.html" aria-label="Hijack home"><img src="assets/Hijack-1024.png" width="36" height="36" alt="">Hijack<span>.</span></a>
+    <nav aria-label="Main navigation"><a href="https://github.com/zl190/hijack">GitHub <span aria-hidden="true">↗</span></a><a class="nav-install" href="#install">Install Hijack <span aria-hidden="true">↓</span></a></nav>
+  </header>
+
+  <main id="main" class="shell">
+    <section class="hero" aria-labelledby="title">
+      <div class="hero-copy">
+        <p class="eyebrow"><span aria-hidden="true"></span>A MACOS MENU BAR UTILITY</p>
+        <h1 id="title">Speak with WeType.<br><em>Then switch back.</em></h1>
+        <p class="intro">Hold your trigger key to temporarily switch to WeType and dictate. Release it; Hijack waits for dictation to finish, then restores <strong>your previous input source.</strong></p>
+        <p class="context-note">Same app. Same text field. Your input method, back in place.</p>
+        <a class="primary" href="#install">Install Hijack <span aria-hidden="true">↗</span></a>
+        <p class="compatibility">Apple silicon · macOS 13+ · Requires WeType</p>
+      </div>
+
+      <div class="demo" aria-label="Input-source switching demonstration">
+        <div class="demo-heading"><span>WATCH THE INPUT SOURCE</span><span>Illustration</span></div>
+        <div class="app-window" data-stage="0">
+          <div class="window-bar"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="window-name">Your editor</span><span class="source-label">Input source <strong id="current-source">ABC</strong></span></div>
+          <div class="editor">
+            <p class="document-label">Meeting notes</p>
+            <p class="document-line">Next steps</p>
+            <p class="dictated"><span id="sample-text">Say the next sentence out loud.</span><span class="caret" aria-hidden="true"></span></p>
+            <div class="voice-capsule" id="voice-capsule" aria-hidden="true"><span class="wave" aria-hidden="true">▂ ▆ ▃ ▇ ▂</span><span id="capsule-label">WeType dictation</span></div>
+          </div>
+          <div class="demo-controls"><p id="demo-status" role="status" aria-live="polite">Typing with ABC.</p><button id="play" type="button">▶ Play the switch</button></div>
+        </div>
+        <ol class="source-steps" aria-label="Input-source sequence">
+          <li data-step="0" aria-current="step"><span class="step-action">Before</span><strong>ABC</strong><span class="step-detail">Your source</span></li>
+          <li data-step="1"><span class="step-action">Hold key</span><strong>WeType</strong><span class="step-detail">Dictating</span></li>
+          <li data-step="2"><span class="step-action">Release</span><strong>WeType</strong><span class="step-detail">Finishing</span></li>
+          <li data-step="3"><span class="step-action">Continue</span><strong>ABC</strong><span class="step-detail">Restored</span></li>
+        </ol>
+        <p class="demo-note">ABC is an example. Hijack remembers the input source you started with. This demo does not record audio.</p>
+        <noscript><p class="demo-note">The sequence above shows the full workflow. Enable JavaScript to play it.</p></noscript>
+      </div>
+    </section>
+
+    <section class="install" id="install" aria-labelledby="install-title">
+      <div class="install-intro"><p class="eyebrow">READY TO RUN</p><h2 id="install-title">One small install.<br>One less manual switch.</h2><p>Have WeType installed and its push-to-talk key configured. Choose either installer.</p><span class="install-footnote">Prebuilt app · No developer tools needed</span></div>
+      <div class="install-right">
+        <details id="install-guide" class="install-guide">
+          <summary>Installation commands <span aria-hidden="true">↗</span></summary>
+          <div class="guide-body">
+            <div class="command"><div class="command-title"><span>CURL</span><button type="button" data-copy="curl" aria-label="Copy curl command">Copy</button></div><pre><code id="curl">curl -fsSL https://raw.githubusercontent.com/zl190/hijack/main/install.sh | sh</code></pre></div>
+            <div class="command"><div class="command-title"><span>OR, WITH HOMEBREW</span><button type="button" data-copy="brew" aria-label="Copy Homebrew command">Copy</button></div><pre><code id="brew">brew install --cask zl190/tap/hijack</code></pre></div>
+            <p class="copy-status" id="copy-status" role="status" aria-live="polite"></p>
+            <p class="permission">After installation, allow Hijack in <strong>System Settings → Privacy &amp; Security → Accessibility.</strong> Click its menu bar icon to choose your trigger key. It follows WeType’s voice key by default.</p>
+            <a class="release-link" href="https://github.com/zl190/hijack/releases">View releases <span aria-hidden="true">↗</span></a>
+          </div>
+        </details>
+        <details class="privacy"><summary>Who processes my voice?</summary><p>WeType handles speech recognition. Hijack switches input sources and forwards trigger-key events; it does not record, store, or upload audio. Consult WeType’s privacy policy for audio processing, network transfer, and retention.</p></details>
+      </div>
+    </section>
+  </main>
+  <footer class="shell footer"><span>Hijack · MIT licensed</span><p>Independent project. Not affiliated with or endorsed by Tencent or WeType.</p></footer>
+</body>
+</html>

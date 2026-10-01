@@ -81,3 +81,20 @@ Verified in the live preview:
 - 390 px collapsed page height: 1,207 px. At 320 px with installation expanded and at 1440 px desktop width, document scroll width equals viewport width.
 - Desktop installation defaults open; compact defaults closed. No console warnings/errors reported.
 - `node --check site/script.js`, HTML structure/link checks, and `git diff --check` pass. Install commands were verified read-only and were not executed.
+
+## Focused alternative / precise.html
+
+User request: create another precise version explaining only the current implemented function. Preserve the existing broad homepage.
+
+Contract: inputs are the current Swift behavior, release installation instructions, and existing icon assets. Outputs are `site/precise.html`, `site/precise.css`, and `site/precise.js`; no app, installer, or existing homepage behavior changes. The page contains no speculative translation/OCR features. The sample dictation is timer-driven and never accesses the microphone.
+
+Composition: one explicit proposition → input-source state demonstration → installation commands and privacy. The four visible stages distinguish release from restoration; the input source remains WeType while dictation finishes. Both the headline copy and demonstration state that the previously selected source is restored.
+
+Verification:
+- Browser playback: holding shows WeType; release/finishing still shows WeType; submitted text restores ABC and enables replay.
+- Both clipboard commands match the published README exactly; installer scripts were not executed.
+- Installation and privacy disclosures work.
+- No horizontal overflow at 320, 390, or 1440 CSS pixels. Collapsed mobile page height at 390px: 1,202px.
+- No browser warnings/errors reported. JavaScript syntax, HTML nesting/IDs/local-link checks, and whitespace checks pass.
+- Original `site/index.html`, `site/script.js`, and `site/styles.css` remain unchanged from the prior commit.
+- Clipboard denial fallback and disabled-JavaScript browser execution were not exercised; static markup retains the entire four-step explanation and manual-copy commands.

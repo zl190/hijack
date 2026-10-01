@@ -13,3 +13,9 @@ The three stories are borrowed voice input (available now), contextual translati
 Assets reuse the approved Hijack icons from the repository's `assets/` directory. Keep these site copies synchronized if the product icon changes. No external fonts, tracking, network APIs, package installs, or build step are required.
 
 At widths up to 900px, the page uses a compact reading path: one selected hero story and demo, a short product statement, an expandable workflow explanation, and expandable installation instructions. The repeated desktop sections are omitted at this breakpoint.
+
+## Focused alternative
+
+[`precise.html`](precise.html) is a separate English homepage covering only the shipping WeType voice workflow. It uses `precise.css` and `precise.js` and shares the existing icon assets. The broader concept homepage remains unchanged at `index.html`.
+
+Its demonstration makes the macOS input source explicit: ABC → WeType while holding → WeType while finishing after release → ABC after text submission. ABC is illustrative; Hijack restores the previous source. Serve this directory and open `/precise.html` to compare versions.
