@@ -1,9 +1,42 @@
 (() => {
   'use strict';
   const scenes = {
-    code: { title: 'A thought, right where you work', context: 'draft.ts', source: 'ABC', before: 'function saveDraft() {', after: '  return draft.persist();\n}', prefix: '// ', placeholder: 'Say this comment out loud.', text: 'Save locally, then sync to the cloud.' },
-    mail: { title: 'A long reply, spoken first', context: 'Mail draft · Project update', source: 'Pinyin', before: 'Hi Alex,', after: 'Thanks!', prefix: '', placeholder: 'Say this reply out loud.', text: 'The direction looks good. There are two details I’d like to discuss.' },
-    notes: { title: 'Catch a thought while it is fresh', context: 'My notes · A passing thought', source: 'Shuangpin', before: 'Something to come back to', after: 'Next: turn this into a plan.', prefix: '', placeholder: 'Say this thought out loud.', text: 'My tools should fit the way I think.' }
+    voice: {
+      headline: 'WeType’s voice.', payoff: 'Your keyboard.',
+      description: 'Keep the input method you love. Borrow WeType’s voice when a thought is easier to say, then return to your familiar keyboard.',
+      action: 'Try the voice example', destination: '#install',
+      title: 'A thought, right where you work', context: 'draft.ts', source: 'ABC', borrowed: 'Voice',
+      availability: 'Voice example · available now', note: 'Example: WeType voice. Illustrative only; no audio recorded.',
+      capability: 'Borrow voice', borrowing: 'Borrowing voice input',
+      before: 'function saveDraft() {', after: '  return draft.persist();\n}', prefix: '// ',
+      placeholder: 'Say this comment out loud.', text: 'Save locally, then sync to the cloud.',
+      idle: 'Your keyboard. Your editor. Your setup.', active: 'Borrow a voice. Keep your keyboard.',
+      settling: 'Release the key. Let the words settle.', done: 'Back to ABC. Back to your rhythm.'
+    },
+    translate: {
+      headline: 'A new language.', payoff: 'Your own flow.',
+      description: 'A passage stops you mid-read. Imagine borrowing a translator for a moment, then carrying on in the same article.',
+      action: 'See the borrowing pattern', destination: '#how-it-works',
+      title: 'Keep your place in the story', context: 'Reading · A selected passage', source: 'Reader', borrowed: 'Translate',
+      availability: 'Translation · concept only', note: 'Illustrative concept. Translation is not available in Hijack today.',
+      capability: 'Translate', borrowing: 'Borrowing a translation',
+      before: '“À chacun sa façon de travailler.”', after: 'Your article. Your place. Your notes.', prefix: '',
+      placeholder: 'A little help with this passage.', text: '“Everyone has their own way of working.”',
+      idle: 'A passage to understand. A place to keep.', active: 'Imagine borrowing just the translation.',
+      settling: 'A little clarity, in the same context.', done: 'Back to the article. Keep reading.'
+    },
+    ocr: {
+      headline: 'Text in a picture.', payoff: 'Your next idea.',
+      description: 'A screenshot has the words you need. Imagine borrowing text recognition and bringing the result into your own notes.',
+      action: 'See the borrowing pattern', destination: '#how-it-works',
+      title: 'From a picture to your own notes', context: 'Notebook · A captured idea', source: 'Notes', borrowed: 'OCR',
+      availability: 'Text capture · concept only', note: 'Illustrative concept. Text capture is not available in Hijack today.',
+      capability: 'Capture text', borrowing: 'Borrowing text recognition',
+      before: 'Image: workshop-whiteboard.png', after: 'Keep the words in your own notebook.', prefix: '',
+      placeholder: 'There is a thought worth keeping.', text: 'Make the tools fit the way you think.',
+      idle: 'The words you need are inside a picture.', active: 'Imagine borrowing text recognition.',
+      settling: 'A useful sentence, ready for your notes.', done: 'Back to your notebook. Make it your own.'
+    }
   };
   const windowEl = document.querySelector('.demo-window');
   const title = document.querySelector('#window-title');
@@ -13,7 +46,7 @@
   const status = document.querySelector('#demo-status');
   const play = document.querySelector('#play-demo');
   const choices = [...document.querySelectorAll('[data-scene]')];
-  let current = 'code';
+  let current = 'voice';
   let timers = [];
   let run = 0;
   const clear = () => { timers.forEach(clearTimeout); timers = []; run += 1; };
@@ -27,23 +60,32 @@
     clear(); current = key;
     const scene = scenes[key];
     choices.forEach(button => button.setAttribute('aria-pressed', String(button.dataset.scene === key)));
+    document.querySelector('#story-headline').textContent = scene.headline;
+    document.querySelector('#story-payoff').textContent = scene.payoff;
+    document.querySelector('#story-description').textContent = scene.description;
+    document.querySelector('#story-action-label').textContent = scene.action;
+    document.querySelector('#story-action').setAttribute('href', scene.destination);
     title.textContent = scene.title; context.textContent = scene.context; source.textContent = scene.source;
+    document.querySelector('#demo-availability').textContent = scene.availability;
+    document.querySelector('#demo-note').textContent = scene.note;
+    document.querySelector('#journey-capability').textContent = scene.capability;
+    document.querySelector('#borrow-label').textContent = scene.borrowing;
     const line = paragraph(scene.prefix); line.className = 'dictation-line';
     const text = document.createElement('span'); text.id = 'dictation-text'; text.className = 'placeholder-text'; text.textContent = scene.placeholder;
     const caret = document.createElement('span'); caret.className = 'caret'; caret.setAttribute('aria-hidden', 'true');
     line.append(text, caret); lines.replaceChildren(paragraph(scene.before), line, paragraph(scene.after));
-    status.textContent = `Your familiar ${scene.source} input source.`;
+    status.textContent = scene.idle;
     play.disabled = false; play.textContent = '▶ Play demo'; phase('idle');
   }
   function playDemo() {
     clear();
     const scene = scenes[current];
     const text = document.querySelector('#dictation-text');
-    phase('borrowing'); source.textContent = 'WeType'; play.disabled = true; play.textContent = 'Playing…';
-    text.textContent = '…'; text.className = 'placeholder-text'; status.textContent = `Remember ${scene.source}. Borrow WeType voice.`;
+    phase('borrowing'); source.textContent = scene.borrowed; play.disabled = true; play.textContent = 'Playing…';
+    text.textContent = '…'; text.className = 'placeholder-text'; status.textContent = scene.active;
     later(() => { text.className = ''; text.textContent = scene.text; }, 1100);
-    later(() => { phase('restoring'); status.textContent = 'Release the key. Let the words settle.'; }, 2600);
-    later(() => { phase('done'); source.textContent = scene.source; status.textContent = `Back to ${scene.source}. Back to your rhythm.`; play.disabled = false; play.textContent = '↻ Play again'; }, 3800);
+    later(() => { phase('restoring'); status.textContent = scene.settling; }, 2600);
+    later(() => { phase('done'); source.textContent = scene.source; status.textContent = scene.done; play.disabled = false; play.textContent = '↻ Play again'; }, 3800);
   }
   choices.forEach(button => button.addEventListener('click', () => selectScene(button.dataset.scene)));
   document.querySelectorAll('[data-demo-link]').forEach(link => link.addEventListener('click', () => { selectScene(link.dataset.demoLink); play.focus({ preventScroll: true }); }));
@@ -61,5 +103,11 @@
       feedback.textContent = 'Copy was blocked. The command is selected; press ⌘C or Ctrl+C.';
     }
   });
+  // Keep the brief mobile page readable; users expand installation when they need it.
+  const compactLayout = window.matchMedia('(max-width: 900px)');
+  const installGuide = document.querySelector('#install-guide');
+  const setGuideDefault = () => { installGuide.open = !compactLayout.matches; };
+  setGuideDefault();
+  compactLayout.addEventListener('change', setGuideDefault);
   selectScene(current);
 })();
