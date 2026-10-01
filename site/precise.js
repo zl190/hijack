@@ -25,6 +25,11 @@
   const button = document.querySelector('#play');
   const capsuleLabel = document.querySelector('#capsule-label');
   let timers = [];
+  function setPlayButton(disabled, text) {
+    if (!button) return;
+    button.disabled = disabled;
+    button.textContent = text;
+  }
   function showStage(index) {
     const stage = stages[index];
     appWindow.dataset.stage = String(index);
@@ -37,7 +42,7 @@
     if (isChinese) {
       document.querySelector('.source-steps').dataset.direction = ['idle', 'out', 'waiting', 'back'][index];
       document.querySelector('#typing-detail').textContent = index === 3 ? '继续打字' : '原输入法';
-      document.querySelector('#voice-detail').textContent = index === 2 ? '等待上屏…' : '语音输入';
+      document.querySelector('#voice-detail').textContent = '语音输入';
     }
     document.querySelectorAll('[data-step]').forEach(item => {
       if (Number(item.dataset.step) === activeStep) item.setAttribute('aria-current', 'step');
@@ -48,23 +53,23 @@
   function clearTimers() { timers.forEach(clearTimeout); timers = []; }
   function playFrom(startIndex) {
     clearTimers();
-    button.disabled = true;
-    button.textContent = labels.playing;
+    setPlayButton(true, labels.playing);
     showStage(startIndex);
+    const sequence = isChinese ? [0, 1, 3] : [0, 1, 2, 3];
     const durations = [700, 1800, 2000];
     let elapsed = 0;
-    for (let index = startIndex + 1; index < stages.length; index += 1) {
-      elapsed += durations[index - 1];
+    for (let position = sequence.indexOf(startIndex) + 1; position < sequence.length; position += 1) {
+      const index = sequence[position];
+      elapsed += durations[sequence[position - 1]];
       timers.push(setTimeout(() => {
         showStage(index);
         if (index === stages.length - 1) {
-          button.disabled = false;
-          button.textContent = labels.replay;
+          setPlayButton(false, labels.replay);
         }
       }, elapsed));
     }
   }
-  button.addEventListener('click', () => {
+  button?.addEventListener('click', () => {
     playFrom(isChinese ? 0 : 1);
     document.querySelector('[data-go-stage="0"]')?.focus();
   });
@@ -84,14 +89,13 @@
   document.querySelector('#back-to-meme')?.addEventListener('click', () => {
     clearTimers();
     showCover();
-    button.disabled = false;
-    button.textContent = labels.play;
-    button.focus();
+    setPlayButton(false, labels.play);
+    (button || document.querySelector('[data-go-stage="0"]'))?.focus();
   });
   window.addEventListener('pagehide', clearTimers);
   window.addEventListener('pageshow', event => {
     if (event.persisted) {
-      clearTimers(); if (isChinese) showCover(); else showStage(0); button.disabled = false; button.textContent = labels.play;
+      clearTimers(); if (isChinese) showCover(); else showStage(0); setPlayButton(false, labels.play);
     }
   });
   document.querySelectorAll('[data-copy]').forEach(copyButton => {

@@ -220,10 +220,13 @@ html[lang="zh-CN"] .has-cover .demo-controls { flex-wrap: nowrap; }
 .has-cover[data-view="cover"] #play:active { transform: scale(.96); }
 @media(prefers-reduced-motion:reduce) { .has-cover[data-view="cover"] #play { transition: none; } }
 
-.back-to-meme { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); z-index: 2; width: 32px; height: 32px; border: 0; padding: 0; background: transparent; color: #909b86; opacity: .65; font-size: 18px; }
+.back-to-meme { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); z-index: 2; width: 32px; height: 32px; border: 0; padding: 0; background: transparent; color: #909b86; opacity: 0; display: grid; place-items: center; transition: opacity .18s ease; }
 .has-cover[data-view="cover"] .back-to-meme,
 .has-cover:not([data-stage="3"]) .back-to-meme { display: none; }
+.has-cover:hover .back-to-meme { opacity: .65; }
 .back-to-meme:hover, .back-to-meme:focus-visible { color: #626f54; opacity: 1; }
+@media(hover:none) { .has-cover .back-to-meme { opacity: .65; } }
+@media(prefers-reduced-motion:reduce) { .back-to-meme { transition: none; } }
 
 .has-cover:not([data-view="cover"]) #play { display: none; }
 
@@ -235,35 +238,62 @@ html[lang="zh-CN"] .has-cover .demo-controls { flex-wrap: nowrap; }
 .step-icon .mic-icon { width: 18px; height: 18px; }
 
 /* Two endpoints, with a springy hand-off in each direction. */
-html[lang="zh-CN"] .source-steps--toggle { grid-template-columns: minmax(0, 1fr) 38px minmax(0, 1fr); gap: 6px; }
+html[lang="zh-CN"] .source-steps--toggle { grid-template-columns: minmax(0, 1fr) 64px minmax(0, 1fr); gap: 10px; align-items: center; }
 .source-steps.source-steps--toggle li::after { display: none; }
-.source-steps--toggle .switch-arrows { border: 0; background: transparent; border-radius: 0; padding: 0; justify-content: center; gap: 7px; color: #b2bca6; }
-.switch-arrows svg { display: block; width: 28px; height: 16px; transform-origin: center; }
-[data-direction="out"] .arrow-out { color: var(--accent); animation: switch-out .75s both; }
+.source-steps--toggle .switch-arrows { border: 0; background: transparent; border-radius: 0; padding: 0; justify-content: center; gap: 0; color: #b2bca6; }
+.switch-arrows svg { display: block; width: 56px; height: 28px; transform-origin: center; }
+[data-direction="out"] .arrow-out { color: var(--accent); animation: switch-out .72s cubic-bezier(.37, 0, .63, 1) both; }
 [data-direction="waiting"] .arrow-out { color: var(--accent); }
-[data-direction="back"] .arrow-back { color: var(--accent); animation: switch-back .75s both; }
-.source-steps--toggle [aria-current="step"] .step-select { animation: switch-card .55s both; }
+[data-direction="back"] .arrow-back { color: var(--accent); animation: switch-back .72s cubic-bezier(.37, 0, .63, 1) both; }
+.source-steps--toggle [data-step] { width: min(100%, 138px); aspect-ratio: 1; border-radius: 50%; justify-self: center; transition: background-color .22s ease, border-color .22s ease; }
+.source-steps--toggle [aria-current="step"] .step-select { animation: switch-card .6s cubic-bezier(.37, 0, .63, 1) both; }
 @keyframes switch-out {
-  0% { transform: translateX(-5px) scaleX(.7); }
-  35% { transform: translateX(8px) scaleX(1.22); }
-  58% { transform: translateX(-3px) scaleX(.94); }
-  78% { transform: translateX(2px) scaleX(1.05); }
+  0% { transform: translateX(0) scaleX(1); }
+  18% { transform: translateX(-5px) scaleX(.8); }
+  45% { transform: translateX(10px) scaleX(1.22); }
+  70% { transform: translateX(-3px) scaleX(.94); }
+  88% { transform: translateX(1px) scaleX(1.02); }
   100% { transform: translateX(0) scaleX(1); }
 }
 @keyframes switch-back {
-  0% { transform: translateX(5px) scaleX(.7); }
-  35% { transform: translateX(-8px) scaleX(1.22); }
-  58% { transform: translateX(3px) scaleX(.94); }
-  78% { transform: translateX(-2px) scaleX(1.05); }
+  0% { transform: translateX(0) scaleX(1); }
+  18% { transform: translateX(5px) scaleX(.8); }
+  45% { transform: translateX(-10px) scaleX(1.22); }
+  70% { transform: translateX(3px) scaleX(.94); }
+  88% { transform: translateX(-1px) scaleX(1.02); }
   100% { transform: translateX(0) scaleX(1); }
 }
 @keyframes switch-card {
-  0% { transform: scale(.95); }
-  45% { transform: scale(1.045); }
-  70% { transform: scale(.99); }
+  0% { transform: scale(1); }
+  18% { transform: scale(.95); }
+  48% { transform: scale(1.045); }
+  75% { transform: scale(.99); }
   100% { transform: scale(1); }
 }
 @media(prefers-reduced-motion:reduce) {
   .source-steps--toggle .switch-arrows svg,
   .source-steps--toggle [aria-current="step"] .step-select { animation: none; }
 }
+
+.source-steps--toggle .step-select { justify-content: center; border-radius: 50%; }
+
+.switch-hijack { display: block; width: 30px; height: 30px; object-fit: contain; }
+
+.squirrel-icon { display: block; width: 30px; height: 30px; object-fit: contain; }
+[data-direction="out"] .switch-hijack { animation: hijack-hop-out .72s cubic-bezier(.37, 0, .63, 1) both; }
+[data-direction="back"] .switch-hijack { animation: hijack-hop-back .72s cubic-bezier(.37, 0, .63, 1) both; }
+@keyframes hijack-hop-out {
+  0%, 100% { transform: translate(0, 0) rotate(0) scale(1); }
+  18% { transform: translateX(-2px) rotate(-5deg) scale(1.14, .84); }
+  45% { transform: translate(4px, -5px) rotate(9deg) scale(.91, 1.13); }
+  70% { transform: translateY(1px) rotate(-3deg) scale(1.07, .95); }
+  88% { transform: translateY(-1px) rotate(1deg) scale(.99, 1.02); }
+}
+@keyframes hijack-hop-back {
+  0%, 100% { transform: translate(0, 0) rotate(0) scale(1); }
+  18% { transform: translateX(2px) rotate(5deg) scale(1.14, .84); }
+  45% { transform: translate(-4px, -5px) rotate(-9deg) scale(.91, 1.13); }
+  70% { transform: translateY(1px) rotate(3deg) scale(1.07, .95); }
+  88% { transform: translateY(-1px) rotate(-1deg) scale(.99, 1.02); }
+}
+@media(prefers-reduced-motion:reduce) { .source-steps--toggle .switch-hijack { animation: none; } }

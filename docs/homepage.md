@@ -128,3 +128,9 @@ Clicking any step now plays the remaining sequence. Clicking the first step show
 The Chinese workflow now has two interactive cards: the previous input method and voice input. Two arrows between them show outbound and return motion with a short overshoot-and-settle animation; the selected card also springs into place. Submission keeps the voice card selected until text is committed, then the original input method becomes active. Reduced-motion preferences disable the bounce. Browser verification confirmed WeType / voice-card selection while submitting, then 鼠须管 / original-card selection with the return-arrow animation.
 
 The cover's play button is now a small translucent dark pill. The Chinese footer keeps only the project/license line, per user request. Verified the simplified footer in the browser; JavaScript syntax and whitespace checks pass.
+
+## Circular switcher and synchronized icon motion
+
+User refinements replace the two cards with circles, add curved outbound/return arrows and the Hijack icon between them, and replace the Squirrel text in the left control with its official app icon. The arrows retain an anticipation/overshoot/settle motion; Hijack squashes, hops, and settles in the matching direction. Reduced-motion preferences suppress motion. Chinese playback now runs source → voice → restored source without a separate waiting scene; English retains its four states. The redundant cover play button is removed, while either circle starts playback. The return control is an SVG chevron that appears on frame hover or keyboard focus after completion; touch layouts keep it visible.
+
+Browser verification: clicking the first circle reached voice input with `hijack-hop-out`, then restored Squirrel with `hijack-hop-back`; the removed play button is absent, and the return control is hidden until hover/focus. JavaScript syntax and whitespace checks pass.
