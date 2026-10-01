@@ -1,7 +1,7 @@
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="site/assets/brand/hijack-wordmark-inverse.svg">
-  <source media="(prefers-color-scheme: light)" srcset="site/assets/brand/hijack-wordmark.svg">
-  <img src="site/assets/brand/hijack-wordmark.svg" width="190" alt="Hijack">
+  <source media="(prefers-color-scheme: dark)" srcset="https://hijack.ylab3.com/assets/brand/hijack-wordmark-inverse.svg">
+  <source media="(prefers-color-scheme: light)" srcset="https://hijack.ylab3.com/assets/brand/hijack-wordmark.svg">
+  <img src="https://hijack.ylab3.com/assets/brand/hijack-wordmark.svg" width="190" alt="Hijack">
 </picture>
 
 **Voice input, then back to your preferred input method.**
@@ -54,8 +54,8 @@ Compatibility reflects maintainer testing as of October 1, 2026. The first four 
 
 See the [user guide](docs/usage.md) for settings, command-line usage and troubleshooting. Download updates and read changes on the [releases page](https://github.com/zl190/hijack/releases).
 
-To build from a local checkout, run `./install-from-source.sh` with Xcode Command Line Tools installed. Website development is documented in [site/README.md](site/README.md).
+To build from a local checkout, run `./install-from-source.sh` with Xcode Command Line Tools installed.
 
 ## License
 
-[MIT](LICENSE). Third-party homepage imagery has [separate provenance](site/README.md#assets-and-cache).
+[MIT](LICENSE).
