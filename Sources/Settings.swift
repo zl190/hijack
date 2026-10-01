@@ -244,7 +244,7 @@ struct DictationTab: View {
                     }.pickerStyle(.radioGroup).labelsHidden()
                 }
                 if store.triggerMode == "toggle" {
-                    Row(title: L("按任意键也可停止", "Any Key Also Stops"), hint: L("用来停止的那个键不会输入", "That key isn't typed"), divider: false) {
+                    Row(title: L("按任意键也可停止", "Any Key Also Stops"), divider: false) {
                         Toggle("", isOn: Binding(get: { store.stopOnAnyKey }, set: { v in store.edit { $0.stopOnAnyKey = v } })).toggleStyle(.switch).labelsHidden()
                     }
                 }
