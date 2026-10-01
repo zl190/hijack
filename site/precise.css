@@ -279,7 +279,7 @@ html[lang="zh-CN"] .source-steps--toggle { grid-template-columns: minmax(0, 1fr)
 
 .switch-hijack { display: block; width: 30px; height: 30px; object-fit: contain; }
 
-.squirrel-icon { display: block; width: 30px; height: 30px; object-fit: contain; }
+.rime-icon { display: block; width: 22px; height: 22px; }
 [data-direction="out"] .switch-hijack { animation: hijack-hop-out .72s cubic-bezier(.37, 0, .63, 1) both; }
 [data-direction="back"] .switch-hijack { animation: hijack-hop-back .72s cubic-bezier(.37, 0, .63, 1) both; }
 @keyframes hijack-hop-out {
