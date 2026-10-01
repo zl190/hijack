@@ -5,12 +5,12 @@
 import AppKit
 import ApplicationServices
 import Carbon
-import CoreAudio
 import ServiceManagement
 
 let appName = "Hijack"
-let restoreDelay = 2.5   // longest wait after release before switching back (lets WeType commit)
-let micGrace = 0.3       // after WeType releases the microphone, wait this long, then switch back
+let restoreDelay = 5.0   // longest wait after release before switching back
+let fallbackDelay = 2.5  // used when WeType's capsule can't be watched
+let capsuleGrace = 0.15  // after WeType's capsule disappears, wait this long, then switch back
 let holdDelay = 0.2      // minimum hold before WeType gets the key (a quick tap does nothing)
 let maxSwitchWait = 1.0  // give up waiting for the input source switch after this long
 let marker: Int64 = 0x5357424B               // tags events we post ourselves
@@ -91,18 +91,29 @@ func switchTo(_ id: String, _ label: String) {
     }
 }
 
-// Is any app using the default microphone? (WeType stops recording → time to switch back)
-func micInUse() -> Bool {
-    var dev = AudioDeviceID(0)
-    var size = UInt32(MemoryLayout<AudioDeviceID>.size)
-    var addr = AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyDefaultInputDevice,
-                                          mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
-    guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &addr, 0, nil, &size, &dev) == noErr else { return false }
-    var running = UInt32(0)
-    size = UInt32(MemoryLayout<UInt32>.size)
-    addr.mSelector = kAudioDevicePropertyDeviceIsRunningSomewhere
-    guard AudioObjectGetPropertyData(dev, &addr, 0, nil, &size, &running) == noErr else { return false }
-    return running != 0
+// WeType shows its voice capsule until the dictated text is finally committed (rough text first,
+// then the tidied version). Switching away before that drops the uncommitted text, so the capsule
+// disappearing is the "done" signal. Owner/bounds need no Screen Recording. nil = WeType not running.
+func voiceCapsuleVisible() -> Bool? {
+    guard let pid = NSWorkspace.shared.runningApplications.first(where: {
+        ($0.bundleIdentifier ?? "").hasPrefix("com.tencent.inputmethod.wetype") || ($0.localizedName ?? "").contains("微信输入法")
+    })?.processIdentifier else { return nil }
+    let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
+    return list.contains { ($0[kCGWindowOwnerPID as String] as? Int32) == pid }
+}
+
+// What has keyboard focus right now (app + control role) — for diagnosing focus changes in the logs.
+func focusDesc() -> String {
+    let sys = AXUIElementCreateSystemWide()
+    var ref: CFTypeRef?
+    guard AXUIElementCopyAttributeValue(sys, kAXFocusedUIElementAttribute as CFString, &ref) == .success, let ref else {
+        return "focus=none(\(NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?"))"
+    }
+    let el = ref as! AXUIElement
+    var pid: pid_t = 0; AXUIElementGetPid(el, &pid)
+    var role: CFTypeRef?; AXUIElementCopyAttributeValue(el, kAXRoleAttribute as CFString, &role)
+    let app = NSRunningApplication(processIdentifier: pid)?.bundleIdentifier ?? "pid\(pid)"
+    return "focus=\(app):\((role as? String) ?? "?")"
 }
 
 // MARK: log  (~/Library/Logs/Hijack.log)
@@ -165,7 +176,7 @@ final class Engine {
         }
         passthrough = false
         if let cur, cur != m.voiceID { previous = cur }
-        log("down: \(cur ?? "?") front=\(NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?")")
+        log("down: \(cur ?? "?") \(focusDesc())")
         if cur != m.voiceID { switchTo(m.voiceID, "switch to") }
         let gen = generation, start = Date()
         func forwardWhenReady() {
@@ -175,7 +186,7 @@ final class Engine {
             if (ready && waited >= holdDelay) || waited >= maxSwitchWait {
                 forwarded = true
                 post(m.forwardKey, down: true)
-                log("forward down after \(Int(waited * 1000))ms ready=\(ready)")
+                log("forward down after \(Int(waited * 1000))ms ready=\(ready) \(focusDesc())")
             } else {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) { forwardWhenReady() }
             }
@@ -186,19 +197,20 @@ final class Engine {
 
     func released() -> Bool {
         if passthrough { passthrough = false; log("up: pass through"); return true }
-        if forwarded { post(m.forwardKey, down: false); forwarded = false; log("forward up") }
+        if forwarded { post(m.forwardKey, down: false); forwarded = false; log("forward up \(focusDesc())") }
         let gen = generation, released = Date()
-        var micStopped: Date?
+        var capsuleGone: Date?
         func restoreWhenDone() {
             guard gen == generation else { return }
             let waited = Date().timeIntervalSince(released)
-            if micStopped == nil && !micInUse() { micStopped = Date(); log("mic idle after \(Int(waited * 1000))ms") }
-            let graceDone = micStopped.map { Date().timeIntervalSince($0) >= micGrace } ?? false
-            guard graceDone || waited >= restoreDelay else {
+            let visible = voiceCapsuleVisible()
+            if capsuleGone == nil && visible == false { capsuleGone = Date(); log("capsule gone after \(Int(waited * 1000))ms") }
+            let graceDone = capsuleGone.map { Date().timeIntervalSince($0) >= capsuleGrace } ?? false
+            guard graceDone || waited >= (visible == nil ? fallbackDelay : restoreDelay) else {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { restoreWhenDone() }; return
             }
             guard currentID() == m.voiceID, let prev = previous else { return }
-            log("restore after \(Int(waited * 1000))ms, held \(Int(released.timeIntervalSince(pressedAt)))s, front=\(NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?")")
+            log("restore after \(Int(waited * 1000))ms, held \(Int(released.timeIntervalSince(pressedAt)))s, \(focusDesc())")
             switchTo(prev, "restore")
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { restoreWhenDone() }
