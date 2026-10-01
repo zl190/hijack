@@ -1,0 +1,18 @@
+{
+    "title": "ime-voice",
+    "rules": [
+        {
+            "description": "Hold right_option = WeType voice input from any input source (switch to WeType, hold its voice key, switch back after release)",
+            "manipulators": [
+                {
+                    "type": "basic",
+                    "from": { "key_code": "right_option", "modifiers": { "optional": ["any"] } },
+                    "to": [{ "shell_command": "$HOME/.local/bin/ime-voice begin" }],
+                    "to_if_held_down": [{ "key_code": "right_option" }],
+                    "to_after_key_up": [{ "shell_command": "$HOME/.local/bin/ime-voice end 2.5" }],
+                    "parameters": { "basic.to_if_held_down_threshold_milliseconds": 200 }
+                }
+            ]
+        }
+    ]
+}
