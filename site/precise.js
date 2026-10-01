@@ -23,6 +23,7 @@
   ];
   const appWindow = document.querySelector('.app-window');
   const button = document.querySelector('#play');
+  const capsuleLabel = document.querySelector('#capsule-label');
   let timers = [];
   function showStage(index) {
     const stage = stages[index];
@@ -31,7 +32,7 @@
     document.querySelector('#current-source').textContent = stage.source;
     document.querySelector('#demo-status').textContent = stage.status;
     document.querySelector('#sample-text').textContent = stage.text;
-    document.querySelector('#capsule-label').textContent = stage.capsule || labels.capsule;
+    if (capsuleLabel) capsuleLabel.textContent = stage.capsule || labels.capsule;
     const activeStep = isChinese ? Math.min(index, 2) : index;
     if (isChinese) {
       document.querySelector('#return-source').textContent = index === 2 ? stage.source : stages[0].source;
