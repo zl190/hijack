@@ -230,6 +230,33 @@ struct Page<Content: View>: View {
     }
 }
 
+/// One option of a single choice, as a full-width row: icon, title, a line of explanation, ✓ when chosen.
+struct ChoiceRow: View {
+    let icon: String, title: String
+    var detail: String? = nil
+    let selected: Bool
+    var divider = true
+    let action: () -> Void
+    var body: some View {
+        VStack(spacing: 0) {
+            Button(action: action) {
+                HStack(spacing: 12) {
+                    Image(systemName: icon).font(.title3).frame(width: 26).foregroundStyle(selected ? Color.accentColor : .secondary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(title)
+                        if let detail { Text(detail).font(.footnote).foregroundStyle(.secondary) }
+                    }
+                    Spacer()
+                    if selected { Image(systemName: "checkmark").font(.body.weight(.semibold)).foregroundStyle(Color.accentColor) }
+                }.padding(.vertical, 9).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(selected ? [.isSelected] : [])
+            if divider { Divider().opacity(0.5) }
+        }
+    }
+}
+
 let accessibilityURL = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
 
 struct DictationTab: View {
@@ -237,12 +264,10 @@ struct DictationTab: View {
     var body: some View {
         Page(store: store) {
             Card(title: L("听写方式", "How You Dictate")) {
-                Row(title: L("方式", "Mode"), divider: store.triggerMode == "toggle") {
-                    Picker("", selection: Binding(get: { store.triggerMode }, set: { v in store.edit { $0.triggerMode = v } })) {
-                        Text(L("按住说话", "Hold to Talk")).tag("hold")
-                        Text(L("点按开始，再点停止（免按）", "Tap to Start, Tap to Stop")).tag("toggle")
-                    }.pickerStyle(.radioGroup).labelsHidden()
-                }
+                ChoiceRow(icon: "hand.raised", title: L("按住说话", "Hold to Talk"), detail: L("按住说，松开停", "Hold the key while you speak"),
+                          selected: store.triggerMode == "hold") { store.edit { $0.triggerMode = "hold" } }
+                ChoiceRow(icon: "hand.tap", title: L("点按开始，再点停止（免按）", "Tap to Start, Tap to Stop"), detail: L("点一下开始，再点一下停止", "Tap once to start, again to stop"),
+                          selected: store.triggerMode == "toggle", divider: store.triggerMode == "toggle") { store.edit { $0.triggerMode = "toggle" } }
                 if store.triggerMode == "toggle" {
                     Row(title: L("按任意键也可停止", "Any Key Also Stops"), divider: false) {
                         Toggle("", isOn: Binding(get: { store.stopOnAnyKey }, set: { v in store.edit { $0.stopOnAnyKey = v } })).toggleStyle(.switch).labelsHidden()
@@ -316,9 +341,12 @@ struct SourcesTab: View {
                 }
             } else {
                 Card(title: L("语音来源", "Voice Source")) {
-                    Picker("", selection: Binding(get: { store.voiceInput }, set: { v in store.edit { $0.voiceInput = v } })) {
-                        ForEach(store.sources) { Text($0.name).tag($0.id) }
-                    }.pickerStyle(.radioGroup).labelsHidden().padding(.vertical, 10)
+                    ForEach(Array(store.sources.enumerated()), id: \.element.id) { i, src in
+                        ChoiceRow(icon: src.id.hasPrefix("app:") ? "app" : "keyboard", title: src.name,
+                                  detail: src.id.hasPrefix("app:") ? L("听写 app，Hijack 替你按它的快捷键", "Dictation app; Hijack presses its hotkey")
+                                                                   : L("输入法，Hijack 切过去用完再切回", "Input method; Hijack switches to it and back"),
+                                  selected: src.id == store.voiceInput, divider: i < store.sources.count - 1) { store.edit { $0.voiceInput = src.id } }
+                    }
                 }
                 if let s = store.sources.first(where: { $0.id == store.voiceInput }) {
                     Card(title: L("\(s.name)的设置", s.name)) {
@@ -441,7 +469,6 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         tabs.tabStyle = .toolbar
         func tab<V: View>(_ title: String, _ symbol: String, _ view: V) -> NSTabViewItem {
             let host = NSHostingController(rootView: view)
-            host.title = title                       // the window title follows the selected tab
             if #available(macOS 13.0, *) { host.sizingOptions = .preferredContentSize }
             let item = NSTabViewItem(viewController: host)
             item.label = title
@@ -454,7 +481,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         tabs.addTabViewItem(tab(L("高级", "Advanced"), "slider.horizontal.3", AdvancedTab(store: store)))
         let window = NSWindow(contentViewController: tabs)
         window.styleMask = [.titled, .closable]
-        window.title = tabs.tabViewItems.first?.label ?? appName   // the title follows the tab, from the start
+        tabs.canPropagateSelectedChildViewControllerTitle = false   // keep one title; the toolbar shows the tab
+        window.title = L("\(appName) 设置", "\(appName) Settings")
         window.isReleasedWhenClosed = false
         self.init(window: window)
         window.delegate = self

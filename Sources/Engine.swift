@@ -137,7 +137,7 @@ final class Engine {
             guard currentID() == m.voiceID, let prev = previous else { report("done", ""); return }
             log("restore after \(Int(waited * 1000))ms, held \(Int(released.timeIntervalSince(pressedAt)))s, \(focusDesc())")
             switchTo(prev, "restore")
-            report("done", L("等上屏 \(String(format: "%.1f", waited)) 秒，已切回 \(sourceName(prev))", "waited \(String(format: "%.1f", waited))s for the text, back to \(sourceName(prev))"))
+            report("done", L("等上屏 \(String(format: "%.1f", waited)) 秒，已切回 \(voiceProvider(for: prev).name)", "waited \(String(format: "%.1f", waited))s for the text, back to \(voiceProvider(for: prev).name)"))
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { restoreWhenDone() }
         return false

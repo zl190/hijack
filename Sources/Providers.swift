@@ -55,12 +55,13 @@ protocol VoiceProvider {
 
 struct InputMethodProvider: VoiceProvider {
     let sourceID: String
+    var label: (zh: String, en: String)? = nil   // our own names; the system often only registers a Chinese one
     var defaultKey: String? = nil           // when its settings can't be read
     var helpers: [String] = []              // apps that own its voice UI (Sogou: a separate voice assistant)
     var reader: (() -> (key: KeySpec, style: String)?)? = nil
 
     var id: String { sourceID }
-    var name: String { sourceName(sourceID) }
+    var name: String { label.map { L($0.zh, $0.en) } ?? sourceName(sourceID) }
     var isInstalled: Bool { source(sourceID) != nil }
     var switchesInputSource: Bool { true }
     var readsSettings: Bool { reader != nil }
@@ -111,9 +112,9 @@ func handyVoiceKey() -> KeySpec? {
 
 // The voice tools Hijack knows. Order = menu order. Adding one is adding a line here.
 let builtInProviders: [VoiceProvider] = [
-    InputMethodProvider(sourceID: weTypeID, reader: weTypeVoice),
-    InputMethodProvider(sourceID: "com.sogou.inputmethod.sogou.pinyin", defaultKey: "left_option", helpers: ["com.sogou.voiceassistant"]),
-    InputMethodProvider(sourceID: "com.bytedance.inputmethod.doubaoime.pinyin", defaultKey: "fn"),
+    InputMethodProvider(sourceID: weTypeID, label: ("微信输入法", "WeType"), reader: weTypeVoice),
+    InputMethodProvider(sourceID: "com.sogou.inputmethod.sogou.pinyin", label: ("搜狗输入法", "Sogou"), defaultKey: "left_option", helpers: ["com.sogou.voiceassistant"]),
+    InputMethodProvider(sourceID: "com.bytedance.inputmethod.doubaoime.pinyin", label: ("豆包输入法", "Doubao"), defaultKey: "fn"),
     AppProvider(bundle: "com.pais.handy", appName: "Handy", reader: handyVoiceKey),
 ]
 
