@@ -1,45 +1,212 @@
 {
-  "fill" : {
-    "automatic-gradient" : "extended-srgb:0.25490,0.26667,0.27059,1.00000"
-  },
-  "groups" : [
+  "fill-specializations": [
     {
-      "layers" : [
-        {
-          "fill-specializations" : [
-            {
-              "appearance" : "dark",
-              "value" : "none"
-            }
-          ],
-          "image-name" : "02-pointer.svg",
-          "name" : "02-pointer"
-        },
-        {
-          "fill-specializations" : [
-            {
-              "appearance" : "dark",
-              "value" : "none"
-            }
-          ],
-          "image-name" : "01-hat.svg",
-          "name" : "01-hat"
-        }
-      ],
-      "shadow" : {
-        "kind" : "neutral",
-        "opacity" : 0.5
-      },
-      "translucency" : {
-        "enabled" : true,
-        "value" : 0.3
+      "value": {
+        "automatic-gradient": "srgb:0.9451,0.9373,0.9176,1.0000"
       }
+    },
+    {
+      "appearance": "dark",
+      "value": {
+        "automatic-gradient": "srgb:0.1255,0.1373,0.1412,1.0000"
+      }
+    },
+    {
+      "appearance": "tinted",
+      "value": "automatic"
     }
   ],
-  "supported-platforms" : {
-    "circles" : [
-      "watchOS"
-    ],
-    "squares" : "shared"
+  "groups": [
+    {
+      "name": "Sculpted foreground",
+      "layers": [
+        {
+          "name": "Hat \u2014 default relief",
+          "image-name": "hat-default.png",
+          "fill": "none",
+          "glass": true,
+          "opacity-specializations": [
+            {
+              "value": 1
+            },
+            {
+              "appearance": "dark",
+              "value": 0
+            },
+            {
+              "appearance": "tinted",
+              "value": 0
+            }
+          ],
+          "position": {
+            "scale": 1.12,
+            "translation-in-points": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "name": "Pointer \u2014 default relief",
+          "image-name": "pointer-default.png",
+          "fill": "none",
+          "glass": true,
+          "opacity-specializations": [
+            {
+              "value": 1
+            },
+            {
+              "appearance": "dark",
+              "value": 0
+            },
+            {
+              "appearance": "tinted",
+              "value": 0
+            }
+          ],
+          "position": {
+            "scale": 1.12,
+            "translation-in-points": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "name": "Hat \u2014 dark relief",
+          "image-name": "hat-dark.png",
+          "fill": "none",
+          "glass": true,
+          "opacity-specializations": [
+            {
+              "value": 0
+            },
+            {
+              "appearance": "dark",
+              "value": 1
+            },
+            {
+              "appearance": "tinted",
+              "value": 0
+            }
+          ],
+          "position": {
+            "scale": 1.12,
+            "translation-in-points": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "name": "Pointer \u2014 dark relief",
+          "image-name": "pointer-dark.png",
+          "fill": "none",
+          "glass": true,
+          "opacity-specializations": [
+            {
+              "value": 0
+            },
+            {
+              "appearance": "dark",
+              "value": 1
+            },
+            {
+              "appearance": "tinted",
+              "value": 0
+            }
+          ],
+          "position": {
+            "scale": 1.12,
+            "translation-in-points": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "name": "Hat \u2014 tinted relief",
+          "image-name": "hat-mono.png",
+          "fill": "none",
+          "glass": true,
+          "opacity-specializations": [
+            {
+              "value": 0
+            },
+            {
+              "appearance": "dark",
+              "value": 0
+            },
+            {
+              "appearance": "tinted",
+              "value": 1
+            }
+          ],
+          "position": {
+            "scale": 1.12,
+            "translation-in-points": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "name": "Pointer \u2014 tinted relief",
+          "image-name": "pointer-mono.png",
+          "fill": "none",
+          "glass": true,
+          "opacity-specializations": [
+            {
+              "value": 0
+            },
+            {
+              "appearance": "dark",
+              "value": 0
+            },
+            {
+              "appearance": "tinted",
+              "value": 1
+            }
+          ],
+          "position": {
+            "scale": 1.12,
+            "translation-in-points": [
+              0,
+              0
+            ]
+          }
+        }
+      ],
+      "lighting": "individual",
+      "specular": false,
+      "specular-specializations": [
+        {
+          "appearance": "tinted",
+          "value": true
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.35
+      },
+      "translucency": {
+        "enabled": false,
+        "value": 0.0
+      },
+      "translucency-specializations": [
+        {
+          "appearance": "tinted",
+          "value": {
+            "enabled": true,
+            "value": 0.2
+          }
+        }
+      ]
+    }
+  ],
+  "supported-platforms": {
+    "squares": [
+      "macOS"
+    ]
   }
 }
