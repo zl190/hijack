@@ -236,7 +236,16 @@ final class Engine {
     func finish() {
         let p = plan
         let prev = previous; previous = nil     // consumed here, not at .begin: a chained dictation keeps it (FM-17)
-        if record.switchFailed { summary(end: "input source never switched"); report("done", ""); return }
+        if record.switchFailed {
+            summary(end: "input source never switched"); report("done", "")
+            // The switch can still land after we gave up. Then the user would stay in the voice IME (review-4 S1).
+            if let prev { clock.after(0.5) { [self] in
+                guard sources.current() == p.voiceID else { return }
+                log("input source switched late: restore after failed switch to \(prev)")
+                switchTo(prev, "restore after failed switch")
+            } }
+            return
+        }
         guard p.switchesInput else { summary(end: "no switch back needed"); report("done", p.voiceName); return }
         guard let prev else { summary(end: "started inside \(p.voiceName), nothing to switch back to"); report("done", p.voiceName); return }
         guard sources.current() == p.voiceID else {

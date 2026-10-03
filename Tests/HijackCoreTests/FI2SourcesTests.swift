@@ -110,3 +110,28 @@ extension FI2SourcesTests {
         XCTAssertTrue(r.sink.summaries.last?.contains("back after") == true, r.sink.summaries.last ?? "")
     }
 }
+
+// FM-05 (review-4 S1): the switch lands after switchFailed. The user must not stay in the voice IME.
+extension FI2SourcesTests {
+    func testFM05_LateSwitchAfterFailureIsRestored() {
+        let r = Rig()
+        r.sources.applies = false
+        r.press(); r.clock.advance(1.1)
+        XCTAssertEqual(r.engine.machine.state, .idle)
+        r.sources.applies = true
+        r.sources.currentID = Rig.voice                         // TIS caught up at 1.2 s
+        r.clock.advance(0.5)
+        XCTAssertEqual(r.sources.currentID, Rig.english, "restored to where the user was")
+        XCTAssertTrue(r.sink.has("restore after failed switch"))
+    }
+
+    func testFM05_NoLateSwitchMeansNoRestore() {
+        let r = Rig()
+        r.sources.applies = false
+        r.press(); r.clock.advance(1.1)
+        let selects = r.sources.selected.count
+        r.clock.advance(1.0)
+        XCTAssertEqual(r.sources.selected.count, selects, "nothing to undo")
+        XCTAssertFalse(r.sink.has("restore after failed switch"))
+    }
+}
