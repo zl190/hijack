@@ -21,7 +21,7 @@ func runCLI(_ args: [String]) -> Int32? {
     case "set": return cliSet(rest)
     case "log": return cliLog(rest)
     case "stats": return cliStats(rest, json: json)
-    case "version": print(appVersion); return 0
+    case "version": return cliVersion()
     default: print(cliHelp); return 0
     }
 }
@@ -37,6 +37,17 @@ let appBundle: Bundle = {
 }()
 let appVersion = appBundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
 
+/// The running version, and the update Sparkle found at its last check (its own user defaults; no network).
+func cliVersion() -> Int32 {
+    print(appVersion)
+    // The CLI is often a symlink outside the bundle, so it reads the app's defaults domain by name.
+    let d = UserDefaults.standard.persistentDomain(forName: "com.zl190.hijack") ?? [:]
+    let item = d["SULatestAppcastItemFound"] as? [String: Any]
+    let found = (item?["displayVersionString"] as? String) ?? (item?["versionString"] as? String)
+    if let line = UpdateNotice.line(running: appVersion, found: found, skipped: d["SUSkippedVersion"] as? String) { print(line) }
+    return 0
+}
+
 let cliHelp = """
 hijack — hold a key to dictate with another tool's voice input, from any input source
 
@@ -49,7 +60,7 @@ Usage:
   hijack log [-f] [-n N]          show the log: one line per dictation, plus errors (-f follows it)
   hijack log --live               watch every step of each dictation as it happens (Ctrl-C to stop)
   hijack stats [--days N|--all] [--json]   how reliable dictation has been (default: last 7 days)
-  hijack version
+  hijack version                  running version, and the update Sparkle found last
 
 Settings:
   mode             hold | toggle
