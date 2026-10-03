@@ -11,6 +11,7 @@ final class StatsTests: XCTestCase {
     let noEcho = "2026-10-03 21:01:00.000 dictation WeType (hold): held 2.00s, Fn sent after 210ms, window never closed after release, back after 2.50s | echo missing, mic tool off device off, window while held: no window (pid 912) | front=x"
     let unseen = "2026-10-03 21:02:00.000 dictation WeType (hold): held 2.00s, Fn sent after 210ms, window never closed after release, back after 2.50s | echo after 211ms, mic tool on device on, window while held: no window (pid 912) | front=x"
     let cut = "2026-10-03 21:03:00.000 dictation WeType (hold): held 1.00s, Fn sent after 205ms, window never closed after release, interrupted by the next press | echo after 206ms, mic tool on device on, window while held: 1 window | front=x"
+    let noSwitch = "2026-10-03 21:05:00.000 dictation WeType (hold): held 1.20s, input source never switched | front=x"
     let app = "2026-10-03 21:04:00.000 dictation Handy (hold): held 1.50s, Option sent after 200ms, no switch back needed | echo after 201ms, mic tool on device on | front=x"
 
     func testParsesASuccess() {
@@ -53,5 +54,12 @@ final class StatsTests: XCTestCase {
         let lines = (1...20).map { "2026-10-03 10:00:\(String(format: "%02d", $0)).000 dictation WeType (hold): held 1.00s, Fn sent after \($0 * 10)ms, window closed 1000ms after release, back after 1.2s | echo after 1ms" }
         let s = DictationStats.compute(lines: lines, today: "2026-10-03")
         XCTAssertEqual(s.sentP50, 100); XCTAssertEqual(s.sentP95, 190)
+    }
+
+    func testSwitchFailureIsAFailureWithItsOwnCause() {
+        let e = DictationEntry.parse(noSwitch)
+        XCTAssertEqual(e?.outcome, .noWindow)
+        XCTAssertEqual(e?.cause, .sourceNotSwitched)
+        XCTAssertNil(e?.sentMs)
     }
 }
