@@ -11,6 +11,7 @@ stateDiagram-v2
   starting --> waitingForText: otherKey [免按]<br/>swallowKeyAndItsRelease, waitForText
   starting --> idle: otherKey [免按·app]<br/>swallowKeyAndItsRelease, finish
   starting --> listening: keySent<br/>sendTalkKey
+  starting --> idle: switchFailed<br/>finish
   listening --> waitingForText: press [免按]<br/>releaseTalkKey, waitForText
   listening --> idle: press [免按·app]<br/>releaseTalkKey, finish
   listening --> waitingForText: release [按住 / 按住·同键]<br/>releaseTalkKey, waitForText

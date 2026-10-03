@@ -18,6 +18,7 @@ struct DictationEntry: Equatable {
         case toolDidntListen = "voice tool didn't start listening (mic off)"
         case windowNotSeen = "tool listened, its window wasn't seen (mic on)"
         case unknown = "not enough checks on the line"
+        case sourceNotSwitched = "input source never switched (talk key not sent)"
     }
     var day: String              // yyyy-MM-dd
     var tool: String
@@ -49,14 +50,16 @@ struct DictationEntry: Equatable {
         let echo = line.contains("echo missing") ? false : line.contains("echo after") ? true : nil
         let mic = word(#"mic tool (on|off)"#).map { $0 == "on" }
         let outcome: Outcome
-        if sent == nil { outcome = .tooShort }
+        if line.contains("input source never switched") { outcome = .noWindow }
+        else if sent == nil { outcome = .tooShort }
         else if line.contains("interrupted by the next press") { outcome = .interrupted }
         else if textIn != nil { outcome = .textArrived }
         else if line.contains("no switch back needed") { outcome = .unverified }
         else { outcome = .noWindow }
         var cause: Cause?
         if outcome == .noWindow {
-            cause = echo == false ? .keyNotSent : mic == false ? .toolDidntListen : mic == true ? .windowNotSeen : .unknown
+            cause = line.contains("input source never switched") ? .sourceNotSwitched
+                : echo == false ? .keyNotSent : mic == false ? .toolDidntListen : mic == true ? .windowNotSeen : .unknown
         }
         return DictationEntry(day: String(line.prefix(10)), tool: tool, toggle: line.contains("(toggle)"),
                               heldMs: Int(held * 1000), sentMs: sent, textInMs: textIn, outcome: outcome, cause: cause,

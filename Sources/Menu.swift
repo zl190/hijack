@@ -6,7 +6,7 @@ import ServiceManagement
 // MARK: menu (the whole UI)
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
-    let engine: Engine = Engine()
+    let engine: Engine = Engine.live()
     let m: Model = .shared
     let menu: NSMenu = NSMenu()
     var item: NSStatusItem?
@@ -25,13 +25,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         engine.start()
         // Sleep, wake and lock land in the log, to line them up with a session that stops working.
         let ws = NSWorkspace.shared.notificationCenter
+        // After wake and after unlock the engine also reconciles: a session across sleep stops, the trigger is re-read (FM-25).
         for (name, text) in [(NSWorkspace.willSleepNotification, "system sleep"), (NSWorkspace.didWakeNotification, "system wake"),
                              (NSWorkspace.screensDidSleepNotification, "screens sleep"), (NSWorkspace.screensDidWakeNotification, "screens wake"),
                              (NSWorkspace.sessionDidResignActiveNotification, "session inactive"), (NSWorkspace.sessionDidBecomeActiveNotification, "session active")] {
-            ws.addObserver(forName: name, object: nil, queue: .main) { _ in log(text) }
+            ws.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                log(text)
+                if name == NSWorkspace.didWakeNotification { self?.engine.reconcileAfterWake(text) }
+            }
         }
         for (name, text) in [("com.apple.screenIsLocked", "screen locked"), ("com.apple.screenIsUnlocked", "screen unlocked")] {
-            DistributedNotificationCenter.default().addObserver(forName: .init(name), object: nil, queue: .main) { _ in log(text) }
+            DistributedNotificationCenter.default().addObserver(forName: .init(name), object: nil, queue: .main) { [weak self] _ in
+                log(text)
+                if text == "screen unlocked" { self?.engine.reconcileAfterWake(text) }
+            }
         }
         // Reopens Hijack after an installer replaces it (brew can't: its install sandbox denies launching apps).
         // The system keeps the plist from registration time, so re-register when the bundled one changes.

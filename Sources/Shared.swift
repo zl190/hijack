@@ -5,8 +5,6 @@ import Carbon
 import ServiceManagement
 
 let appName = "Hijack"
-let capsuleGrace = 0.15  // after its voice window disappears, wait this long, then switch back
-let maxSwitchWait = 1.0  // give up waiting for the input source switch after this long
 let marker: Int64 = 0x5357424B               // tags events we post ourselves
 let weTypeID = "com.tencent.inputmethod.wetype.pinyin"
 

@@ -1,7 +1,5 @@
-import AppKit
-import ApplicationServices
-import Carbon
-import ServiceManagement
+import Foundation
+import CoreGraphics
 
 // MARK: keys — any key plus modifiers; a bare modifier key is a "modifier-only" key
 
@@ -49,7 +47,7 @@ struct KeySpec: Equatable {
     var named: NamedKey? { namedKeys.first { $0.code == code } }
     var modifierOnly: Bool { mods.isEmpty && named?.flag != nil }
     var name: String {
-        let base = named.map { L($0.zh, $0.en) } ?? "keyCode \(code)"
+        let base = named.map { localize($0.zh, $0.en) } ?? "keyCode \(code)"
         return Mod.allCases.filter { mods.contains($0) }.map(\.symbol).joined() + base
     }
     var flags: CGEventFlags { mods.reduce(into: CGEventFlags()) { $0.insert($1.flag) } }
