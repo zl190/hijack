@@ -196,6 +196,31 @@ final class HCIFaultsTests: XCTestCase {
         XCTAssertEqual(r.keys.posted.count, 0)
     }
 
+    // S1 (docs/review-4/hardening-review.md): waitingForText is not isActive, so stopForQuit()'s own guard
+    // already covers it — same shape as the idle case above, at the Engine level this time.
+    func testStopForQuit_WaitingForTextDoesNothing() {
+        let r = Rig()
+        r.pressUntilListening(); r.release()
+        XCTAssertEqual(r.engine.machine.state, .waitingForText, "setup")
+        let postedBefore = r.keys.posted.count, tracesBefore = r.sink.traces.count
+        r.engine.stopForQuit()
+        XCTAssertEqual(r.sink.traces.count, tracesBefore, "run() must not be called: waitingForText is not isActive")
+        XCTAssertEqual(r.keys.posted.count, postedBefore, "nothing new posted")
+        XCTAssertEqual(r.engine.machine.state, .waitingForText, "unchanged")
+    }
+
+    // S1: passthrough IS isActive, so stopForQuit() does call run(.quit) here — the machine's own
+    // catch-all (SessionMachine.swift) must leave it alone, with nothing posted.
+    func testStopForQuit_PassthroughDoesNothing() {
+        let r = Rig(current: Rig.voice)   // already on the voice input source: the press passes through
+        r.press()
+        XCTAssertEqual(r.engine.machine.state, .passthrough, "setup")
+        let postedBefore = r.keys.posted.count
+        r.engine.stopForQuit()
+        XCTAssertEqual(r.keys.posted.count, postedBefore, "nothing posted")
+        XCTAssertEqual(r.engine.machine.state, .passthrough, "unchanged")
+    }
+
     // FM-09: the probe reads the tool's mic "off" for >= 1s while the key is held; "Try it" must say so.
     // (The first sample fires 0.3s after the talk key goes out, itself ~0.2s (holdDelay) after the press.)
     func testFM09_MicOffForASecondReportsNotListening() {
