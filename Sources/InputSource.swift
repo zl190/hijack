@@ -31,7 +31,7 @@ func select(_ id: String) -> Bool {
 func switchTo(_ id: String, _ label: String) {
     let ok = select(id)
     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-        if currentID() == id { log("\(label) \(id) ok=\(ok)") }
+        if currentID() == id { trace("\(label) \(id) ok=\(ok)") }
         else { log("\(label) \(id) didn't stick, retry ok=\(select(id))") }
     }
 }

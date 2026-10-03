@@ -2,7 +2,7 @@ import AppKit
 import ApplicationServices
 
 // MARK: command line — the same binary; with a known command as its first argument it runs that and exits.
-//   hijack status | doctor | sources | get [setting] | set <setting> <value> | log [-f] [-n N] | version | help
+//   hijack status | doctor | sources | get [setting] | set <setting> <value> | log [-f] [-n N] [--live] | version | help
 // --json on status / sources / get, for scripts and agents. Settings go through the same Config as the app,
 // so the running app picks changes up on its next key press or menu open.
 
@@ -45,7 +45,8 @@ Usage:
   hijack sources [--json]         installed voice sources and their talk keys
   hijack get [setting] [--json]   read settings
   hijack set <setting> <value>    change a setting (validated)
-  hijack log [-f] [-n N]          show the log (-f follows it)
+  hijack log [-f] [-n N]          show the log: one line per dictation, plus errors (-f follows it)
+  hijack log --live               watch every step of each dictation as it happens (Ctrl-C to stop)
   hijack version
 
 Settings:
@@ -246,6 +247,12 @@ func cliSet(_ args: [String]) -> Int32 {
 
 func cliLog(_ args: [String]) -> Int32 {
     var n = 20, follow = false
+    if args.contains("--live") {   // the step-level trace lives in the system log at debug level
+        let stream = Process()
+        stream.executableURL = URL(fileURLWithPath: "/usr/bin/log")
+        stream.arguments = ["stream", "--level", "debug", "--style", "compact", "--predicate", "subsystem == \"com.zl190.hijack\""]
+        do { try stream.run(); stream.waitUntilExit(); return stream.terminationStatus } catch { return fail("can't run /usr/bin/log") }
+    }
     var i = 0
     while i < args.count {
         if args[i] == "-f" { follow = true }

@@ -1,4 +1,5 @@
 import AppKit
+import os
 import ApplicationServices
 import Carbon
 import ServiceManagement
@@ -36,8 +37,19 @@ func spaced(_ s: String) -> String {
 
 // MARK: log  (~/Library/Logs/Hijack.log)
 
+// Two levels. log(): the file — one summary line per dictation, plus errors, settings changes and system
+// events; always on, so an intermittent failure is already on record when it happens. trace(): each step
+// of a session, to the system log at debug level (kept only while someone watches: `hijack log --live`).
 let logURL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/\(appName).log")
+let logLimit = 1_000_000   // past this the file becomes Hijack.old.log and a new one starts
+let tracer = Logger(subsystem: "com.zl190.hijack", category: "session")
+func trace(_ msg: String) { tracer.debug("\(msg, privacy: .public)") }
 func log(_ msg: String) {
+    trace(msg)
+    if let size = (try? FileManager.default.attributesOfItem(atPath: logURL.path))?[.size] as? Int, size > logLimit {
+        let old = logURL.deletingPathExtension().appendingPathExtension("old.log")
+        try? FileManager.default.removeItem(at: old); try? FileManager.default.moveItem(at: logURL, to: old)
+    }
     let f = DateFormatter(); f.dateFormat = "MM-dd HH:mm:ss.SSS"
     let line = "\(f.string(from: Date())) \(msg)\n"
     if let h = try? FileHandle(forWritingTo: logURL) { h.seekToEndOfFile(); h.write(line.data(using: .utf8)!); try? h.close() }
