@@ -248,11 +248,13 @@ func cliSet(_ args: [String]) -> Int32 {
     case "language":
         guard ["system", "en", "zh"].contains(value) else { return fail("language: system | en | zh") }; c.language = value
     case "hold-delay":
-        guard let s = seconds(0.05...1) else { return fail("hold-delay: 0.05–1 seconds") }; c.holdDelay = s
+        // Ranges shared with Config's own load-time clamp (Sources/Core/ConfigValues.swift, review-5 #14):
+        // a hand edit of config.json bypasses this validation, so loading enforces the same bounds again.
+        guard let s = seconds(holdDelayRange) else { return fail("hold-delay: 0.05–1 seconds") }; c.holdDelay = s
     case "restore-timeout":
-        guard let s = seconds(1...15) else { return fail("restore-timeout: 1–15 seconds") }; c.restoreTimeout = s
+        guard let s = seconds(restoreTimeoutRange) else { return fail("restore-timeout: 1–15 seconds") }; c.restoreTimeout = s
     case "fallback-delay":
-        guard let s = seconds(0.5...10) else { return fail("fallback-delay: 0.5–10 seconds") }; c.fallbackDelay = s
+        guard let s = seconds(fallbackDelayRange) else { return fail("fallback-delay: 0.5–10 seconds") }; c.fallbackDelay = s
     default:
         return fail("unknown setting '\(name)' — see `hijack help`")
     }
