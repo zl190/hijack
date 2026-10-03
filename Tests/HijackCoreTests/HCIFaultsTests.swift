@@ -65,7 +65,21 @@ final class HCIFaultsTests: XCTestCase {
         let r = Rig()
         r.tap.trusted = false
         _ = r.engine.handle(KeyInput(kind: .tapDisabledByTimeout))
+        r.clock.advance(0)   // the write is off the tap callback, one tick later (review-4 M2)
         XCTAssertTrue(r.sink.has("Accessibility permission is gone"))
+        XCTAssertEqual(r.sink.states.last.map { [$0.trusted, $0.tapActive] }, [false, false])
+    }
+
+    // review-4 M2: the Accessibility guard must not do file I/O (via sink.state -> AppState.write) inside
+    // the tap callback. Zero state writes while the event is handled; one on the next run-loop turn.
+    func testFM24_StateWriteIsOffTheTapCallback() {
+        let r = Rig()
+        let before = r.sink.states.count
+        r.tap.trusted = false
+        _ = r.engine.handle(KeyInput(kind: .tapDisabledByTimeout))
+        XCTAssertEqual(r.sink.states.count, before, "no state write inside the callback")
+        r.clock.advance(0)
+        XCTAssertEqual(r.sink.states.count, before + 1, "exactly one, on the next tick")
         XCTAssertEqual(r.sink.states.last.map { [$0.trusted, $0.tapActive] }, [false, false])
     }
 

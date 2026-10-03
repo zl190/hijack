@@ -372,7 +372,7 @@ final class Engine {
     func reenableTap(_ why: String) {
         guard tap.trusted else {   // Accessibility was revoked while running (FM-24): re-enabling can't work
             log("event tap disabled (\(why)): Accessibility permission is gone")
-            sink.state(trusted: false, tapActive: false)
+            clock.after(0) { [self] in sink.state(trusted: false, tapActive: false) }   // off the tap callback (review-4 M2)
             return
         }
         tap.enable()

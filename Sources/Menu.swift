@@ -51,7 +51,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Secure Input can only be read live (Accessibility's own); keep state.json fresh at the one other
         // natural moment besides a menu open — the end of a dictation (docs/hci-review-faults.md §5 item 4).
         NotificationCenter.default.addObserver(forName: .hijackActivity, object: nil, queue: .main) { [weak self] n in
-            if (n.userInfo?["phase"] as? String) == "done" { self?.writeSecureInputState() }
+            // An app tool's "done" post can come from inside the tap callback (NSNotificationCenter's .main
+            // queue runs inline when the post is already on main): hop off it before the file I/O (review-4 M2).
+            guard (n.userInfo?["phase"] as? String) == "done" else { return }
+            DispatchQueue.main.async { self?.writeSecureInputState() }
         }
         // Reopens Hijack after an installer replaces it (brew can't: its install sandbox denies launching apps).
         // The system keeps the plist from registration time, so re-register when the bundled one changes.
