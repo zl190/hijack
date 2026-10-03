@@ -264,7 +264,7 @@ final class Engine {
     func summary(end: String) {
         let p = plan, r = record
         let held = (r.releasedAt ?? Date()).timeIntervalSince(r.pressedAt)
-        var line = "dictation \(p.voiceName) (\(p.toggle ? "toggle" : "hold")): held \(String(format: "%.1f", held))s"
+        var line = "dictation \(p.voiceName) (\(p.toggle ? "toggle" : "hold")): held \(String(format: "%.2f", held))s"
         if let sent = r.keySentMs {
             func onOff(_ b: Bool?) -> String { b.map { $0 ? "on" : "off" } ?? "?" }
             line += ", \(p.forwardKey.name) sent after \(sent)ms"

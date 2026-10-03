@@ -4,14 +4,13 @@ sequenceDiagram
   participant H as Hijack
   participant V as 语音工具
   participant I as 输入法系统
-  Note over U,I: 第 1 次说话 · 共 8.53 s · 来源 dictation.trace
+  Note over U,I: 2026-10-03 19:59:58 的说话 (日志，按住时长精确到 10 ms) · 来源 Hijack.log
   U->>H: 按下触发键 (0 ms)
   H->>I: 切到语音输入法
-  H->>V: 说话键按下 (208 ms)
-  H-->>H: echo，键已发出 (210 ms)
-  Note over H,V: 收音 6.62 s
-  U->>H: 松开 (6.83 s)
+  H->>V: 说话键按下 (242 ms)
+  H-->>H: echo，键已发出 (243 ms)
+  Note over H,V: 收音 5.16 s
+  U->>H: 松开 (5.40 s)
   H->>V: 说话键松开
-  V-->>H: 语音窗口消失，文字已上屏 (松开后 1.54 s)
-  H->>I: 切回原输入法 (8.53 s)
-  Note over H: 期间 3 个按键事件，tap 回调最长 0.42 ms
+  V-->>H: 语音窗口消失，文字已上屏 (松开后 1.40 s)
+  H->>I: 切回原输入法 (6.96 s)
