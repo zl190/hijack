@@ -1,0 +1,45 @@
+%% System design. Hand-maintained: no tool can read the key-tap chain or who writes which file from the code.
+%% The other diagrams in this folder are generated (scripts/diagrams.sh, scripts/sequence.sh).
+%% Template: a Mermaid flowchart; nodes are type names from Sources/, edges are calls, files, or key events.
+%% Persona: whoever changes what the app talks to (a new file, process, system API, or tap) updates this.
+%% Procedure: edit it in the same commit as that code; review it with the diff.
+%% Enforcement: none automatic yet; scripts/diagrams.sh prints a reminder when Sources/ is newer than this file.
+flowchart LR
+  KB["键盘 HID"] --> TAP
+
+  subgraph WS["macOS 按键监听链 (WindowServer)"]
+    direction LR
+    TAP["Hijack 的 tap<br/>headInsert"] --> WTAP["语音输入法的 tap"] --> APP["前台 app"]
+  end
+
+  subgraph HJ["Hijack.app (tap 回调跑在主线程)"]
+    direction TB
+    ENG["Engine<br/>按键边沿 → 事件，执行动作"]
+    SM["SessionMachine<br/>纯函数：状态 × 事件 → 状态 + 动作"]
+    PLAN["Plan 快照<br/>空闲时每秒刷新"]
+    REC["DictationRecord<br/>一次说话的记录"]
+    PROV["VoiceProvider<br/>微信 / 搜狗 / 豆包 / Handy"]
+    SAMP["后台采样<br/>按住期间每 0.5 秒"]
+    LOGQ["日志队列<br/>后台串行"]
+    UI["菜单 + 设置窗口"]
+  end
+
+  TAP <--> ENG
+  ENG <--> SM
+  ENG --> PLAN
+  ENG --> REC
+  ENG --> PROV
+  ENG -- "说话键 (marker 0x5357424B)" --> TAP
+  ENG -- "TISSelectInputSource" --> TIS["输入法系统 TIS"]
+  ENG --> SAMP
+  SAMP -- "窗口数" --> WIN["CGWindowList"]
+  SAMP -- "进程是否在用麦克风" --> CA["CoreAudio"]
+  PROV -- "只读" --> MMKV[("语音输入法自己的设置")]
+  PLAN -- "读" --> CFG[("config.json")]
+  UI -- "写" --> CFG
+  CLI["hijack 命令<br/>同一个二进制"] -- "读写" --> CFG
+  CLI -- "读" --> ST[("state.json")]
+  ENG -- "写" --> ST
+  ENG --> LOGQ --> LOG[("Hijack.log<br/>一次说话一行")]
+  ENG -. "signpost / trace" .-> OSLOG["系统日志 · Instruments"]
+  RL["重开任务 LaunchAgent<br/>盯着 MacOS/Hijack"] -. "安装器换掉 app 后 open" .-> HJ

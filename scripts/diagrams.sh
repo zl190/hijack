@@ -39,3 +39,7 @@ java -Djava.awt.headless=true -jar "$JAR" -tsvg "$OUT/classes.puml" 2>/dev/null
 echo "wrote $OUT/classes.puml $OUT/classes.svg"
 HIJACK_UPDATE_DIAGRAMS=1 swift test --filter testStateDiagramIsCurrent >/dev/null
 echo "wrote $OUT/states.mmd"
+# architecture.mmd is the one hand-maintained diagram: remind when the code moved on after it.
+code=$(git log -1 --format=%ct -- Sources 2>/dev/null || echo 0)
+arch=$(git log -1 --format=%ct -- docs/diagrams/architecture.mmd 2>/dev/null || echo 0)
+[ "${arch:-0}" -ge "${code:-0}" ] || echo "note: Sources/ changed after docs/diagrams/architecture.mmd: check it still matches"
