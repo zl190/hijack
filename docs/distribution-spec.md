@@ -92,7 +92,7 @@ Acceptance:
 2. Given the feed URL points at a local server (`defaults write com.zl190.hijack SUFeedURL http://127.0.0.1:8000/appcast.xml`) that lists a higher version signed with the same key: when the user chooses "Check for Updates…", Sparkle shall show the update with the release notes.
 3. When the user accepts that update, the new version shall be in `/Applications` and running within 30 s. Exactly one Hijack process shall exist. `hijack status` shall print `accessibility allowed` without a new grant.
 4. When the appcast entry is signed with a different key, Sparkle shall refuse the update and shall say so.
-5. When `make release` runs, `appcast.xml` shall validate: one `<item>` per release in `dist/`, each with `sparkle:edSignature` and `length`.
+5. When `make release` runs, `appcast.xml` shall validate: one `<item>`, for the new release, with `sparkle:edSignature` and `length`.
 6. The first dictation after the update shall produce a summary line in the log (the tap works under the new signature).
 7. When the user turns "Check for updates automatically" off in Settings, `defaults read com.zl190.hijack SUEnableAutomaticChecks` shall print 0, and no scheduled check shall run.
 
