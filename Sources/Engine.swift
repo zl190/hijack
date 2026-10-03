@@ -52,23 +52,22 @@ final class Engine {
     private(set) var plan: Plan = Plan(Model.shared)
     var previous: String?
     var generation: Int = 0
-    var physicalDown: Bool = false
-    var forwarded: Bool = false
-    var passthrough: Bool = false
+    var physicalDown: Bool = false          // the shortcut as the keyboard has it (edges go to the machine)
+    var machine: SessionMachine = SessionMachine()   // what a press does: Sources/Core/SessionMachine.swift
+    var mode: SessionMode = SessionMode()   // fixed per press
     var record: DictationRecord = DictationRecord()
-    var restoring: Bool = false             // waiting for the text before switching back
+    var waited: TimeInterval = 0            // release → switch back, for the summary
     var voicePIDs: [pid_t] = []             // the voice tool's processes, looked up once per dictation: listing running apps asks other processes, too slow to repeat every 50 ms
     var tap: CFMachPort?
     var span: (id: OSSignpostID, dictation: OSSignpostIntervalState, phase: (name: StaticString, state: OSSignpostIntervalState))?
 
-    var active: Bool = false                // a voice session is running (hold: key held · toggle: between taps)
     var swallowUp: Int?               // key that stopped a toggle session: also eat its key-up
     var paused: Bool = false                // the settings window is recording a key: let every key through
     var waitingReported: Bool = false
 
     /// Re-read the settings, between sessions only, so a change mid-session can't strand a held key.
     func refresh() {
-        guard !active, !physicalDown, !restoring else { return }
+        guard machine.state == .idle, !physicalDown else { return }
         plan = Plan(m)
     }
 
@@ -147,7 +146,6 @@ final class Engine {
     func mark(_ name: StaticString) { if let s = span { signposter.emitEvent(name, id: s.id) } }
 
     func sendKey() {
-        forwarded = true
         voicePIDs = plan.provider.processIDs()
         record.keySentMs = ms(since: record.pressedAt)
         enterPhase("listening"); mark("talk key sent")
@@ -157,68 +155,71 @@ final class Engine {
         trace("forward \(self.plan.forwardKey.name) start (\(self.plan.style)) after \(self.record.keySentMs ?? 0)ms")
     }
 
-    func pressed() -> Bool {
-        if restoring { summary(end: "interrupted by the next press") }   // the retry after a failure must not erase it
-        restoring = false
-        generation += 1
-        record = DictationRecord()
-        let p = plan, gen = generation
-        voicePIDs = []
-        if !p.provider.switchesInputSource {   // a voice app: no input-source switch, just press its key
-            if p.trigger == p.forwardKey && !p.toggle && p.style == "hold" { passthrough = true; trace("down: trigger is \(p.voiceName)'s own key, pass through"); return true }
-            passthrough = false
-            beginDictation()
-            trace("down: \(p.voiceName)")
-            DispatchQueue.main.asyncAfter(deadline: .now() + p.holdDelay) { [self] in
-                guard active, gen == generation else { trace("released before forward"); return }
-                sendKey()
+    /// Hand an event to the state machine and carry out what it returns. Returns whether the key event passes.
+    @discardableResult
+    func run(_ event: SessionEvent, keyCode: Int? = nil) -> Bool {
+        let p = plan
+        if event == .press {
+            // The shortcut is the tool's own key and the tool is already in front: it gets the real key.
+            let sameKey = p.trigger == p.forwardKey && !p.toggle && p.style == "hold"
+            mode = SessionMode(toggle: p.toggle, switchesInput: p.provider.switchesInputSource,
+                               passthrough: sameKey && (!p.provider.switchesInputSource || currentID() == p.voiceID))
+        }
+        let before = machine.state
+        let effects = machine.handle(event, mode)
+        let after = machine.state
+        trace("\(event.rawValue): \(before.rawValue) → \(after.rawValue) \(effects.map { "\($0)" })")
+        if (before == .starting || before == .listening) && (machine.state == .waitingForText || machine.state == .idle) {
+            record.releasedAt = Date(); enterPhase("waiting for text")
+        }
+        var pass = false
+        for effect in effects {
+            switch effect {
+            case .passKey: pass = true
+            case .swallowKey: pass = false
+            case .swallowKeyAndItsRelease: pass = false; swallowUp = keyCode
+            case .finishPrevious: summary(end: "interrupted by the next press")   // the retry after a failure must not erase it
+            case .begin:
+                generation += 1; record = DictationRecord(); voicePIDs = []; beginDictation()
+            case .switchToVoice:
+                let cur = currentID()
+                if let cur, cur != p.voiceID { previous = cur }
+                // After the tap returns: nothing slow inside the tap, every tap after ours would wait for it.
+                if cur != p.voiceID { DispatchQueue.main.async { switchTo(p.voiceID, "switch to") } }
+                report("switching", p.voiceName)
+            case .scheduleTalkKey: scheduleTalkKey()
+            case .sendTalkKey: sendKey()
+            case .releaseTalkKey: endVoice()
+            case .waitForText: report("finishing", p.voiceName); waitForText()
+            case .finish: finish()
             }
-            return false
         }
-        let cur = currentID()
-        // Already in the voice method and the trigger is its own key: let it see the real key.
-        if cur == p.voiceID && p.trigger == p.forwardKey && !p.toggle && p.style == "hold" {
-            passthrough = true; trace("down: already voice IME, pass through"); return true
-        }
-        passthrough = false
-        beginDictation()
-        if let cur, cur != p.voiceID { previous = cur }
-        trace("down: \(cur ?? "?")")
-        // After the tap returns: nothing slow inside the tap, every tap after ours would wait for it.
-        if cur != p.voiceID { DispatchQueue.main.async { switchTo(p.voiceID, "switch to") } }
-        report("switching", p.voiceName)
-        let start = Date()
-        func forwardWhenReady() {
-            guard active, gen == generation else { trace("released before forward"); return }
-            let ready = currentID() == p.voiceID
+        return pass
+    }
+
+    /// Send the talk key once the input source is ready and the hold delay is over (an app: after the delay).
+    func scheduleTalkKey() {
+        let p = plan, gen = generation, start = Date()
+        func whenReady() {
+            guard machine.state == .starting, gen == generation else { trace("released before forward"); return }
+            let ready = !p.provider.switchesInputSource || currentID() == p.voiceID
             let waited = Date().timeIntervalSince(start)
             if (ready && waited >= p.holdDelay) || waited >= maxSwitchWait {
                 if !ready { trace("input source not ready after \(Int(waited * 1000))ms, sending anyway") }
-                sendKey()
+                run(.keySent)
             } else {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) { forwardWhenReady() }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) { whenReady() }
             }
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) { forwardWhenReady() }
-        return false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) { whenReady() }
     }
 
-    func released() -> Bool {
-        if passthrough { passthrough = false; trace("up: pass through"); return true }
-        let p = plan
-        record.releasedAt = Date()
-        enterPhase("waiting for text")
-        if forwarded { endVoice(); forwarded = false; trace("forward end (\(p.style))") }
-        if !p.provider.switchesInputSource {   // nothing to switch back
-            summary(end: "no switch back needed")
-            report("done", p.voiceName); return false
-        }
-        report("finishing", p.voiceName)
-        restoring = true
-        let gen = generation, released = record.releasedAt!
+    /// Watch the voice window: when it goes (plus a short grace), or the wait runs out, the text is in.
+    func waitForText() {
+        let p = plan, gen = generation, released = record.releasedAt ?? Date()
         var windowGone: Date?
-        func restoreWhenDone() {
-            guard gen == generation else { return }
+        func poll() {
+            guard gen == generation, machine.state == .waitingForText else { return }
             let waited = Date().timeIntervalSince(released)
             if voicePIDs.isEmpty { voicePIDs = p.provider.processIDs() }   // released before the key was sent
             let visible = onScreenWindows(of: voicePIDs).busy
@@ -226,26 +227,31 @@ final class Engine {
             if record.sawWindow && windowGone == nil && visible == false { windowGone = Date(); record.windowGoneMs = ms(since: released); mark("window gone") }
             let graceDone = windowGone.map { Date().timeIntervalSince($0) >= capsuleGrace } ?? false
             guard graceDone || waited >= (record.sawWindow ? p.restoreTimeout : p.fallbackDelay) else {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { restoreWhenDone() }; return
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { poll() }; return
             }
-            restoring = false
-            guard currentID() == p.voiceID, let prev = previous else {
-                summary(end: "input source already changed, not switched back")
-                report("done", ""); return
-            }
-            summary(end: "back after \(String(format: "%.2f", waited))s")
-            switchTo(prev, "restore")
-            report("done", L("等上屏 \(String(format: "%.1f", waited)) 秒，已切回 \(voiceProvider(for: prev).name)", "waited \(String(format: "%.1f", waited))s for the text, back to \(voiceProvider(for: prev).name)"))
+            self.waited = waited
+            run(.textDone)
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { restoreWhenDone() }
-        return false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { poll() }
+    }
+
+    /// The dictation is over: write its line; an input method also switches back to where you were.
+    func finish() {
+        let p = plan
+        guard p.provider.switchesInputSource else { summary(end: "no switch back needed"); report("done", p.voiceName); return }
+        guard currentID() == p.voiceID, let prev = previous else {
+            summary(end: "input source already changed, not switched back"); report("done", ""); return
+        }
+        summary(end: "back after \(String(format: "%.2f", waited))s")
+        switchTo(prev, "restore")
+        report("done", L("等上屏 \(String(format: "%.1f", waited)) 秒，已切回 \(voiceProvider(for: prev).name)", "waited \(String(format: "%.1f", waited))s for the text, back to \(voiceProvider(for: prev).name)"))
     }
 
     /// While the talk key is held: is the voice tool listening, and is its window up? Sampled every half
     /// second off the main thread (CoreAudio and the window list are slow for a key tap); release keeps the last.
     func sampleWhileHeld(gen: Int, after delay: Double) {
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [self] in
-            guard forwarded, gen == generation else { return }
+            guard machine.state == .listening, gen == generation else { return }
             let pids = voicePIDs, watched = plan.provider.switchesInputSource
             DispatchQueue.global(qos: .utility).async {
                 let mic = (micInUse(by: pids), micInUse(by: nil))
@@ -288,7 +294,7 @@ final class Engine {
         guard downNow != physicalDown else { return }
         log("trigger is \(downNow ? "down" : "up") but we had it \(physicalDown ? "down" : "up"): catching up")
         physicalDown = downNow
-        if !downNow && active && !plan.toggle { active = false; _ = released() }
+        if !downNow && machine.isActive && !plan.toggle { run(.release) }
     }
 
     func handle(_ type: CGEventType, _ event: CGEvent) -> Unmanaged<CGEvent>? {
@@ -309,10 +315,8 @@ final class Engine {
         guard !paused else { return Unmanaged.passUnretained(event) }
         if type == .keyUp, code == swallowUp { swallowUp = nil; return nil }
         // Toggle session running: any other key stops it, and is not typed (Return must not send a message).
-        if active && p.toggle && p.stopOnAnyKey && type == .keyDown && code != p.trigger.code {
-            trace("stopped by another key")
-            active = false; swallowUp = code; _ = released()
-            return nil
+        if machine.isActive && p.toggle && p.stopOnAnyKey && type == .keyDown && code != p.trigger.code {
+            return run(.otherKey, keyCode: code) ? Unmanaged.passUnretained(event) : nil
         }
         let trigger = p.trigger
         guard code == trigger.code else { return Unmanaged.passUnretained(event) }
@@ -330,18 +334,10 @@ final class Engine {
         }
         // A release whose press we never saw (the tap was off): not ours to swallow, or the key stays down for everyone.
         if !down && !physicalDown { return Unmanaged.passUnretained(event) }
-        var pass = passthrough
-        if down != physicalDown { trace("trigger \(down ? "down" : "up") (session \(self.active ? "running" : "idle"), \(p.toggle ? "toggle" : "hold"))") }
-        if down && !physicalDown {
-            physicalDown = true
-            if !active { active = true; pass = pressed() }                    // hold or toggle: start
-            else if p.toggle { active = false; pass = released() }            // toggle: second tap stops
-        } else if !down && physicalDown {
-            physicalDown = false
-            if active && !p.toggle { active = false; pass = released() }      // hold: release stops
-            else if p.toggle { pass = false }
-        }
-        return pass ? Unmanaged.passUnretained(event) : nil   // key repeats while held are swallowed too
+        // A repeat while held: the tool's own key keeps its repeats, ours are swallowed.
+        if down == physicalDown { return machine.state == .passthrough ? Unmanaged.passUnretained(event) : nil }
+        physicalDown = down
+        return run(down ? .press : .release) ? Unmanaged.passUnretained(event) : nil
     }
 
     func isPress(_ type: CGEventType, _ event: CGEvent, _ key: KeySpec) -> Bool {

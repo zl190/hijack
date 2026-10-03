@@ -1,5 +1,6 @@
 #!/bin/sh
 # Regenerate docs/diagrams from the code. Same commit in, same diagrams out.
+#   states  — the state machine's transition function, enumerated by the tests (states.mmd).
 #   classes — SwiftPlantUML reads Sources/ (config: .swiftplantuml.yml); PlantUML renders it.
 #     · No --sdk: with it, SourceKit can't resolve types declared in other files and prints them as "_".
 #     · Member types come from the declarations, so stored properties spell out their type (`var x: Bool = false`).
@@ -11,7 +12,7 @@ cd "$(dirname "$0")/.."
 JAR="${PLANTUML_JAR:-$HOME/.local/share/plantuml/plantuml.jar}"
 OUT=docs/diagrams
 mkdir -p "$OUT"
-swiftplantuml classdiagram Sources --output consoleOnly > "$OUT/classes.puml"
+swiftplantuml classdiagram Sources Sources/Core --output consoleOnly > "$OUT/classes.puml"
 python3 - "$OUT/classes.puml" <<'PY'
 import re, sys
 path = sys.argv[1]
@@ -36,3 +37,5 @@ print(f'{len(edges)} has-a edges')
 PY
 java -Djava.awt.headless=true -jar "$JAR" -tsvg "$OUT/classes.puml" 2>/dev/null
 echo "wrote $OUT/classes.puml $OUT/classes.svg"
+HIJACK_UPDATE_DIAGRAMS=1 swift test --filter testStateDiagramIsCurrent >/dev/null
+echo "wrote $OUT/states.mmd"

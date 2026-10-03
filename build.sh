@@ -7,7 +7,7 @@ cd "$(dirname "$0")"
 VERSION="${HIJACK_VERSION:-$(cat VERSION)}"
 APP=build/Hijack.app
 rm -rf build && mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-swiftc -O -target arm64-apple-macos13 Sources/*.swift -o "$APP/Contents/MacOS/Hijack"
+swiftc -O -target arm64-apple-macos13 Sources/*.swift Sources/Core/*.swift -o "$APP/Contents/MacOS/Hijack"
 # App icon: the layered Icon Composer icon (Liquid Glass, Default/Dark/Clear/Tinted) needs Xcode's actool,
 # which also writes a flat Hijack.icns for older macOS. Command Line Tools alone: flat icon from the PNG.
 if xcrun --find actool >/dev/null 2>&1; then

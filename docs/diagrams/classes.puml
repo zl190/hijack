@@ -25,6 +25,44 @@ class "AppState" as AppState << (S, SkyBlue) struct >> {
   ~{static} write(trusted:tapActive:)
   ~{static} read() 
 }
+class "SessionState" as SessionState << (E, LightSteelBlue) enum >> { 
+  ~idle
+  ~passthrough
+  ~starting
+  ~listening
+  ~waitingForText 
+}
+class "SessionEvent" as SessionEvent << (E, LightSteelBlue) enum >> { 
+  ~press
+  ~release
+  ~otherKey
+  ~keySent
+  ~textDone 
+}
+class "SessionMode" as SessionMode << (S, SkyBlue) struct >> { 
+  ~toggle : Bool
+  ~switchesInput : Bool
+  ~passthrough : Bool 
+}
+class "SessionEffect" as SessionEffect << (E, LightSteelBlue) enum >> { 
+  ~passKey
+  ~swallowKey
+  ~swallowKeyAndItsRelease
+  ~finishPrevious
+  ~begin
+  ~switchToVoice
+  ~scheduleTalkKey
+  ~sendTalkKey
+  ~releaseTalkKey
+  ~waitForText
+  ~finish 
+}
+class "SessionMachine" as SessionMachine << (S, SkyBlue) struct >> { 
+  ~state : SessionState
+  ~isActive : Bool
+  ~handle(_:_:)
+  ~{static} transition(_:_:_:) 
+}
 class "Mod" as Mod << (E, LightSteelBlue) enum >> { 
   ~ctrl
   ~option
@@ -87,12 +125,13 @@ class "Engine" as Engine << (C, DarkSeaGreen) >> {
   ~previous : String?
   ~generation : Int
   ~physicalDown : Bool
-  ~forwarded : Bool
-  ~passthrough : Bool
+  ~machine : SessionMachine
+  ~mode : SessionMode
   ~record : DictationRecord
-  ~restoring : Bool
+  ~waited : TimeInterval
+  ~voicePIDs : [pid_t]
   ~tap : CFMachPort?
-  ~active : Bool
+  ~span : (id: OSSignpostID, dictation: OSSignpostIntervalState, phase: (name: StaticString, state: OSSignpostIntervalState))?
   ~swallowUp : Int?
   ~paused : Bool
   ~waitingReported : Bool
@@ -104,9 +143,15 @@ class "Engine" as Engine << (C, DarkSeaGreen) >> {
   ~post(_:down:)
   ~postModifier(_:down:held:)
   ~ms(since:)
+  ~beginDictation()
+  ~enterPhase(_:)
+  ~endDictation()
+  ~mark(_:)
   ~sendKey()
-  ~pressed()
-  ~released()
+  ~run(_:keyCode:)
+  ~scheduleTalkKey()
+  ~waitForText()
+  ~finish()
   ~sampleWhileHeld(gen:after:)
   ~summary(end:)
   ~reconcile()
@@ -251,6 +296,44 @@ class "AppDelegate" as AppDelegate << (C, DarkSeaGreen) >> {
   ~openConfig()
   ~openAccessibility() 
 }
+class "SessionState" as SessionState0 << (E, LightSteelBlue) enum >> { 
+  ~idle
+  ~passthrough
+  ~starting
+  ~listening
+  ~waitingForText 
+}
+class "SessionEvent" as SessionEvent1 << (E, LightSteelBlue) enum >> { 
+  ~press
+  ~release
+  ~otherKey
+  ~keySent
+  ~textDone 
+}
+class "SessionMode" as SessionMode2 << (S, SkyBlue) struct >> { 
+  ~toggle : Bool
+  ~switchesInput : Bool
+  ~passthrough : Bool 
+}
+class "SessionEffect" as SessionEffect3 << (E, LightSteelBlue) enum >> { 
+  ~passKey
+  ~swallowKey
+  ~swallowKeyAndItsRelease
+  ~finishPrevious
+  ~begin
+  ~switchToVoice
+  ~scheduleTalkKey
+  ~sendTalkKey
+  ~releaseTalkKey
+  ~waitForText
+  ~finish 
+}
+class "SessionMachine" as SessionMachine4 << (S, SkyBlue) struct >> { 
+  ~state : SessionState
+  ~isActive : Bool
+  ~handle(_:_:)
+  ~{static} transition(_:_:_:) 
+}
 class "Name" as Notification.Name << (X, Orchid) extension >> { 
   ~{static} hijackActivity 
 }
@@ -266,6 +349,8 @@ DictationRecord --> WindowState : heldWindow
 Engine --> DictationRecord : record
 Engine --> Model : m
 Engine --> Plan : plan
+Engine --> SessionMachine : machine
+Engine --> SessionMode : mode
 InputMethodProvider --> KeySpec : reader
 KeySpec --> Mod : mods
 KeySpec --> NamedKey : named
@@ -274,6 +359,8 @@ Model --> KeySpec : customTrigger, detectedVoiceKey, forwardKey, trigger, userVo
 Model --> VoiceProvider : provider
 Plan --> KeySpec : forwardKey, trigger
 Plan --> VoiceProvider : provider
+SessionMachine --> SessionState : state
+SessionMachine4 --> SessionState : state
 SettingsStore --> Engine : engine
 SettingsStore --> KeySpec : effectiveTrigger, trigger, voiceKeyForCurrent
 SettingsStore --> Model : model

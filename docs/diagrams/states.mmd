@@ -1,0 +1,22 @@
+stateDiagram-v2
+  [*] --> idle
+  idle --> starting: press [按住 / 按住·同键 / 免按]<br/>begin, switchToVoice, scheduleTalkKey
+  idle --> passthrough: press [按住·同键]
+  idle --> starting: press [按住·app / 免按·app]<br/>begin, scheduleTalkKey
+  passthrough --> idle: release [按住·同键]
+  starting --> waitingForText: press [免按]<br/>waitForText
+  starting --> idle: press [免按·app]<br/>finish
+  starting --> waitingForText: release [按住 / 按住·同键]<br/>waitForText
+  starting --> idle: release [按住·app]<br/>finish
+  starting --> waitingForText: otherKey [免按]<br/>swallowKeyAndItsRelease, waitForText
+  starting --> idle: otherKey [免按·app]<br/>swallowKeyAndItsRelease, finish
+  starting --> listening: keySent<br/>sendTalkKey
+  listening --> waitingForText: press [免按]<br/>releaseTalkKey, waitForText
+  listening --> idle: press [免按·app]<br/>releaseTalkKey, finish
+  listening --> waitingForText: release [按住 / 按住·同键]<br/>releaseTalkKey, waitForText
+  listening --> idle: release [按住·app]<br/>releaseTalkKey, finish
+  listening --> waitingForText: otherKey [免按]<br/>swallowKeyAndItsRelease, releaseTalkKey, waitForText
+  listening --> idle: otherKey [免按·app]<br/>swallowKeyAndItsRelease, releaseTalkKey, finish
+  waitingForText --> starting: press [按住 / 按住·同键 / 免按]<br/>finishPrevious, begin, switchToVoice, scheduleTalkKey
+  waitingForText --> passthrough: press [按住·同键]<br/>finishPrevious
+  waitingForText --> idle: textDone [按住 / 按住·同键 / 免按]<br/>finish
