@@ -21,6 +21,7 @@ text, write the summary). `docs/diagrams/states.mmd` is generated from the same 
 before the machine). `otherKey` — another key while a toggle session runs and "any key stops" is on.
 `keySent` — the switch is ready, send the talk key. `textDone` — the voice window went (or the wait timed out).
 `switchFailed` — the input source did not switch within `maxSwitchWait`: the talk key stays unsent (FM-05).
+`quit` — the app is quitting: stop now and release the talk key if it was sent, skipping `waitingForText` (FM-10).
 
 ## Acceptance (EARS)
 
@@ -35,3 +36,4 @@ before the machine). `otherKey` — another key while a toggle session runs and 
 9. When the shortcut is released in `passthrough`, it shall go to `idle` and pass the key.
 10. Every state shall have an outcome for every event (no undefined transitions).
 11. When `switchFailed` arrives in `starting`, it shall go to `idle` and finish without sending the talk key; elsewhere `switchFailed` shall change nothing.
+12. When `quit` arrives in `starting` or `listening`, it shall go to `idle` and release the talk key only if it was sent (`listening`), without waiting for text; elsewhere `quit` shall change nothing.

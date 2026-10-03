@@ -101,6 +101,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return false
     }
 
+    // FM-10 at the source: a clean quit (menu Quit, ⌘Q, SIGTERM via main.swift) must release a held talk
+    // key before the process exits, not rely on the next launch's clearStuckModifier() to find it stuck.
+    func applicationWillTerminate(_ n: Notification) {
+        engine.stopForQuit()
+    }
+
     // Menu bar icon + Dock icon follow the config.
     func applyAppearance() {
         updateIcon()

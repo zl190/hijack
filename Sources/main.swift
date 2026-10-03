@@ -16,4 +16,13 @@ let app = NSApplication.shared
 let delegate = AppDelegate()
 app.delegate = delegate
 app.setActivationPolicy(.accessory)
+
+// SIGTERM (launchd stop, `kill`, a relaunch during an update) must still run applicationWillTerminate,
+// so a held talk key gets released (FM-10). SIG_IGN first: DispatchSource only sees the signal once the
+// default disposition is ignored (dispatch/source.h).
+signal(SIGTERM, SIG_IGN)
+let sigtermSource = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
+sigtermSource.setEventHandler { NSApp.terminate(nil) }
+sigtermSource.resume()
+
 app.run()

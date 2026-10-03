@@ -149,6 +149,27 @@ final class HCIFaultsTests: XCTestCase {
         XCTAssertEqual(r.keys.posted.count, 0)
     }
 
+    // FM-10 at the source: quitting while a session is active must release the talk key before the process
+    // exits, synchronously (no waitingForText poll — there is no time left for one). AppDelegate.applicationWillTerminate
+    // calls engine.stopForQuit(), the same Engine path used by stopStuckSession and reconcileAfterWake.
+    func testStopForQuit_ListeningReleasesTheTalkKeyOnce() {
+        let r = Rig()
+        r.pressUntilListening()
+        r.engine.stopForQuit()
+        XCTAssertEqual(r.keys.count(Rig.fn, down: false), 1, "exactly one release")
+        XCTAssertEqual(r.engine.machine.state, .idle)
+    }
+
+    // Out-of-range: nothing active (idle) when the app quits, so nothing is posted.
+    func testStopForQuit_IdleDoesNothing() {
+        let r = Rig()
+        let tracesBefore = r.sink.traces.count
+        r.engine.stopForQuit()
+        XCTAssertEqual(r.sink.traces.count, tracesBefore, "run() must not be called when nothing is active")
+        XCTAssertEqual(r.engine.machine.state, .idle)
+        XCTAssertEqual(r.keys.posted.count, 0)
+    }
+
     // FM-09: the probe reads the tool's mic "off" for >= 1s while the key is held; "Try it" must say so.
     // (The first sample fires 0.3s after the talk key goes out, itself ~0.2s (holdDelay) after the press.)
     func testFM09_MicOffForASecondReportsNotListening() {

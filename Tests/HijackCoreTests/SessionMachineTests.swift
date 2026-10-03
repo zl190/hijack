@@ -113,6 +113,16 @@ final class SessionMachineTests: XCTestCase {
             XCTAssertEqual(t(s, .switchFailed, hold).1, [], "\(s)")
         }
     }
+    // 12
+    func testQuitStopsImmediatelyWithoutWaitingForText() {
+        XCTAssertEqual(t(.listening, .quit, hold).0, .idle)
+        XCTAssertEqual(t(.listening, .quit, hold).1, [.releaseTalkKey], "release the sent key, no waitForText")
+        XCTAssertEqual(t(.starting, .quit, hold).0, .idle)
+        XCTAssertEqual(t(.starting, .quit, hold).1, [], "never sent, so nothing to release")
+        // Out-of-range: idle has nothing active, quit posts nothing and stays put.
+        XCTAssertEqual(t(.idle, .quit, hold).0, .idle)
+        XCTAssertEqual(t(.idle, .quit, hold).1, [])
+    }
 
     func testStateDiagramIsCurrent() throws {
         // Configurations. "Same key": the shortcut is the talk key, so a press passes through whenever the voice

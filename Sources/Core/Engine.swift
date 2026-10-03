@@ -374,6 +374,14 @@ final class Engine {
         // without this the next real press reads as a repeat of a press that never happened, and is swallowed.
     }
 
+    /// The app is quitting (AppDelegate.applicationWillTerminate, or SIGTERM routed through it): a held
+    /// talk key must not outlive the process (FM-10, at the source). No restore-input-source wait — the
+    /// process exits right after this call, so `.quit` goes straight to idle instead of `waitingForText`.
+    func stopForQuit() {
+        guard machine.isActive else { return }
+        run(.quit)
+    }
+
     /// Re-enable the tap and check that it took (FM-02). One retry on the next run-loop turn; state.json tells the menu.
     func reenableTap(_ why: String) {
         guard tap.trusted else {   // Accessibility was revoked while running (FM-24): re-enabling can't work
