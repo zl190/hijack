@@ -38,7 +38,7 @@ func spaced(_ s: String) -> String {
 
 let logURL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/\(appName).log")
 func log(_ msg: String) {
-    let f = DateFormatter(); f.dateFormat = "HH:mm:ss.SSS"
+    let f = DateFormatter(); f.dateFormat = "MM-dd HH:mm:ss.SSS"
     let line = "\(f.string(from: Date())) \(msg)\n"
     if let h = try? FileHandle(forWritingTo: logURL) { h.seekToEndOfFile(); h.write(line.data(using: .utf8)!); try? h.close() }
     else { try? line.write(to: logURL, atomically: true, encoding: .utf8) }

@@ -51,6 +51,7 @@ protocol VoiceProvider {
     var readsSettings: Bool { get }         // detected() comes from its own settings, not a built-in guess
     func detected() -> (key: KeySpec?, style: String?)
     func isBusy() -> Bool?                  // its voice UI is on screen; nil = can't tell
+    func windowReport() -> String           // what isBusy() saw, for the log when no window showed up
 }
 
 struct InputMethodProvider: VoiceProvider {
@@ -79,6 +80,15 @@ struct InputMethodProvider: VoiceProvider {
         let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
         return list.contains { pids.contains(($0[kCGWindowOwnerPID as String] as? Int32) ?? -1) }
     }
+    func windowReport() -> String {
+        guard let bundle = source(sourceID).flatMap({ prop($0, kTISPropertyBundleID) }) else { return "no bundle id for \(sourceID)" }
+        let owners = Set([bundle] + helpers)
+        let pids = NSWorkspace.shared.runningApplications.filter { owners.contains($0.bundleIdentifier ?? "") }.map(\.processIdentifier)
+        guard !pids.isEmpty else { return "no running process for \(owners.sorted().joined(separator: ","))" }
+        let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
+        let mine = list.filter { pids.contains(($0[kCGWindowOwnerPID as String] as? Int32) ?? -1) }.count
+        return "pids \(pids.map(String.init).joined(separator: ",")) have \(mine) on-screen windows (of \(list.count))"
+    }
 }
 
 struct AppProvider: VoiceProvider {
@@ -96,6 +106,7 @@ struct AppProvider: VoiceProvider {
     var readsSettings: Bool { reader != nil }
     func detected() -> (key: KeySpec?, style: String?) { (reader?(), nil) }
     func isBusy() -> Bool? { nil }
+    func windowReport() -> String { "an app: its window isn't watched" }
 }
 
 // Handy: settings_store.json, bindings.transcribe.current_binding like "option_left+space".

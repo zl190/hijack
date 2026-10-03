@@ -1,6 +1,7 @@
 import AppKit
 import ApplicationServices
 import Carbon
+import CoreAudio
 import ServiceManagement
 
 // MARK: key handling
@@ -14,6 +15,8 @@ final class Engine {
     var passthrough = false
     var pressedAt = Date()
     var sawWindow = false   // the voice method showed a window during this press
+    var echoed = false      // our own posted talk key came back through the tap (it was really posted)
+    var micOn: Bool?        // the microphone was running while the talk key was held; nil = can't tell
     var tap: CFMachPort?
 
     var trigger = KeySpec(code: 61)   // snapshot per session, so a config change mid-session can't strand it
@@ -77,7 +80,7 @@ final class Engine {
     func pressed() -> Bool {
         generation += 1
         pressedAt = Date()
-        sawWindow = false
+        sawWindow = false; echoed = false; micOn = nil
         let cur = currentID()
         if !m.provider.switchesInputSource {   // a voice app: no input-source switch, just press its key
             if trigger == m.forwardKey && !m.toggleMode && m.voiceStyle == "hold" { passthrough = true; log("down: trigger is \(m.voiceName)'s own key, pass through"); return true }
@@ -110,6 +113,7 @@ final class Engine {
                 startVoice()
                 report("listening", m.voiceName)
                 log("forward \(m.forwardKey.name) start (\(m.voiceStyle)) after \(Int(waited * 1000))ms ready=\(ready) \(focusDesc())")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [self] in if gen == generation { micOn = micRunning() } }
             } else {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) { forwardWhenReady() }
             }
@@ -137,6 +141,9 @@ final class Engine {
             }
             guard currentID() == m.voiceID, let prev = previous else { report("done", ""); return }
             log("restore after \(Int(waited * 1000))ms, held \(Int(released.timeIntervalSince(pressedAt)))s, \(focusDesc())")
+            // Which step failed when no voice window showed: the key never went out (echo), the voice tool
+            // didn't start (mic), or it started and we didn't see its window (window report).
+            log("check: echo \(echoed ? "seen" : "missing"), mic \(micOn.map { $0 ? "on" : "off" } ?? "unknown"), window \(sawWindow ? "seen" : "missing: " + m.provider.windowReport())")
             switchTo(prev, "restore")
             report("done", L("等上屏 \(String(format: "%.1f", waited)) 秒，已切回 \(voiceProvider(for: prev).name)", "waited \(String(format: "%.1f", waited))s for the text, back to \(voiceProvider(for: prev).name)"))
         }
@@ -150,7 +157,11 @@ final class Engine {
             if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
             return Unmanaged.passUnretained(event)
         }
-        guard !paused, event.getIntegerValueField(.eventSourceUserData) != marker else { return Unmanaged.passUnretained(event) }
+        if event.getIntegerValueField(.eventSourceUserData) == marker {
+            if Int(event.getIntegerValueField(.keyboardEventKeycode)) == m.forwardKey.code { echoed = true }
+            return Unmanaged.passUnretained(event)
+        }
+        guard !paused else { return Unmanaged.passUnretained(event) }
         let code = Int(event.getIntegerValueField(.keyboardEventKeycode))
         if type == .keyUp, code == swallowUp { swallowUp = nil; return nil }
         // Toggle session running: any other key stops it, and is not typed (Return must not send a message).
@@ -198,7 +209,15 @@ final class Engine {
             tap: .cghidEventTap, place: .headInsertEventTap, options: .defaultTap,
             eventsOfInterest: CGEventMask(1 << CGEventType.flagsChanged.rawValue | 1 << CGEventType.keyDown.rawValue | 1 << CGEventType.keyUp.rawValue),
             callback: { _, type, event, ctx in
-                Unmanaged<Engine>.fromOpaque(ctx!).takeUnretainedValue().handle(type, event)
+                // Slow taps get disabled by the system, and other apps' taps see keys late: log where the time went.
+                let entered = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
+                let queued = entered > event.timestamp ? Double(entered - event.timestamp) / 1e6 : 0
+                let result = Unmanaged<Engine>.fromOpaque(ctx!).takeUnretainedValue().handle(type, event)
+                let spent = Double(clock_gettime_nsec_np(CLOCK_UPTIME_RAW) - entered) / 1e6
+                if queued > 100 || spent > 100 {
+                    log("slow key event: waited \(Int(queued))ms for the main thread, handled in \(Int(spent))ms (type \(type.rawValue), key \(event.getIntegerValueField(.keyboardEventKeycode)))")
+                }
+                return result
             }, userInfo: me)
         else { AppState.write(trusted: true, tapActive: false); DispatchQueue.main.asyncAfter(deadline: .now() + 1) { self.start() }; return }
         self.tap = tap
@@ -207,6 +226,18 @@ final class Engine {
         AppState.write(trusted: true, tapActive: true)
         log("started: trigger \(m.trigger.name), forward \(m.forwardKey.name), voice \(m.voiceID)")
     }
+}
+
+/// The default input device is in use by some process (the voice tool listening). nil = can't tell.
+func micRunning() -> Bool? {
+    var dev = AudioDeviceID(0), size = UInt32(MemoryLayout<AudioDeviceID>.size)
+    var addr = AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyDefaultInputDevice,
+                                          mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+    guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &addr, 0, nil, &size, &dev) == noErr, dev != 0 else { return nil }
+    var running = UInt32(0); size = UInt32(MemoryLayout<UInt32>.size)
+    addr.mSelector = kAudioDevicePropertyDeviceIsRunningSomewhere
+    guard AudioObjectGetPropertyData(dev, &addr, 0, nil, &size, &running) == noErr else { return nil }
+    return running != 0
 }
 
 extension Notification.Name { static let hijackActivity = Notification.Name("HijackActivity") }

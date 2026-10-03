@@ -17,6 +17,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Pick up icon/Dock changes made from the CLI or a hand edit.
         Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in Config.shared.reload(); self?.applyAppearance() }
         engine.start()
+        // Sleep, wake and lock land in the log, to line them up with a session that stops working.
+        let ws = NSWorkspace.shared.notificationCenter
+        for (name, text) in [(NSWorkspace.willSleepNotification, "system sleep"), (NSWorkspace.didWakeNotification, "system wake"),
+                             (NSWorkspace.screensDidSleepNotification, "screens sleep"), (NSWorkspace.screensDidWakeNotification, "screens wake"),
+                             (NSWorkspace.sessionDidResignActiveNotification, "session inactive"), (NSWorkspace.sessionDidBecomeActiveNotification, "session active")] {
+            ws.addObserver(forName: name, object: nil, queue: .main) { _ in log(text) }
+        }
         // Reopens Hijack after an installer replaces it (brew can't: its install sandbox denies launching apps).
         // The system keeps the plist from registration time, so re-register when the bundled one changes.
         let plist = "com.zl190.hijack.relauncher.plist"
