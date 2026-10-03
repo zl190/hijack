@@ -399,10 +399,14 @@ final class Engine {
     /// talk key must not outlive the process (FM-10, at the source). No restore-input-source wait — the
     /// process exits right after this call, so `.quit` goes straight to idle instead of `waitingForText`.
     func stopForQuit() {
-        guard machine.isActive else { return }
+        // S2: one log line either way, so a field log can show whether a quit released a key.
+        guard machine.isActive else { log("quit: nothing held"); return }
+        let releasing = machine.state == .listening   // the only state where a talk key was actually sent
+        let key = plan.forwardKey.logID
         quitting = true
         run(.quit)
         quitting = false
+        log(releasing ? "quit: released \(key)" : "quit: nothing held")
     }
 
     /// Re-enable the tap and check that it took (FM-02). One retry on the next run-loop turn; state.json tells the menu.

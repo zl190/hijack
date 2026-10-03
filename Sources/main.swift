@@ -26,12 +26,17 @@ let delegate = AppDelegate()
 app.delegate = delegate
 app.setActivationPolicy(.accessory)
 
-// SIGTERM (launchd stop, `kill`, a relaunch during an update) must still run applicationWillTerminate,
-// so a held talk key gets released (FM-10). SIG_IGN first: DispatchSource only sees the signal once the
-// default disposition is ignored (dispatch/source.h).
-signal(SIGTERM, SIG_IGN)
-let sigtermSource = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
-sigtermSource.setEventHandler { NSApp.terminate(nil) }
-sigtermSource.resume()
+// SIGTERM (launchd stop, `kill`, a relaunch during an update), SIGINT (Ctrl-C on a binary run from a
+// terminal) and SIGHUP must all still run applicationWillTerminate, so a held talk key gets released
+// (FM-10, S2). SIG_IGN first, for each: DispatchSource only sees the signal once the default disposition
+// is ignored (dispatch/source.h). Kept in a global array: each source needs a strong reference for the
+// process lifetime, same as the single sigtermSource before it.
+let quitSignalSources: [DispatchSourceSignal] = [SIGTERM, SIGINT, SIGHUP].map { sig in
+    signal(sig, SIG_IGN)
+    let source = DispatchSource.makeSignalSource(signal: sig, queue: .main)
+    source.setEventHandler { NSApp.terminate(nil) }
+    source.resume()
+    return source
+}
 
 app.run()

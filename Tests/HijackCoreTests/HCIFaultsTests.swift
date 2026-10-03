@@ -221,6 +221,29 @@ final class HCIFaultsTests: XCTestCase {
         XCTAssertEqual(r.engine.machine.state, .passthrough, "unchanged")
     }
 
+    // S2 (docs/review-4/hardening-review.md): a quit must leave one log line saying whether it released a
+    // key — a field log otherwise cannot show that a quit cleaned something up.
+    func testStopForQuit_LogsWhatItReleased() {
+        let r = Rig()
+        r.pressUntilListening()
+        r.engine.stopForQuit()
+        XCTAssertTrue(r.sink.has("quit: released \(Rig.fn.logID)"), r.sink.lines.last ?? "nil")
+    }
+    func testStopForQuit_LogsNothingHeldWhenIdle() {
+        let r = Rig()
+        r.engine.stopForQuit()
+        XCTAssertTrue(r.sink.has("quit: nothing held"), r.sink.lines.last ?? "nil")
+    }
+    // Out-of-range: isActive (starting) but the talk key was never sent yet — still "nothing held", not
+    // "released", since endVoice()/releaseTalkKey never ran.
+    func testStopForQuit_LogsNothingHeldWhenStartingBeforeTheKeyWasSent() {
+        let r = Rig()
+        r.press()
+        XCTAssertEqual(r.engine.machine.state, .starting, "setup")
+        r.engine.stopForQuit()
+        XCTAssertTrue(r.sink.has("quit: nothing held"), r.sink.lines.last ?? "nil")
+    }
+
     // FM-09: the probe reads the tool's mic "off" for >= 1s while the key is held; "Try it" must say so.
     // (The first sample fires 0.3s after the talk key goes out, itself ~0.2s (holdDelay) after the press.)
     func testFM09_MicOffForASecondReportsNotListening() {
