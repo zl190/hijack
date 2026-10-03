@@ -342,6 +342,13 @@ final class Engine {
         log("cleared a stuck \(key.name)")
     }
 
+    /// Stop a session the menu finds still active with the physical key already up (FM-01, FM-04, FM-25):
+    /// the same stop path `reconcileAfterWake` uses after sleep or unlock.
+    func stopStuckSession() {
+        guard machine.isActive else { return }
+        run(plan.toggle ? .press : .release)
+    }
+
     /// Re-enable the tap and check that it took (FM-02). One retry on the next run-loop turn; state.json tells the menu.
     func reenableTap(_ why: String) {
         guard tap.trusted else {   // Accessibility was revoked while running (FM-24): re-enabling can't work

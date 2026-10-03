@@ -140,15 +140,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let c = m.c, name = m.voiceName, key = m.trigger.name
 
         // Status — derived from the same state the engine uses. At most one fault line replaces the normal
-        // status line (docs/hci-review-faults.md §3.2): a dead key listener first. "No Accessibility" is
-        // checked first; it already has its own line and is the more fundamental cause when both are true.
-        let fault = MenuFaults.firstLine(tapActive: engine.tap.isEnabled)
+        // status line (docs/hci-review-faults.md §3.2): a dead key listener first, then a stuck session.
+        // "No Accessibility" is checked first; it already has its own line and is the more fundamental
+        // cause when both are true.
+        let stillHolding = (engine.machine.isActive && !engine.physicalDown) ? m.forwardKey.name : nil
+        let fault = MenuFaults.firstLine(tapActive: engine.tap.isEnabled, stillHoldingTalkKey: stillHolding)
         if !AXIsProcessTrusted() {
             add(L("⚠︎ 需要辅助功能权限，点这里去允许…", "⚠︎ Needs Accessibility permission — Allow…"), #selector(openAccessibility))
         } else if let fault {
             switch fault {
             case .keyListenerOff:
                 add(L("⚠︎ 系统关掉了按键监听，快捷键无效，点这里重新打开 Hijack", "⚠︎ macOS turned off the key listener; the shortcut does nothing — Reopen Hijack"), #selector(relaunchApp))
+            case .stillHolding(let talkKey):
+                add(L("⚠︎ Hijack 还按着\(talkKey)，点这里松开", "⚠︎ Hijack is still holding \(talkKey) — Release"), #selector(releaseStuckSession))
             }
         } else if m.toggleMode {
             add(L("点按\(key)用\(name)听写", "Tap \(key) to dictate with \(name)"))
@@ -281,4 +285,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: NSWorkspace.OpenConfiguration()) { _, _ in }
         NSApp.terminate(nil)
     }
+
+    // FM-01, FM-04, FM-25: the engine still thinks a session is active, but the physical key is already up.
+    @objc func releaseStuckSession() { engine.stopStuckSession() }
 }

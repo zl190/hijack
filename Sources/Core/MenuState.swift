@@ -15,8 +15,15 @@ enum IconState: Equatable {
 /// time; more cases join this enum as the rest of the HCI review's items land.
 enum MenuFault: Equatable {
     case keyListenerOff
+    case stillHolding(talkKey: String)   // a session the engine thinks is active, with the physical key already up
 }
 
 enum MenuFaults {
-    static func firstLine(tapActive: Bool) -> MenuFault? { tapActive ? nil : .keyListenerOff }
+    /// `tapActive` false wins first (nothing works until it's fixed); a stuck session is next, since it
+    /// traps the user's next press.
+    static func firstLine(tapActive: Bool, stillHoldingTalkKey: String? = nil) -> MenuFault? {
+        if !tapActive { return .keyListenerOff }
+        if let talkKey = stillHoldingTalkKey { return .stillHolding(talkKey: talkKey) }
+        return nil
+    }
 }
