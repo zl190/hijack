@@ -64,6 +64,7 @@ final class Engine {
 
     var swallowUp: Int?               // key that stopped a toggle session: also eat its key-up
     var paused: Bool = false                // the settings window is recording a key: let every key through
+    var forwardKeyEdgeSeen: Bool = false    // an edge of the talk key came through the tap since start (S2)
     var waitingReported: Bool = false
 
     init(plan: @escaping () -> Plan, deps: Deps) {
@@ -320,8 +321,11 @@ final class Engine {
     }
 
     /// The forward key as the system has it. A crash while the talk key was held leaves it down (FM-10).
+    /// Runs 1 s after the tap starts. The system state cannot tell a stuck key from a key the user holds:
+    /// an edge of the key through the tap in that second means a hand is on it, so nothing is posted.
+    /// Limit: a user who holds the talk key for more than 1 s across a launch gets one release posted.
     func clearStuckModifier() {
-        guard !physicalDown else { return }
+        guard !physicalDown, !forwardKeyEdgeSeen else { return }
         let key = plan.forwardKey
         let down = key.modifierOnly ? key.named?.flag.map { tap.modifierIsDown($0) } ?? false : tap.keyIsDown(key.code)
         guard down else { return }
@@ -356,6 +360,7 @@ final class Engine {
         }
         let p = plan
         let code = input.code
+        if code == p.forwardKey.code, !input.ours { forwardKeyEdgeSeen = true }
         if input.ours {
             // Our own talk key came back through our tap: it was posted. Count only its press.
             if code == p.forwardKey.code, record.echoMs == nil, isPress(input, p.forwardKey) { record.echoMs = ms(since: record.pressedAt); mark("echo") }
@@ -410,7 +415,8 @@ final class Engine {
         let on = tap.isEnabled
         sink.state(trusted: true, tapActive: on)
         if !on { log("event tap installed but not enabled") }
-        clearStuckModifier()
+        forwardKeyEdgeSeen = false
+        clock.after(1) { [self] in clearStuckModifier() }
         log("started: trigger \(plan.trigger.name), forward \(plan.forwardKey.name), voice \(plan.voiceID)")
     }
 }
