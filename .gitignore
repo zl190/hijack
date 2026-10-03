@@ -8,3 +8,5 @@ dist/
 briefs/
 handoff.yaml
 RESUME.md
+.sparkle/
+dist-test/
