@@ -172,6 +172,7 @@ class "Engine" as Engine << (C, DarkSeaGreen) >> {
   ~span : (id: OSSignpostID, dictation: OSSignpostIntervalState, phase: (name: StaticString, state: OSSignpostIntervalState))?
   ~swallowUp : Int?
   ~paused : Bool
+  ~forwardKeyEdgeSeen : Bool
   ~waitingReported : Bool
   ~init(plan:deps:)
   ~log(_:)
@@ -196,6 +197,10 @@ class "Engine" as Engine << (C, DarkSeaGreen) >> {
   ~sampleWhileHeld(gen:after:)
   ~summary(end:)
   ~reconcile()
+  ~sleptAt : Date?
+  ~lockedAt : Date?
+  ~systemWillSleep()
+  ~screenLocked()
   ~reconcileAfterWake(_:)
   ~clearStuckModifier()
   ~reenableTap(_:)
@@ -203,6 +208,9 @@ class "Engine" as Engine << (C, DarkSeaGreen) >> {
   ~isPress(_:_:)
   ~start()
   ~{static} live() <&bolt> 
+}
+class "Wake" as Engine.Wake << (E, LightSteelBlue) enum >> { 
+  ~systemWake 
 }
 class "KeyInput" as KeyInput << (S, SkyBlue) struct >> { 
   ~kind : Kind
@@ -314,12 +322,9 @@ class "SessionMachine" as SessionMachine << (S, SkyBlue) struct >> {
   ~{static} transition(_:_:_:) 
 }
 class "SettingsWatch" as SettingsWatch << (C, DarkSeaGreen) >> { 
-  ~folders : [String]
   ~roots : [String]
+  ~isWatching : Bool
   ~init(paths:latency:onChange:)
-  ~counts(_:)
-  ~{static} resolve(_:)
-  ~{static} nearestExisting(_:)
   ~deinit 
 }
 class "Config" as Config << (C, DarkSeaGreen) >> { 
@@ -571,6 +576,7 @@ class "Engine" as Engine11 << (C, DarkSeaGreen) >> {
   ~span : (id: OSSignpostID, dictation: OSSignpostIntervalState, phase: (name: StaticString, state: OSSignpostIntervalState))?
   ~swallowUp : Int?
   ~paused : Bool
+  ~forwardKeyEdgeSeen : Bool
   ~waitingReported : Bool
   ~init(plan:deps:)
   ~log(_:)
@@ -595,6 +601,10 @@ class "Engine" as Engine11 << (C, DarkSeaGreen) >> {
   ~sampleWhileHeld(gen:after:)
   ~summary(end:)
   ~reconcile()
+  ~sleptAt : Date?
+  ~lockedAt : Date?
+  ~systemWillSleep()
+  ~screenLocked()
   ~reconcileAfterWake(_:)
   ~clearStuckModifier()
   ~reenableTap(_:)
@@ -602,23 +612,26 @@ class "Engine" as Engine11 << (C, DarkSeaGreen) >> {
   ~isPress(_:_:)
   ~start() 
 }
-class "KeyInput" as KeyInput12 << (S, SkyBlue) struct >> { 
+class "Wake" as Engine.Wake12 << (E, LightSteelBlue) enum >> { 
+  ~systemWake 
+}
+class "KeyInput" as KeyInput13 << (S, SkyBlue) struct >> { 
   ~kind : Kind
   ~code : Int
   ~flags : CGEventFlags
   ~ours : Bool 
 }
-class "Kind" as KeyInput.Kind13 << (E, LightSteelBlue) enum >> { 
+class "Kind" as KeyInput.Kind14 << (E, LightSteelBlue) enum >> { 
   ~keyDown 
 }
-class "WindowState" as WindowState14 << (E, LightSteelBlue) enum >> { 
+class "WindowState" as WindowState15 << (E, LightSteelBlue) enum >> { 
   ~visible(_:)
   ~none(_:)
   ~unknown(_:)
   ~busy : Bool?
   ~text : String 
 }
-class "Deps" as Deps15 << (S, SkyBlue) struct >> { 
+class "Deps" as Deps16 << (S, SkyBlue) struct >> { 
   ~keys : KeyPoster
   ~sources : InputSources
   ~tap : TapControl
@@ -626,7 +639,7 @@ class "Deps" as Deps15 << (S, SkyBlue) struct >> {
   ~clock : Scheduler
   ~sink : Sink 
 }
-class "DictationEntry" as DictationEntry16 << (S, SkyBlue) struct >> { 
+class "DictationEntry" as DictationEntry17 << (S, SkyBlue) struct >> { 
   ~day : String
   ~tool : String
   ~toggle : Bool
@@ -639,21 +652,21 @@ class "DictationEntry" as DictationEntry16 << (S, SkyBlue) struct >> {
   ~secureInput : Bool
   ~{static} parse(_:) 
 }
-class "Outcome" as DictationEntry.Outcome17 << (E, LightSteelBlue) enum >> { 
+class "Outcome" as DictationEntry.Outcome18 << (E, LightSteelBlue) enum >> { 
   ~textArrived
   ~noWindow
   ~interrupted
   ~unverified
   ~tooShort 
 }
-class "Cause" as DictationEntry.Cause18 << (E, LightSteelBlue) enum >> { 
+class "Cause" as DictationEntry.Cause19 << (E, LightSteelBlue) enum >> { 
   ~keyNotSent
   ~toolDidntListen
   ~windowNotSeen
   ~unknown
   ~sourceNotSwitched 
 }
-class "DictationStats" as DictationStats19 << (S, SkyBlue) struct >> { 
+class "DictationStats" as DictationStats20 << (S, SkyBlue) struct >> { 
   ~dictations : Int
   ~outcomes : [DictationEntry.Outcome: Int]
   ~causes : [DictationEntry.Cause: Int]
@@ -671,14 +684,14 @@ class "DictationStats" as DictationStats19 << (S, SkyBlue) struct >> {
   ~successRate : Double?
   ~{static} compute(lines:days:today:) 
 }
-class "SessionState" as SessionState20 << (E, LightSteelBlue) enum >> { 
+class "SessionState" as SessionState21 << (E, LightSteelBlue) enum >> { 
   ~idle
   ~passthrough
   ~starting
   ~listening
   ~waitingForText 
 }
-class "SessionEvent" as SessionEvent21 << (E, LightSteelBlue) enum >> { 
+class "SessionEvent" as SessionEvent22 << (E, LightSteelBlue) enum >> { 
   ~press
   ~release
   ~otherKey
@@ -686,12 +699,12 @@ class "SessionEvent" as SessionEvent21 << (E, LightSteelBlue) enum >> {
   ~textDone
   ~switchFailed 
 }
-class "SessionMode" as SessionMode22 << (S, SkyBlue) struct >> { 
+class "SessionMode" as SessionMode23 << (S, SkyBlue) struct >> { 
   ~toggle : Bool
   ~switchesInput : Bool
   ~passthrough : Bool 
 }
-class "SessionEffect" as SessionEffect23 << (E, LightSteelBlue) enum >> { 
+class "SessionEffect" as SessionEffect24 << (E, LightSteelBlue) enum >> { 
   ~passKey
   ~swallowKey
   ~swallowKeyAndItsRelease
@@ -704,19 +717,16 @@ class "SessionEffect" as SessionEffect23 << (E, LightSteelBlue) enum >> {
   ~waitForText
   ~finish 
 }
-class "SessionMachine" as SessionMachine24 << (S, SkyBlue) struct >> { 
+class "SessionMachine" as SessionMachine25 << (S, SkyBlue) struct >> { 
   ~state : SessionState
   ~isActive : Bool
   ~handle(_:_:)
   ~{static} transition(_:_:_:) 
 }
-class "SettingsWatch" as SettingsWatch25 << (C, DarkSeaGreen) >> { 
-  ~folders : [String]
+class "SettingsWatch" as SettingsWatch26 << (C, DarkSeaGreen) >> { 
   ~roots : [String]
+  ~isWatching : Bool
   ~init(paths:latency:onChange:)
-  ~counts(_:)
-  ~{static} resolve(_:)
-  ~{static} nearestExisting(_:)
   ~deinit 
 }
 class "Name" as Notification.Name << (X, Orchid) extension >> { 
@@ -733,12 +743,14 @@ Scheduler <|.. LiveScheduler
 Sink <|.. LiveSink
 VoiceProvider <|.. InputMethodProvider
 VoiceProvider <|.. AppProvider
+Engine +-- Engine.Wake
 KeyInput +-- KeyInput.Kind
 DictationEntry +-- DictationEntry.Outcome
 DictationEntry +-- DictationEntry.Cause
-KeyInput12 +-- KeyInput.Kind13
-DictationEntry16 +-- DictationEntry.Outcome17
-DictationEntry16 +-- DictationEntry.Cause18
+Engine11 +-- Engine.Wake12
+KeyInput13 +-- KeyInput.Kind14
+DictationEntry17 +-- DictationEntry.Outcome18
+DictationEntry17 +-- DictationEntry.Cause19
 
 ' HAS-A (derived from member types)
 AppDelegate --> Engine : engine
@@ -752,16 +764,16 @@ Deps --> Probes : probes
 Deps --> Scheduler : clock
 Deps --> Sink : sink
 Deps --> TapControl : tap
-Deps15 --> InputSources : sources
-Deps15 --> KeyPoster : keys
-Deps15 --> Probes : probes
-Deps15 --> Scheduler : clock
-Deps15 --> Sink : sink
-Deps15 --> TapControl : tap
+Deps16 --> InputSources : sources
+Deps16 --> KeyPoster : keys
+Deps16 --> Probes : probes
+Deps16 --> Scheduler : clock
+Deps16 --> Sink : sink
+Deps16 --> TapControl : tap
 DictationRecord --> WindowState : heldWindow
 DictationRecord10 --> WindowState : heldWindow
 DictationStats --> DictationEntry : causes, outcomes
-DictationStats19 --> DictationEntry : causes, outcomes
+DictationStats20 --> DictationEntry : causes, outcomes
 Engine --> DictationRecord : record
 Engine --> InputSources : sources
 Engine --> KeyPoster : keys
@@ -794,7 +806,7 @@ Model --> VoiceProvider : provider
 Plan --> KeySpec : forwardKey, trigger
 Plan9 --> KeySpec : forwardKey, trigger
 SessionMachine --> SessionState : state
-SessionMachine24 --> SessionState : state
+SessionMachine25 --> SessionState : state
 SettingsStore --> Engine : engine
 SettingsStore --> KeySpec : effectiveTrigger, trigger, voiceKeyForCurrent
 SettingsStore --> Model : model
