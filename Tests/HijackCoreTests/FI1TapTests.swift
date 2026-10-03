@@ -31,17 +31,19 @@ final class FI1TapTests: XCTestCase {
     }
 
     // FM-02: the re-enable does not take; one retry on the next turn, state.json shows both.
+    // Review-4 S5: the tap callback writes no file. Both state writes happen on the next turn.
     func testFM02_FailedReenableIsRetriedAndReported() {
         let r = Rig()
+        let before = r.sink.states.count
         r.tap.enabled = false; r.tap.enableFails = 1
         _ = r.engine.handle(KeyInput(kind: .tapDisabledByTimeout))
         XCTAssertFalse(r.tap.isEnabled)
         XCTAssertTrue(r.sink.has("re-enable failed, retrying"))
-        XCTAssertEqual(r.sink.states.last.map { [$0.trusted, $0.tapActive] }, [true, false])
+        XCTAssertEqual(r.sink.states.count, before, "no state.json write inside the tap callback")
         r.clock.advance(0)
         XCTAssertTrue(r.tap.isEnabled)
         XCTAssertTrue(r.sink.has("re-enabled on retry"))
-        XCTAssertEqual(r.sink.states.last.map { [$0.trusted, $0.tapActive] }, [true, true])
+        XCTAssertEqual(r.sink.states.dropFirst(before).map { [$0.trusted, $0.tapActive] }, [[true, false], [true, true]])
     }
 
     // FM-02, the normal case: re-enabled at once, one log line, no state change.

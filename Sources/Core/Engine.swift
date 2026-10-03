@@ -350,8 +350,8 @@ final class Engine {
             log("event tap was disabled by the system (\(why)), re-enabled")
         } else {
             log("event tap was disabled by the system (\(why)), re-enable failed, retrying")
-            sink.state(trusted: true, tapActive: false)
-            clock.after(0) { [self] in
+            clock.after(0) { [self] in              // off the tap callback: state.json is file I/O (review-4 S5)
+                sink.state(trusted: true, tapActive: false)
                 tap.enable()
                 let ok = tap.isEnabled
                 sink.state(trusted: true, tapActive: ok)
