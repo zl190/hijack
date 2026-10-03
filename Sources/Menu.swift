@@ -47,6 +47,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         // The icon follows the key listener / Accessibility state even while no menu is open (§3.1).
         NotificationCenter.default.addObserver(forName: .hijackStateChanged, object: nil, queue: .main) { [weak self] _ in self?.updateIcon() }
+        // Secure Input can only be read live (Accessibility's own); keep state.json fresh at the one other
+        // natural moment besides a menu open — the end of a dictation (docs/hci-review-faults.md §5 item 4).
+        NotificationCenter.default.addObserver(forName: .hijackActivity, object: nil, queue: .main) { [weak self] n in
+            if (n.userInfo?["phase"] as? String) == "done" { self?.writeSecureInputState() }
+        }
         // Reopens Hijack after an installer replaces it (brew can't: its install sandbox denies launching apps).
         // The system keeps the plist from registration time, so re-register when the bundled one changes.
         let plist = "com.zl190.hijack.relauncher.plist"
@@ -122,6 +127,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         it.button?.image = icon
     }
 
+    /// Secure Input (Carbon's own call) at the two moments state.json is refreshed for it: a menu open, and
+    /// the end of a dictation. The CLI reads it from there — see the comment on `AppState.secureInput`.
+    func writeSecureInputState() {
+        let on = engine.tap.secureInputOn
+        AppState.write(trusted: AXIsProcessTrusted(), tapActive: engine.tap.isEnabled,
+                       secureInput: on, secureInputApp: on ? NSWorkspace.shared.frontmostApplication?.localizedName : nil)
+    }
+
     // Rebuilt every time it opens, so it always shows the live state.
     // Layout: status · how you dictate (mode, shortcut) · dictation source (+ its key, its start style) · app.
     func menuNeedsUpdate(_ menu: NSMenu) {
@@ -139,12 +152,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         let c = m.c, name = m.voiceName, key = m.trigger.name
 
+        // Refresh state.json for Secure Input here too, so a CLI check right after the user looks is fresh.
+        writeSecureInputState()
+
         // Status — derived from the same state the engine uses. At most one fault line replaces the normal
-        // status line (docs/hci-review-faults.md §3.2): a dead key listener first, then a stuck session.
-        // "No Accessibility" is checked first; it already has its own line and is the more fundamental
-        // cause when both are true.
+        // status line (docs/hci-review-faults.md §3.2): a dead key listener first, then a stuck session,
+        // then Secure Input. "No Accessibility" is checked first; it already has its own line and is the
+        // more fundamental cause when both are true.
         let stillHolding = (engine.machine.isActive && !engine.physicalDown) ? m.forwardKey.name : nil
-        let fault = MenuFaults.firstLine(tapActive: engine.tap.isEnabled, stillHoldingTalkKey: stillHolding)
+        let secureApp = engine.tap.secureInputOn ? (NSWorkspace.shared.frontmostApplication?.localizedName ?? L("另一个 app", "Another app")) : nil
+        let fault = MenuFaults.firstLine(tapActive: engine.tap.isEnabled, stillHoldingTalkKey: stillHolding, secureInputApp: secureApp)
         if !AXIsProcessTrusted() {
             add(L("⚠︎ 需要辅助功能权限，点这里去允许…", "⚠︎ Needs Accessibility permission — Allow…"), #selector(openAccessibility))
         } else if let fault {
@@ -153,6 +170,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 add(L("⚠︎ 系统关掉了按键监听，快捷键无效，点这里重新打开 Hijack", "⚠︎ macOS turned off the key listener; the shortcut does nothing — Reopen Hijack"), #selector(relaunchApp))
             case .stillHolding(let talkKey):
                 add(L("⚠︎ Hijack 还按着\(talkKey)，点这里松开", "⚠︎ Hijack is still holding \(talkKey) — Release"), #selector(releaseStuckSession))
+            case .secureInput(let app):
+                add(L("⚠︎ \(app)开着安全输入（常见于密码框），关掉前快捷键无效", "⚠︎ \(app) has Secure Input on (often a password field). The shortcut won't work until it's off"))
             }
         } else if m.toggleMode {
             add(L("点按\(key)用\(name)听写", "Tap \(key) to dictate with \(name)"))

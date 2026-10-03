@@ -27,6 +27,21 @@ final class MenuStateTests: XCTestCase {
     func testStillHoldingShowsWhenKeyListenerIsFine() {
         XCTAssertEqual(MenuFaults.firstLine(tapActive: true, stillHoldingTalkKey: "Fn"), .stillHolding(talkKey: "Fn"))
     }
+
+    // FM-03: shows alone when it's the only thing wrong.
+    func testSecureInputShowsAlone() {
+        XCTAssertEqual(MenuFaults.firstLine(tapActive: true, secureInputApp: "Terminal"), .secureInput(app: "Terminal"))
+    }
+
+    // A stuck session outranks Secure Input (it traps the very next press).
+    func testStillHoldingWinsOverSecureInput() {
+        XCTAssertEqual(MenuFaults.firstLine(tapActive: true, stillHoldingTalkKey: "Fn", secureInputApp: "Terminal"), .stillHolding(talkKey: "Fn"))
+    }
+
+    // A dead key listener wins over both of the others at once.
+    func testKeyListenerOffWinsOverEverything() {
+        XCTAssertEqual(MenuFaults.firstLine(tapActive: false, stillHoldingTalkKey: "Fn", secureInputApp: "Terminal"), .keyListenerOff)
+    }
 }
 
 final class HCIFaultsTests: XCTestCase {

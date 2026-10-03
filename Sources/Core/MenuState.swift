@@ -12,18 +12,20 @@ enum IconState: Equatable {
 }
 
 /// One fault the menu can show as its first line, in place of the normal status line. Only one shows at a
-/// time; more cases join this enum as the rest of the HCI review's items land.
+/// time.
 enum MenuFault: Equatable {
     case keyListenerOff
     case stillHolding(talkKey: String)   // a session the engine thinks is active, with the physical key already up
+    case secureInput(app: String)
 }
 
 enum MenuFaults {
-    /// `tapActive` false wins first (nothing works until it's fixed); a stuck session is next, since it
-    /// traps the user's next press.
-    static func firstLine(tapActive: Bool, stillHoldingTalkKey: String? = nil) -> MenuFault? {
+    /// `tapActive` false wins first (nothing works until it's fixed). Then a stuck session, which traps the
+    /// user's next press. Then Secure Input, which only blocks the next dictation.
+    static func firstLine(tapActive: Bool, stillHoldingTalkKey: String? = nil, secureInputApp: String? = nil) -> MenuFault? {
         if !tapActive { return .keyListenerOff }
         if let talkKey = stillHoldingTalkKey { return .stillHolding(talkKey: talkKey) }
+        if let app = secureInputApp { return .secureInput(app: app) }
         return nil
     }
 }
