@@ -10,6 +10,9 @@ RELEASE_SIGN_ID = $(if $(strip $(SIGN_ID)),$(SIGN_ID),Hijack Signing)
 VERSION := $(shell cat VERSION)
 APP     := build/Hijack.app
 ZIP     := build/Hijack.zip
+# Sparkle tools; build.sh extracts them with the framework.
+SPARKLE_BIN ?= .sparkle/bin
+RELEASE_URL := https://github.com/zl190/hijack/releases/download/v$(VERSION)/
 # TAP_DIR: path to the zl190/homebrew-tap checkout. Override for a different layout.
 TAP_DIR ?= ../homebrew-tap
 
@@ -36,8 +39,8 @@ install: build
 	echo "Hijack installed. Allow it in System Settings > Privacy & Security > Accessibility."
 
 # Publish the GitHub release and bump the Homebrew cask. Run on the maintainer's Mac only.
-# Order: run the tests, check that HEAD is the tag, check the draft tag, check the signing identity, build, zip, sign for Sparkle,
-# write the appcast, upload the assets, publish the release, bump the cask.
+# Order: run the tests, check that HEAD is the tag, check the draft tag, check the signing identity and the Sparkle public key,
+# build, zip, write and sign the appcast, upload the assets, publish the release, bump the cask.
 release: test
 	@git describe --tags --exact-match HEAD 2>/dev/null | grep -qx "v$(VERSION)" || { \
 		echo "HEAD is not tagged v$(VERSION). Check out the tag before you release."; exit 1; \
@@ -57,11 +60,24 @@ release: test
 	@security find-certificate -c "$(RELEASE_SIGN_ID)" >/dev/null 2>&1 || { \
 		echo "Signing identity '$(RELEASE_SIGN_ID)' is not in the keychain."; exit 1; \
 	}
+	@grep -q '^REPLACE-' assets/sparkle-public-key.txt && { \
+		echo "assets/sparkle-public-key.txt is the placeholder. Run generate_keys and paste the public key."; exit 1; \
+	} || true
 	HIJACK_SIGN_ID="$(RELEASE_SIGN_ID)" ./build.sh
 	ditto -c -k --keepParent $(APP) $(ZIP)
-	# T3: sign_update
-	# T3: generate_appcast + upload appcast.xml
-	gh release upload "v$(VERSION)" $(ZIP) --clobber
+	# Sparkle: one archive per version in dist/ (older zips stay there, out of git). generate_appcast reads
+	# the .md next to the zip as release notes, signs the archive with the EdDSA key from the keychain,
+	# and writes dist/appcast.xml. The release asset keeps the name Hijack.zip (the cask URL), so the
+	# enclosure URL is rewritten from Hijack-$(VERSION).zip to Hijack.zip.
+	mkdir -p dist
+	cp $(ZIP) dist/Hijack-$(VERSION).zip
+	cp release-notes/v$(VERSION).md dist/Hijack-$(VERSION).md
+	$(SPARKLE_BIN)/generate_appcast --download-url-prefix "$(RELEASE_URL)" dist
+	@grep -q 'sparkle:edSignature=' dist/appcast.xml || { \
+		echo "dist/appcast.xml has no EdDSA signature. Is the Sparkle key in the keychain?"; exit 1; \
+	}
+	sed -i '' 's|/Hijack-$(VERSION)\.zip"|/Hijack.zip"|' dist/appcast.xml
+	gh release upload "v$(VERSION)" $(ZIP) dist/appcast.xml --clobber
 	gh release edit "v$(VERSION)" --draft=false
 	@sha="$$(shasum -a 256 $(ZIP) | awk '{print $$1}')"; \
 	sed -i '' -e "s/version \"[^\"]*\"/version \"$(VERSION)\"/" \
