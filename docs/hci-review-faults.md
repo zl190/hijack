@@ -166,6 +166,25 @@ The task allows a notification only for S=5 rows: FM-01, FM-02 and FM-10.
    - When Hijack starts and releases a stuck modifier, `hijack status` shall print "last start      released a stuck <key>" until the next start.
    - The Troubleshooting section of `docs/usage.md` shall give the manual step for a stuck modifier after Hijack quits.
 
+## 5a. Decision (owner, 2026-10-03)
+
+Rule used: a surface that says something false must change. A fault with no signal from any other party, where the documented path leads the user wrong, must get a signal. The rest is optional and goes in only when it adds no main-thread work.
+
+| Item | Decision | Why |
+|---|---|---|
+| 1, menu line + true `hijack status` / `doctor` | In. Required | The menu and the CLI say the shortcut works when it does not |
+| 1, icon "Off" state | In | Changes at most twice per launch. No main-thread cost |
+| 1, user notification | Out | The user finds out at the next press. The menu line then names the step |
+| 2, icon "Active" state | Out | The voice tool's own window already shows listening. An icon change on each talk-key edge adds main-thread work (FM-26) |
+| 2, "still holding" menu line | In | Cheap. It appears only when `reconcile` finds the key up and a session active |
+| 3, the two false "Try it" texts | In. Required | "正在听…" with nobody listening and "已切回" before the check are false |
+| 3, cause table in "Try it", menu, status | Out | Optional. Trigger to revisit: seven days of `hijack stats` on 1.1.4 |
+| 4, Secure Input menu line + status line | In | One call when the menu opens. Without it the documented path points to Accessibility, which is wrong |
+| 5, `usage.md` manual step | In. Required | FMEA action 1 covers only the case where Hijack starts again |
+| 5, `hijack status` "last start" line | Out | Optional |
+
+Acceptance lines for the items that are in stay as written in §5. The icon has two states: Idle and Off.
+
 ## 6. Gaps: what the code alone cannot show
 
 - **Notice times** in §2 are estimates from the effect. No user study or screen recording supports them.
