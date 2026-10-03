@@ -305,9 +305,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // FM-02: the key listener is off and the retry already failed (Engine.reenableTap). Quitting and
     // reopening installs a fresh tap; it is also the fix the menu line and `hijack doctor` give.
+    // openApplication(at:) alone activates the already-running copy instead of starting a new one
+    // (createsNewApplicationInstance defaults to false), so terminating right after it would just quit
+    // Hijack with nothing to reopen it (review-4 M4). A detached `open -b` after this process has exited
+    // starts a fresh one instead.
     @objc func relaunchApp() {
         log("menu: relaunching after the key listener was found off")
-        NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: NSWorkspace.OpenConfiguration()) { _, _ in }
+        let reopen = Process()
+        reopen.executableURL = URL(fileURLWithPath: "/bin/sh")
+        reopen.arguments = ["-c", "sleep 0.5; open -b com.zl190.hijack"]
+        try? reopen.run()
         NSApp.terminate(nil)
     }
 
