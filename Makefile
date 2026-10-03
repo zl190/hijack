@@ -10,8 +10,9 @@ RELEASE_SIGN_ID = $(if $(strip $(SIGN_ID)),$(SIGN_ID),Hijack Signing)
 VERSION := $(shell cat VERSION)
 APP     := build/Hijack.app
 ZIP     := build/Hijack.zip
-# Sparkle tools; build.sh extracts them with the framework.
-SPARKLE_BIN ?= .sparkle/bin
+# Sparkle tools; build.sh extracts them with the framework, one folder per version.
+SPARKLE_VERSION := $(shell sed -n 's/^SPARKLE_VERSION=//p' build.sh)
+SPARKLE_BIN ?= .sparkle/$(SPARKLE_VERSION)/bin
 RELEASE_URL := https://github.com/zl190/hijack/releases/download/v$(VERSION)/
 # TAP_DIR: path to the zl190/homebrew-tap checkout. Override for a different layout.
 TAP_DIR ?= ../homebrew-tap

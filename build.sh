@@ -11,14 +11,19 @@ rm -rf build && mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 # The XPC services are for sandboxed apps only; Hijack is not sandboxed, so they are not copied.
 SPARKLE_VERSION=2.10.0
 SPARKLE_SHA256=c2bf58aa8387266ac179357b1415d6f2635f044da8be41042af32425dae6da0c
-SPARKLE_DIR=.sparkle
-SPARKLE_TAR="$SPARKLE_DIR/Sparkle-$SPARKLE_VERSION.tar.xz"
-if [ ! -d "$SPARKLE_DIR/Sparkle.framework" ]; then
-  mkdir -p "$SPARKLE_DIR"
-  [ -f "$SPARKLE_TAR" ] || curl -fsSL -o "$SPARKLE_TAR" \
+# The cache is one folder per version. The download and the extraction land under temporary names and
+# move into place only when complete, so a stopped build never leaves a half cache that the next build trusts.
+SPARKLE_DIR=".sparkle/$SPARKLE_VERSION"
+if [ ! -d "$SPARKLE_DIR/Sparkle.framework" ] || [ ! -x "$SPARKLE_DIR/bin/generate_appcast" ]; then
+  rm -rf "$SPARKLE_DIR" "$SPARKLE_DIR.part"; mkdir -p "$SPARKLE_DIR.part"
+  SPARKLE_TAR="$SPARKLE_DIR.part/Sparkle-$SPARKLE_VERSION.tar.xz"
+  curl -fsSL -o "$SPARKLE_TAR" \
     "https://github.com/sparkle-project/Sparkle/releases/download/$SPARKLE_VERSION/Sparkle-$SPARKLE_VERSION.tar.xz"
-  echo "$SPARKLE_SHA256  $SPARKLE_TAR" | shasum -a 256 -c - >/dev/null || { echo "Sparkle download does not match the pinned sha256"; exit 1; }
-  tar -xJf "$SPARKLE_TAR" -C "$SPARKLE_DIR" Sparkle.framework bin
+  echo "$SPARKLE_SHA256  $SPARKLE_TAR" | shasum -a 256 -c - >/dev/null \
+    || { rm -rf "$SPARKLE_DIR.part"; echo "Sparkle $SPARKLE_VERSION download does not match the pinned sha256; nothing was kept"; exit 1; }
+  tar -xJf "$SPARKLE_TAR" -C "$SPARKLE_DIR.part" Sparkle.framework bin
+  rm "$SPARKLE_TAR"
+  mv "$SPARKLE_DIR.part" "$SPARKLE_DIR"
 fi
 swiftc -O -target arm64-apple-macos13 -F "$SPARKLE_DIR" -framework Sparkle \
   -Xlinker -rpath -Xlinker @executable_path/../Frameworks \
