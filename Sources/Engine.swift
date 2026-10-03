@@ -3,8 +3,13 @@ import ApplicationServices
 import Carbon
 import CoreAudio
 import ServiceManagement
+import os
 
 // MARK: key handling
+
+/// Timing marks for Instruments (Points of Interest): one interval per dictation, its phases, and key moments.
+/// Free when nothing is recording. `scripts/sequence.sh` turns a recording into the sequence diagram.
+let signposter = OSSignposter(subsystem: "com.zl190.hijack", category: .pointsOfInterest)
 
 /// Everything a session needs from the settings, read off the key tap's path: the settings come from disk
 /// (config file, the voice tool's own settings), and the tap shares the main thread with a timeout.
@@ -52,7 +57,9 @@ final class Engine {
     var passthrough: Bool = false
     var record: DictationRecord = DictationRecord()
     var restoring: Bool = false             // waiting for the text before switching back
+    var voicePIDs: [pid_t] = []             // the voice tool's processes, looked up once per dictation: listing running apps asks other processes, too slow to repeat every 50 ms
     var tap: CFMachPort?
+    var span: (id: OSSignpostID, dictation: OSSignpostIntervalState, phase: (name: StaticString, state: OSSignpostIntervalState))?
 
     var active: Bool = false                // a voice session is running (hold: key held · toggle: between taps)
     var swallowUp: Int?               // key that stopped a toggle session: also eat its key-up
@@ -121,9 +128,29 @@ final class Engine {
 
     func ms(since d: Date) -> Int { Int(Date().timeIntervalSince(d) * 1000) }
 
+    // Phases of one dictation: "starting" (press → talk key sent), "listening" (→ release), "waiting for text" (→ switch back).
+    func beginDictation() {
+        let id = signposter.makeSignpostID()
+        span = (id, signposter.beginInterval("dictation", id: id), ("starting", signposter.beginInterval("starting", id: id)))
+    }
+    func enterPhase(_ name: StaticString) {
+        guard let s = span else { return }
+        signposter.endInterval(s.phase.name, s.phase.state)
+        span?.phase = (name, signposter.beginInterval(name, id: s.id))
+    }
+    func endDictation() {
+        guard let s = span else { return }
+        signposter.endInterval(s.phase.name, s.phase.state)
+        signposter.endInterval("dictation", s.dictation)
+        span = nil
+    }
+    func mark(_ name: StaticString) { if let s = span { signposter.emitEvent(name, id: s.id) } }
+
     func sendKey() {
         forwarded = true
+        voicePIDs = plan.provider.processIDs()
         record.keySentMs = ms(since: record.pressedAt)
+        enterPhase("listening"); mark("talk key sent")
         startVoice()
         sampleWhileHeld(gen: generation, after: 0.3)
         report("listening", plan.voiceName)
@@ -136,9 +163,11 @@ final class Engine {
         generation += 1
         record = DictationRecord()
         let p = plan, gen = generation
+        voicePIDs = []
         if !p.provider.switchesInputSource {   // a voice app: no input-source switch, just press its key
             if p.trigger == p.forwardKey && !p.toggle && p.style == "hold" { passthrough = true; trace("down: trigger is \(p.voiceName)'s own key, pass through"); return true }
             passthrough = false
+            beginDictation()
             trace("down: \(p.voiceName)")
             DispatchQueue.main.asyncAfter(deadline: .now() + p.holdDelay) { [self] in
                 guard active, gen == generation else { trace("released before forward"); return }
@@ -152,6 +181,7 @@ final class Engine {
             passthrough = true; trace("down: already voice IME, pass through"); return true
         }
         passthrough = false
+        beginDictation()
         if let cur, cur != p.voiceID { previous = cur }
         trace("down: \(cur ?? "?")")
         // After the tap returns: nothing slow inside the tap, every tap after ours would wait for it.
@@ -177,6 +207,7 @@ final class Engine {
         if passthrough { passthrough = false; trace("up: pass through"); return true }
         let p = plan
         record.releasedAt = Date()
+        enterPhase("waiting for text")
         if forwarded { endVoice(); forwarded = false; trace("forward end (\(p.style))") }
         if !p.provider.switchesInputSource {   // nothing to switch back
             summary(end: "no switch back needed")
@@ -189,9 +220,10 @@ final class Engine {
         func restoreWhenDone() {
             guard gen == generation else { return }
             let waited = Date().timeIntervalSince(released)
-            let visible = p.provider.isBusy()
+            if voicePIDs.isEmpty { voicePIDs = p.provider.processIDs() }   // released before the key was sent
+            let visible = onScreenWindows(of: voicePIDs).busy
             if visible == true { record.sawWindow = true }
-            if record.sawWindow && windowGone == nil && visible == false { windowGone = Date(); record.windowGoneMs = ms(since: released) }
+            if record.sawWindow && windowGone == nil && visible == false { windowGone = Date(); record.windowGoneMs = ms(since: released); mark("window gone") }
             let graceDone = windowGone.map { Date().timeIntervalSince($0) >= capsuleGrace } ?? false
             guard graceDone || waited >= (record.sawWindow ? p.restoreTimeout : p.fallbackDelay) else {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { restoreWhenDone() }; return
@@ -214,8 +246,7 @@ final class Engine {
     func sampleWhileHeld(gen: Int, after delay: Double) {
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [self] in
             guard forwarded, gen == generation else { return }
-            let provider = plan.provider, pids = provider.processIDs()   // input-source lookups: main thread only
-            let watched = provider.switchesInputSource
+            let pids = voicePIDs, watched = plan.provider.switchesInputSource
             DispatchQueue.global(qos: .utility).async {
                 let mic = (micInUse(by: pids), micInUse(by: nil))
                 let window: WindowState = watched ? onScreenWindows(of: pids) : .unknown("an app: its window isn't watched")
@@ -247,6 +278,7 @@ final class Engine {
         if let tap, !CGEvent.tapIsEnabled(tap: tap) { line += ", key tap disabled" }
         if IsSecureEventInputEnabled() { line += ", secure input on" }
         log(line + " | \(frontApp())")
+        endDictation()
     }
 
     /// The tap was off for a while, so key events may have been missed: line our idea of the trigger up with
@@ -262,6 +294,7 @@ final class Engine {
     func handle(_ type: CGEventType, _ event: CGEvent) -> Unmanaged<CGEvent>? {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
             if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
+            signposter.emitEvent("tap disabled")
             log("event tap was disabled by the system (\(type == .tapDisabledByTimeout ? "timeout" : "user input")), re-enabled")
             DispatchQueue.main.async { [self] in reconcile() }
             return Unmanaged.passUnretained(event)
@@ -270,7 +303,7 @@ final class Engine {
         let code = Int(event.getIntegerValueField(.keyboardEventKeycode))
         if event.getIntegerValueField(.eventSourceUserData) == marker {
             // Our own talk key came back through our tap: it was posted. Count only its press.
-            if code == p.forwardKey.code, record.echoMs == nil, isPress(type, event, p.forwardKey) { record.echoMs = ms(since: record.pressedAt) }
+            if code == p.forwardKey.code, record.echoMs == nil, isPress(type, event, p.forwardKey) { record.echoMs = ms(since: record.pressedAt); mark("echo") }
             return Unmanaged.passUnretained(event)
         }
         guard !paused else { return Unmanaged.passUnretained(event) }
@@ -334,7 +367,9 @@ final class Engine {
                 let entered = mach_absolute_time()
                 let age = event.timestamp > 0 && entered > event.timestamp ? ticksToMs(entered - event.timestamp) : 0
                 let engine = Unmanaged<Engine>.fromOpaque(ctx!).takeUnretainedValue()
+                let tapSpan = signposter.beginInterval("key event", id: .exclusive)
                 let result = engine.handle(type, event)
+                signposter.endInterval("key event", tapSpan)
                 let spent = ticksToMs(mach_absolute_time() - entered)
                 if age > 100 || spent > 100 {
                     let code = Int(event.getIntegerValueField(.keyboardEventKeycode))
