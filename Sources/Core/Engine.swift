@@ -173,7 +173,7 @@ final class Engine {
             case .swallowKeyAndItsRelease: pass = false; swallowUp = keyCode
             case .finishPrevious: summary(end: "interrupted by the next press")   // the retry after a failure must not erase it
             case .begin:
-                generation += 1; record = DictationRecord(pressedAt: clock.now); voicePIDs = []; previous = nil; beginDictation()
+                generation += 1; record = DictationRecord(pressedAt: clock.now); voicePIDs = []; beginDictation()
             case .switchToVoice:
                 let cur = sources.current()
                 if let cur, cur != p.voiceID { previous = cur }
@@ -235,9 +235,10 @@ final class Engine {
     /// The dictation is over: write its line; an input method also switches back to where you were.
     func finish() {
         let p = plan
+        let prev = previous; previous = nil     // consumed here, not at .begin: a chained dictation keeps it (FM-17)
         if record.switchFailed { summary(end: "input source never switched"); report("done", ""); return }
         guard p.switchesInput else { summary(end: "no switch back needed"); report("done", p.voiceName); return }
-        guard let prev = previous else { summary(end: "started inside \(p.voiceName), nothing to switch back to"); report("done", p.voiceName); return }
+        guard let prev else { summary(end: "started inside \(p.voiceName), nothing to switch back to"); report("done", p.voiceName); return }
         guard sources.current() == p.voiceID else {
             summary(end: "input source already changed, not switched back"); report("done", ""); return
         }

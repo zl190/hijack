@@ -93,3 +93,20 @@ final class FI2SourcesTests: XCTestCase {
         XCTAssertEqual(r.sources.selected, [])
     }
 }
+
+// FM-17 (review-4 M1): a press while the previous dictation waits for its text. The chain must end where it began.
+extension FI2SourcesTests {
+    func testFM17_ChainedDictationRestoresTheOriginalSource() {
+        let r = Rig(trigger: KeySpec.named("right_option")!)
+        r.pressUntilListening(); r.release()
+        r.clock.advance(0.5)                                    // still waiting for the text
+        XCTAssertEqual(r.engine.machine.state, .waitingForText)
+        r.pressUntilListening(); r.release()
+        r.clock.advance(2.8)
+        XCTAssertEqual(r.engine.machine.state, .idle)
+        XCTAssertEqual(r.sources.currentID, Rig.english, "back where the user was before the first press")
+        XCTAssertEqual(r.sources.selected, [Rig.voice, Rig.english])
+        XCTAssertTrue(r.sink.summaries.first?.contains("interrupted by the next press") == true)
+        XCTAssertTrue(r.sink.summaries.last?.contains("back after") == true, r.sink.summaries.last ?? "")
+    }
+}
