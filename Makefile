@@ -55,6 +55,10 @@ install: build
 release: test release-checks release-assets release-publish cask
 
 release-checks:
+	@dirty="$$(git status --porcelain)"; [ -z "$$dirty" ] || { \
+		echo "The tree has uncommitted changes:"; echo "$$dirty"; \
+		echo "Commit or stash them before you release: the zip must match the tag (review-4 M3)."; exit 1; \
+	}
 	@git describe --tags --exact-match HEAD 2>/dev/null | grep -qx "v$(VERSION)" || { \
 		echo "HEAD is not tagged v$(VERSION). Check out the tag before you release."; exit 1; \
 	}
