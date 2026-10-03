@@ -163,7 +163,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // status line (docs/hci-review-faults.md §3.2): a dead key listener first, then a stuck session,
         // then Secure Input. "No Accessibility" is checked first; it already has its own line and is the
         // more fundamental cause when both are true.
-        let stillHolding = (engine.machine.isActive && !engine.physicalDown) ? m.forwardKey.name : nil
+        let stillHolding = MenuFaults.stillHoldingTalkKey(toggle: engine.plan.toggle, isActive: engine.machine.isActive,
+                                                           keyIsPhysicallyDown: engine.tap.keyIsDown(engine.plan.trigger.code),
+                                                           talkKeyName: engine.plan.forwardKey.name)
         let secureApp = engine.tap.secureInputOn ? (NSWorkspace.shared.frontmostApplication?.localizedName ?? L("另一个 app", "Another app")) : nil
         let fault = MenuFaults.firstLine(tapActive: engine.tap.isEnabled, stillHoldingTalkKey: stillHolding, secureInputApp: secureApp)
         if !AXIsProcessTrusted() {

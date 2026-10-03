@@ -36,4 +36,14 @@ enum MenuFaults {
         if let app = secureInputApp { return .secureInput(app: app) }
         return nil
     }
+
+    /// FM-01, FM-04, FM-25: hold mode only. Toggle mode has the shortcut up for the whole, normal
+    /// dictation (it stops on the next press, not on release) — that is not a fault, so toggle never
+    /// shows this line. `keyIsPhysicallyDown` must be the live key state, not a cached edge flag: a
+    /// missed release leaves a cached flag stuck true, hiding the exact case this line exists for
+    /// (review-4 M3).
+    static func stillHoldingTalkKey(toggle: Bool, isActive: Bool, keyIsPhysicallyDown: Bool, talkKeyName: String) -> String? {
+        guard !toggle, isActive, !keyIsPhysicallyDown else { return nil }
+        return talkKeyName
+    }
 }

@@ -366,6 +366,8 @@ final class Engine {
     func stopStuckSession() {
         guard machine.isActive else { return }
         run(plan.toggle ? .press : .release)
+        physicalDown = tap.keyIsDown(plan.trigger.code)   // resync, as reconcileAfterWake does (review-4 M3):
+        // without this the next real press reads as a repeat of a press that never happened, and is swallowed.
     }
 
     /// Re-enable the tap and check that it took (FM-02). One retry on the next run-loop turn; state.json tells the menu.

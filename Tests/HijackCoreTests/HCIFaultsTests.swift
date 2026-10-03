@@ -55,6 +55,28 @@ final class MenuStateTests: XCTestCase {
     func testKeyListenerOffWinsOverEverything() {
         XCTAssertEqual(MenuFaults.firstLine(tapActive: false, stillHoldingTalkKey: "Fn", secureInputApp: "Terminal"), .keyListenerOff)
     }
+
+    // review-4 M3: the "still holding" condition, moved into Core so it's testable without AppKit.
+    // Toggle mode has the shortcut up for the whole, normal dictation — that is not the fault this line
+    // reports, so toggle never shows it, active or not.
+    func testStillHoldingTalkKey_ToggleActiveShowsNoLine() {
+        XCTAssertNil(MenuFaults.stillHoldingTalkKey(toggle: true, isActive: true, keyIsPhysicallyDown: false, talkKeyName: "Fn"))
+    }
+
+    // Hold mode, active, the live key reads up: this is the exact stuck case (a missed release).
+    func testStillHoldingTalkKey_HoldActiveKeyUpShowsTheLine() {
+        XCTAssertEqual(MenuFaults.stillHoldingTalkKey(toggle: false, isActive: true, keyIsPhysicallyDown: false, talkKeyName: "Fn"), "Fn")
+    }
+
+    // Hold mode, active, the live key still reads down: a normal in-progress dictation, no line.
+    func testStillHoldingTalkKey_HoldActiveKeyDownShowsNoLine() {
+        XCTAssertNil(MenuFaults.stillHoldingTalkKey(toggle: false, isActive: true, keyIsPhysicallyDown: true, talkKeyName: "Fn"))
+    }
+
+    // Not active: never shows, whatever the key state.
+    func testStillHoldingTalkKey_NotActiveShowsNoLine() {
+        XCTAssertNil(MenuFaults.stillHoldingTalkKey(toggle: false, isActive: false, keyIsPhysicallyDown: false, talkKeyName: "Fn"))
+    }
 }
 
 final class HCIFaultsTests: XCTestCase {
@@ -92,6 +114,17 @@ final class HCIFaultsTests: XCTestCase {
         XCTAssertTrue(r.engine.machine.isActive, "setup: still active")
         r.engine.stopStuckSession()
         XCTAssertEqual(r.engine.machine.state, .waitingForText)
+    }
+
+    // review-4 M3: after the stop, physicalDown must match the live key state, or the user's next real
+    // press is read as a repeat of a press that never happened and gets swallowed.
+    func testStopStuckSession_ResyncsPhysicalDownToTheLiveKeyState() {
+        let r = Rig()
+        r.pressUntilListening()
+        r.engine.physicalDown = true   // stale: the tap missed the release, the keyboard already has it up
+        r.tap.keysDown = []             // the live keyboard state: up
+        r.engine.stopStuckSession()
+        XCTAssertFalse(r.engine.physicalDown, "resynced to the live key state, like reconcileAfterWake")
     }
 
     // Toggle mode: the same call presses (stop by press), not releases.
