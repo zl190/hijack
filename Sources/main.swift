@@ -12,6 +12,15 @@ localize = L   // Core (Keys, Engine) speaks the configured language
 // `hijack <command>` runs the CLI and exits; anything else starts the app.
 if let code = runCLI(Array(CommandLine.arguments.dropFirst())) { exit(code) }
 
+// A second launch (double-click, Spotlight, the relauncher after an update) must not install a second
+// event tap. Checked after the CLI dispatch above, so `hijack status` still works while the app runs.
+let myPID = ProcessInfo.processInfo.processIdentifier
+if let other = NSRunningApplication.runningApplications(withBundleIdentifier: "com.zl190.hijack")
+    .first(where: { $0.processIdentifier != myPID }) {
+    log("another Hijack is running (pid \(other.processIdentifier)), exiting")
+    exit(0)
+}
+
 let app = NSApplication.shared
 let delegate = AppDelegate()
 app.delegate = delegate
