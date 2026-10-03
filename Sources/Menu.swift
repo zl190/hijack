@@ -45,6 +45,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 if text == "screen unlocked" { self?.engine.reconcileAfterWake(.screenUnlock) }
             }
         }
+        // The icon follows the key listener / Accessibility state even while no menu is open (§3.1).
+        NotificationCenter.default.addObserver(forName: .hijackStateChanged, object: nil, queue: .main) { [weak self] _ in self?.updateIcon() }
         // Reopens Hijack after an installer replaces it (brew can't: its install sandbox denies launching apps).
         // The system keeps the plist from registration time, so re-register when the bundled one changes.
         let plist = "com.zl190.hijack.relauncher.plist"
@@ -101,19 +103,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc func recordShortcut() { SettingsWindowController.show(tab: 0); SettingsStore.shared.startRecording(.trigger) }
     @objc func recordTalkKey() { SettingsWindowController.show(tab: 1); SettingsStore.shared.startRecording(.voiceKey(m.voiceID)) }
 
+    /// Two icon states only (Idle, Off): §3.1 ruled out a third "Active" state as main-thread cost on every
+    /// talk-key edge (FM-26). Off covers both a dead key listener (FM-02) and missing/revoked Accessibility.
     func updateIcon() {
-        if Config.shared.showMenuBarIcon, item == nil {
-            let it = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-            let icon = Bundle.main.image(forResource: "HijackMenuTemplate")
-                ?? NSImage(systemSymbolName: "mic", accessibilityDescription: appName)
-            icon?.isTemplate = true                  // follows light/dark menu bar
-            icon?.size = NSSize(width: 18, height: 18)
-            it.button?.image = icon
-            it.menu = menu
-            item = it
-        } else if !Config.shared.showMenuBarIcon, let it = item {
-            NSStatusBar.system.removeStatusItem(it); item = nil
+        guard Config.shared.showMenuBarIcon else {
+            if let it = item { NSStatusBar.system.removeStatusItem(it); item = nil }
+            return
         }
+        let it = item ?? NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        if item == nil { it.menu = menu; item = it }
+        let state = IconState.of(trusted: AXIsProcessTrusted(), tapActive: engine.tap.isEnabled)
+        let resource = state == .idle ? "HijackMenuTemplate" : "HijackMenuTemplate-Off"
+        let icon = Bundle.main.image(forResource: resource)
+            ?? NSImage(systemSymbolName: state == .idle ? "mic" : "mic.slash", accessibilityDescription: appName)
+        icon?.isTemplate = true                  // follows light/dark menu bar
+        icon?.size = NSSize(width: 18, height: 18)
+        icon?.accessibilityDescription = state == .idle ? L("Hijack", "Hijack") : L("Hijack：快捷键无效", "Hijack: shortcut not working")
+        it.button?.image = icon
     }
 
     // Rebuilt every time it opens, so it always shows the live state.
@@ -133,9 +139,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         let c = m.c, name = m.voiceName, key = m.trigger.name
 
-        // Status — derived from the same state the engine uses.
+        // Status — derived from the same state the engine uses. At most one fault line replaces the normal
+        // status line (docs/hci-review-faults.md §3.2): a dead key listener first. "No Accessibility" is
+        // checked first; it already has its own line and is the more fundamental cause when both are true.
+        let fault = MenuFaults.firstLine(tapActive: engine.tap.isEnabled)
         if !AXIsProcessTrusted() {
             add(L("⚠︎ 需要辅助功能权限，点这里去允许…", "⚠︎ Needs Accessibility permission — Allow…"), #selector(openAccessibility))
+        } else if let fault {
+            switch fault {
+            case .keyListenerOff:
+                add(L("⚠︎ 系统关掉了按键监听，快捷键无效，点这里重新打开 Hijack", "⚠︎ macOS turned off the key listener; the shortcut does nothing — Reopen Hijack"), #selector(relaunchApp))
+            }
         } else if m.toggleMode {
             add(L("点按\(key)用\(name)听写", "Tap \(key) to dictate with \(name)"))
         } else {
@@ -258,5 +272,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
     @objc func openAccessibility() {
         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+    }
+
+    // FM-02: the key listener is off and the retry already failed (Engine.reenableTap). Quitting and
+    // reopening installs a fresh tap; it is also the fix the menu line and `hijack doctor` give.
+    @objc func relaunchApp() {
+        log("menu: relaunching after the key listener was found off")
+        NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: NSWorkspace.OpenConfiguration()) { _, _ in }
+        NSApp.terminate(nil)
     }
 }

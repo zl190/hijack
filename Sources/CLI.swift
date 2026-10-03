@@ -118,7 +118,7 @@ func cliStatus(json: Bool) -> Int32 {
     print("Hijack \(appVersion) — " + (st.map { "running (pid \($0.pid))" } ?? "not running"))
     if let st {
         print("  accessibility   " + (st.trusted ? "allowed" : "MISSING — System Settings › Privacy & Security › Accessibility"))
-        print("  key listener    " + (st.tapActive ? "active" : "inactive"))
+        print("  key listener    " + (st.tapActive ? "active" : "OFF — macOS turned it off; quit and reopen Hijack"))
     }
     print("  mode            " + (m.toggleMode ? "toggle (tap to start, tap to stop)" : "hold (hold to talk)"))
     print("  shortcut        \(m.trigger.name)" + (c.trigger == nil ? "  (same as talk key)" : ""))
@@ -141,7 +141,7 @@ func cliDoctor() -> Int32 {
     check(st != nil, "Hijack is running", "open /Applications/Hijack.app")
     if let st {
         check(st.trusted, "Accessibility permission granted", "System Settings › Privacy & Security › Accessibility › turn on Hijack")
-        check(st.tapActive, "key listener installed", "grant Accessibility, or quit and reopen Hijack")
+        check(st.tapActive, "key listener installed", "macOS turned it off; quit and reopen Hijack")
     }
     check(p.isInstalled, "voice source \(p.name) is installed", "install it, or `hijack set source <id>` (see `hijack sources`)")
     let found = p.detected().key

@@ -145,7 +145,11 @@ struct LiveSink: Sink {
     func report(_ phase: String, _ detail: String) {
         NotificationCenter.default.post(name: .hijackActivity, object: nil, userInfo: ["phase": phase, "detail": detail])
     }
-    func state(trusted: Bool, tapActive: Bool) { AppState.write(trusted: trusted, tapActive: tapActive) }
+    func state(trusted: Bool, tapActive: Bool) {
+        AppState.write(trusted: trusted, tapActive: tapActive)
+        // The menu bar icon (Idle/Off) follows this even when no menu is open (docs/hci-review-faults.md §3.1).
+        NotificationCenter.default.post(name: .hijackStateChanged, object: nil)
+    }
     func sourceName(_ id: String) -> String { voiceProvider(for: id).name }
 }
 
@@ -190,4 +194,5 @@ func micInUseLive(by pids: [pid_t]?) -> Bool? {
 extension Notification.Name {
     static let hijackActivity = Notification.Name("HijackActivity")
     static let hijackSettingsChanged = Notification.Name("HijackSettingsChanged")
+    static let hijackStateChanged = Notification.Name("HijackStateChanged")   // trusted / tapActive changed
 }

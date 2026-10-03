@@ -344,6 +344,11 @@ final class Engine {
 
     /// Re-enable the tap and check that it took (FM-02). One retry on the next run-loop turn; state.json tells the menu.
     func reenableTap(_ why: String) {
+        guard tap.trusted else {   // Accessibility was revoked while running (FM-24): re-enabling can't work
+            log("event tap disabled (\(why)): Accessibility permission is gone")
+            sink.state(trusted: false, tapActive: false)
+            return
+        }
         tap.enable()
         signposter.emitEvent("tap disabled")
         if tap.isEnabled {
