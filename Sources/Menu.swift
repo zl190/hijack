@@ -2,6 +2,7 @@ import AppKit
 import ApplicationServices
 import Carbon
 import ServiceManagement
+import Sparkle
 
 // MARK: menu (the whole UI)
 
@@ -11,6 +12,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let menu: NSMenu = NSMenu()
     var item: NSStatusItem?
     var watch: SettingsWatch?
+    /// In-app updates (Sparkle). One controller for the app's life; it owns the scheduled check.
+    let updater = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
 
     func applicationDidFinishLaunching(_ n: Notification) {
         logInApp = true
@@ -94,6 +97,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let main = NSMenu(), appItem = NSMenuItem()
         main.addItem(appItem)
         let appMenu = NSMenu()
+        appMenu.addItem(checkForUpdatesItem())
         let settings = NSMenuItem(title: L("设置…", "Settings…"), action: #selector(openSettings), keyEquivalent: ",")
         settings.target = self
         appMenu.addItem(settings)
@@ -109,6 +113,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc func openSettings() { SettingsWindowController.show() }
+    /// Sparkle enables and disables this item itself (it is off while a check runs).
+    func checkForUpdatesItem() -> NSMenuItem {
+        let i = NSMenuItem(title: L("检查更新…", "Check for Updates…"), action: #selector(SPUStandardUpdaterController.checkForUpdates(_:)), keyEquivalent: "")
+        i.target = updater
+        return i
+    }
     @objc func recordShortcut() { SettingsWindowController.show(tab: 0); SettingsStore.shared.startRecording(.trigger) }
     @objc func recordTalkKey() { SettingsWindowController.show(tab: 1); SettingsStore.shared.startRecording(.voiceKey(m.voiceID)) }
 
@@ -247,6 +257,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(.separator())
 
         // Everything set once (login item, icons, language, config file, timings) lives in Settings.
+        menu.addItem(checkForUpdatesItem())
         let settings = add(L("设置…", "Settings…"), #selector(openSettings))
         settings.keyEquivalent = ","; settings.keyEquivalentModifierMask = .command
         if #available(macOS 27.0, *) { settings.preferredImageVisibility = .hidden }   // no auto icon: keep titles aligned
