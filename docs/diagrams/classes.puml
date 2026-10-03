@@ -25,6 +25,50 @@ class "AppState" as AppState << (S, SkyBlue) struct >> {
   ~{static} write(trusted:tapActive:)
   ~{static} read() 
 }
+class "DictationEntry" as DictationEntry << (S, SkyBlue) struct >> { 
+  ~day : String
+  ~tool : String
+  ~toggle : Bool
+  ~heldMs : Int
+  ~sentMs : Int?
+  ~textInMs : Int?
+  ~outcome : Outcome
+  ~cause : Cause?
+  ~tapDisabled : Bool
+  ~secureInput : Bool
+  ~{static} parse(_:) 
+}
+class "Outcome" as DictationEntry.Outcome << (E, LightSteelBlue) enum >> { 
+  ~textArrived
+  ~noWindow
+  ~interrupted
+  ~unverified
+  ~tooShort 
+}
+class "Cause" as DictationEntry.Cause << (E, LightSteelBlue) enum >> { 
+  ~keyNotSent
+  ~toolDidntListen
+  ~windowNotSeen
+  ~unknown 
+}
+class "DictationStats" as DictationStats << (S, SkyBlue) struct >> { 
+  ~dictations : Int
+  ~outcomes : [DictationEntry.Outcome: Int]
+  ~causes : [DictationEntry.Cause: Int]
+  ~tooShort : Int
+  ~sentP50 : Int?
+  ~sentP95 : Int?
+  ~textInP50 : Int?
+  ~textInP95 : Int?
+  ~tapPaused : Int
+  ~slowKeys : Int
+  ~caughtUp : Int
+  ~tools : [String: Int]
+  ~firstDay : String?
+  ~lastDay : String?
+  ~successRate : Double?
+  ~{static} compute(lines:days:today:) 
+}
 class "SessionState" as SessionState << (E, LightSteelBlue) enum >> { 
   ~idle
   ~passthrough
@@ -296,26 +340,70 @@ class "AppDelegate" as AppDelegate << (C, DarkSeaGreen) >> {
   ~openConfig()
   ~openAccessibility() 
 }
-class "SessionState" as SessionState0 << (E, LightSteelBlue) enum >> { 
+class "DictationEntry" as DictationEntry0 << (S, SkyBlue) struct >> { 
+  ~day : String
+  ~tool : String
+  ~toggle : Bool
+  ~heldMs : Int
+  ~sentMs : Int?
+  ~textInMs : Int?
+  ~outcome : Outcome
+  ~cause : Cause?
+  ~tapDisabled : Bool
+  ~secureInput : Bool
+  ~{static} parse(_:) 
+}
+class "Outcome" as DictationEntry.Outcome1 << (E, LightSteelBlue) enum >> { 
+  ~textArrived
+  ~noWindow
+  ~interrupted
+  ~unverified
+  ~tooShort 
+}
+class "Cause" as DictationEntry.Cause2 << (E, LightSteelBlue) enum >> { 
+  ~keyNotSent
+  ~toolDidntListen
+  ~windowNotSeen
+  ~unknown 
+}
+class "DictationStats" as DictationStats3 << (S, SkyBlue) struct >> { 
+  ~dictations : Int
+  ~outcomes : [DictationEntry.Outcome: Int]
+  ~causes : [DictationEntry.Cause: Int]
+  ~tooShort : Int
+  ~sentP50 : Int?
+  ~sentP95 : Int?
+  ~textInP50 : Int?
+  ~textInP95 : Int?
+  ~tapPaused : Int
+  ~slowKeys : Int
+  ~caughtUp : Int
+  ~tools : [String: Int]
+  ~firstDay : String?
+  ~lastDay : String?
+  ~successRate : Double?
+  ~{static} compute(lines:days:today:) 
+}
+class "SessionState" as SessionState4 << (E, LightSteelBlue) enum >> { 
   ~idle
   ~passthrough
   ~starting
   ~listening
   ~waitingForText 
 }
-class "SessionEvent" as SessionEvent1 << (E, LightSteelBlue) enum >> { 
+class "SessionEvent" as SessionEvent5 << (E, LightSteelBlue) enum >> { 
   ~press
   ~release
   ~otherKey
   ~keySent
   ~textDone 
 }
-class "SessionMode" as SessionMode2 << (S, SkyBlue) struct >> { 
+class "SessionMode" as SessionMode6 << (S, SkyBlue) struct >> { 
   ~toggle : Bool
   ~switchesInput : Bool
   ~passthrough : Bool 
 }
-class "SessionEffect" as SessionEffect3 << (E, LightSteelBlue) enum >> { 
+class "SessionEffect" as SessionEffect7 << (E, LightSteelBlue) enum >> { 
   ~passKey
   ~swallowKey
   ~swallowKeyAndItsRelease
@@ -328,7 +416,7 @@ class "SessionEffect" as SessionEffect3 << (E, LightSteelBlue) enum >> {
   ~waitForText
   ~finish 
 }
-class "SessionMachine" as SessionMachine4 << (S, SkyBlue) struct >> { 
+class "SessionMachine" as SessionMachine8 << (S, SkyBlue) struct >> { 
   ~state : SessionState
   ~isActive : Bool
   ~handle(_:_:)
@@ -339,6 +427,10 @@ class "Name" as Notification.Name << (X, Orchid) extension >> {
 }
 VoiceProvider <|.. InputMethodProvider
 VoiceProvider <|.. AppProvider
+DictationEntry +-- DictationEntry.Outcome
+DictationEntry +-- DictationEntry.Cause
+DictationEntry0 +-- DictationEntry.Outcome1
+DictationEntry0 +-- DictationEntry.Cause2
 
 ' HAS-A (derived from member types)
 AppDelegate --> Engine : engine
@@ -346,6 +438,8 @@ AppDelegate --> Model : m
 AppProvider --> KeySpec : reader
 Config --> KeySpec : trigger, voiceKeys
 DictationRecord --> WindowState : heldWindow
+DictationStats --> DictationEntry : causes, outcomes
+DictationStats3 --> DictationEntry : causes, outcomes
 Engine --> DictationRecord : record
 Engine --> Model : m
 Engine --> Plan : plan
@@ -360,7 +454,7 @@ Model --> VoiceProvider : provider
 Plan --> KeySpec : forwardKey, trigger
 Plan --> VoiceProvider : provider
 SessionMachine --> SessionState : state
-SessionMachine4 --> SessionState : state
+SessionMachine8 --> SessionState : state
 SettingsStore --> Engine : engine
 SettingsStore --> KeySpec : effectiveTrigger, trigger, voiceKeyForCurrent
 SettingsStore --> Model : model

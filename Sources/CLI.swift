@@ -2,11 +2,11 @@ import AppKit
 import ApplicationServices
 
 // MARK: command line — the same binary; with a known command as its first argument it runs that and exits.
-//   hijack status | doctor | sources | get [setting] | set <setting> <value> | log [-f] [-n N] [--live] | version | help
-// --json on status / sources / get, for scripts and agents. Settings go through the same Config as the app,
+//   hijack status | doctor | sources | get [setting] | set <setting> <value> | log [-f] [-n N] [--live] | stats | version | help
+// --json on status / sources / get / stats, for scripts and agents. Settings go through the same Config as the app,
 // so the running app picks changes up on its next key press or menu open.
 
-let cliCommands: Set<String> = ["status", "doctor", "sources", "get", "set", "log", "version", "help", "--help", "-h"]
+let cliCommands: Set<String> = ["status", "doctor", "sources", "get", "set", "log", "stats", "version", "help", "--help", "-h"]
 
 /// Runs a CLI command and returns its exit code, or nil when the arguments aren't a CLI call (start the app).
 func runCLI(_ args: [String]) -> Int32? {
@@ -20,6 +20,7 @@ func runCLI(_ args: [String]) -> Int32? {
     case "get": return cliGet(rest.first, json: json)
     case "set": return cliSet(rest)
     case "log": return cliLog(rest)
+    case "stats": return cliStats(rest, json: json)
     case "version": print(appVersion); return 0
     default: print(cliHelp); return 0
     }
@@ -47,6 +48,7 @@ Usage:
   hijack set <setting> <value>    change a setting (validated)
   hijack log [-f] [-n N]          show the log: one line per dictation, plus errors (-f follows it)
   hijack log --live               watch every step of each dictation as it happens (Ctrl-C to stop)
+  hijack stats [--days N|--all] [--json]   how reliable dictation has been (default: last 7 days)
   hijack version
 
 Settings:
@@ -263,4 +265,46 @@ func cliLog(_ args: [String]) -> Int32 {
     tail.executableURL = URL(fileURLWithPath: "/usr/bin/tail")
     tail.arguments = (follow ? ["-F"] : []) + ["-n", "\(n)", logURL.path]
     do { try tail.run(); tail.waitUntilExit(); return tail.terminationStatus } catch { return fail("can't read \(logURL.path)") }
+}
+
+func cliStats(_ args: [String], json: Bool) -> Int32 {
+    var days: Int? = 7
+    if args.contains("--all") { days = nil }
+    if let i = args.firstIndex(of: "--days") {
+        guard i + 1 < args.count, let n = Int(args[i + 1]), n > 0 else { return fail("--days needs a number of days") }
+        days = n
+    }
+    let old = logURL.deletingPathExtension().appendingPathExtension("old.log")
+    let lines = [old, logURL].flatMap { (try? String(contentsOf: $0, encoding: .utf8))?.components(separatedBy: "\n") ?? [] }
+    let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"
+    let s = DictationStats.compute(lines: lines, days: days, today: f.string(from: Date()))
+    let span = days.map { "last \($0) days" } ?? "all of the log"
+    if json {
+        var d: [String: Any] = ["span": span, "dictations": s.dictations, "tooShort": s.tooShort,
+            "outcomes": Dictionary(uniqueKeysWithValues: s.outcomes.map { ($0.key.rawValue, $0.value) }),
+            "failureCauses": Dictionary(uniqueKeysWithValues: s.causes.map { ($0.key.rawValue, $0.value) }),
+            "tools": s.tools, "keyTapPaused": s.tapPaused, "slowKeyEvents": s.slowKeys, "triggerCaughtUp": s.caughtUp]
+        if let r = s.successRate { d["successRate"] = (r * 1000).rounded() / 1000 }
+        for (k, v) in [("talkKeyMsP50", s.sentP50), ("talkKeyMsP95", s.sentP95), ("textInMsP50", s.textInP50), ("textInMsP95", s.textInP95)] {
+            if let v { d[k] = v }
+        }
+        printJSON(d); return 0
+    }
+    print("Hijack stats · \(span)" + (s.firstDay.map { " (\($0) → \(s.lastDay ?? $0))" } ?? ""))
+    guard s.dictations > 0 else { print("No dictations logged yet (the log has them since 1.1.2)."); return 0 }
+    func row(_ label: String, _ n: Int, _ note: String = "") {
+        let share = String(format: "%3.0f%%", Double(n) / Double(s.dictations) * 100)
+        print("  " + label.padding(toLength: 22, withPad: " ", startingAt: 0) + String(format: "%5d", n) + "  \(share)" + note)
+    }
+    print("Dictations".padding(toLength: 24, withPad: " ", startingAt: 0) + String(format: "%5d", s.dictations)
+          + (s.tooShort > 0 ? "  (+\(s.tooShort) too short to start)" : ""))
+    for o in DictationEntry.Outcome.allCases where o != .tooShort { if let n = s.outcomes[o] { row(o.rawValue, n) } }
+    for c in DictationEntry.Cause.allCases { if let n = s.causes[c] { print("      \(n) × \(c.rawValue)") } }
+    if let r = s.successRate { print("Success rate".padding(toLength: 24, withPad: " ", startingAt: 0) + String(format: "%5.1f%%", r * 100) + "  (text arrived ÷ text arrived + no window)") }
+    func ms(_ v: Int?) -> String { v.map { $0 < 1000 ? "\($0) ms" : String(format: "%.2f s", Double($0) / 1000) } ?? "–" }
+    print("Talk key sent after".padding(toLength: 24, withPad: " ", startingAt: 0) + "p50 \(ms(s.sentP50))   p95 \(ms(s.sentP95))")
+    print("Text in after release".padding(toLength: 24, withPad: " ", startingAt: 0) + "p50 \(ms(s.textInP50))   p95 \(ms(s.textInP95))")
+    print("Incidents".padding(toLength: 24, withPad: " ", startingAt: 0) + "key tap paused by macOS \(s.tapPaused) · slow key events \(s.slowKeys) · shortcut caught up \(s.caughtUp)")
+    if s.tools.count > 1 { print("By voice tool".padding(toLength: 24, withPad: " ", startingAt: 0) + s.tools.sorted { $0.value > $1.value }.map { "\($0.key) \($0.value)" }.joined(separator: " · ")) }
+    return 0
 }
