@@ -135,3 +135,30 @@ extension FI2SourcesTests {
         XCTAssertFalse(r.sink.has("restore after failed switch"))
     }
 }
+
+// Review-4 N1: a holdDelay above maxSwitchWait must not read as a failed switch.
+extension FI2SourcesTests {
+    func testN1_LongHoldDelayWithTheSourceReadySendsTheTalkKey() {
+        let r = Rig()
+        r.plan.holdDelay = 1.5
+        r.engine.refresh()
+        r.press(); r.clock.advance(1.45)
+        XCTAssertEqual(r.keys.posted.count, 0)
+        XCTAssertEqual(r.engine.machine.state, .starting)
+        r.clock.advance(0.1)
+        XCTAssertEqual(r.keys.count(Rig.fn, down: true), 1)
+        XCTAssertEqual(r.engine.machine.state, .listening)
+        XCTAssertFalse(r.sink.has("input source never switched"))
+    }
+
+    func testN1_LongHoldDelayWithNoSwitchStillFailsAtMaxSwitchWait() {
+        let r = Rig()
+        r.plan.holdDelay = 1.5
+        r.engine.refresh()
+        r.sources.applies = false
+        r.press(); r.clock.advance(1.05)
+        XCTAssertEqual(r.engine.machine.state, .idle)
+        XCTAssertEqual(r.keys.posted.count, 0)
+        XCTAssertTrue(r.sink.has("input source never switched"))
+    }
+}

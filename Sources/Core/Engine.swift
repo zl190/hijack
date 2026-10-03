@@ -201,7 +201,7 @@ final class Engine {
             let waited = clock.now.timeIntervalSince(start)
             if ready && waited >= p.holdDelay {
                 run(.keySent)
-            } else if waited >= maxSwitchWait {
+            } else if !ready && waited >= maxSwitchWait {   // a holdDelay above maxSwitchWait is not a failed switch (review-4 N1)
                 record.switchFailed = true
                 log("input source never switched to \(p.voiceID) after \(Int(waited * 1000))ms, talk key not sent")
                 run(.switchFailed)
