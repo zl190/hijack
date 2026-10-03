@@ -103,6 +103,17 @@ final class SessionMachineTests: XCTestCase {
 
     // The state diagram, generated from the transition function. HIJACK_UPDATE_DIAGRAMS=1 rewrites it;
     // otherwise the test fails when the checked-in diagram no longer matches the code.
+    // 11
+    func testSwitchFailedEndsTheDictationWithoutTheTalkKey() {
+        XCTAssertEqual(t(.starting, .switchFailed, hold).0, .idle)
+        XCTAssertEqual(t(.starting, .switchFailed, hold).1, [.finish])
+        XCTAssertEqual(t(.starting, .switchFailed, toggle).1, [.finish])
+        for s in SessionState.allCases where s != .starting {
+            XCTAssertEqual(t(s, .switchFailed, hold).0, s, "\(s)")
+            XCTAssertEqual(t(s, .switchFailed, hold).1, [], "\(s)")
+        }
+    }
+
     func testStateDiagramIsCurrent() throws {
         // Configurations. "Same key": the shortcut is the talk key, so a press passes through whenever the voice
         // input method is already active (decided per press), else it starts a dictation.

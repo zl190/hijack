@@ -15,6 +15,7 @@ enum SessionEvent: String, CaseIterable {
     case otherKey     // another key, while a toggle session runs and "any key stops" is on
     case keySent      // the input source is ready: send the talk key
     case textDone     // the voice window went, or the wait timed out
+    case switchFailed // the input source did not switch within maxSwitchWait: end without the talk key
 }
 
 /// What the current press is: fixed for the press, read by the engine before it hands the event over.
@@ -73,11 +74,13 @@ struct SessionMachine {
         case (.starting, .otherKey), (.listening, .otherKey):
             return mode.toggle ? stop(.swallowKeyAndItsRelease) : (s, [.passKey])
         case (.waitingForText, .textDone):    return (.idle, [.finish])
+        case (.starting, .switchFailed):      return (.idle, [.finish])                 // FM-05: the key stays unsent
         case (.idle, .release), (.waitingForText, .release):
             return (s, [.swallowKey])                                              // toggle: the tap that stopped it
         case (.passthrough, .press):          return (s, [.passKey])
         case (_, .otherKey):                  return (s, [.passKey])
-        case (_, .keySent), (_, .textDone):   return (s, [])                       // stale: from an earlier dictation
+        case (_, .keySent), (_, .textDone), (_, .switchFailed):
+            return (s, [])                                                         // stale: from an earlier dictation
         }
     }
 }

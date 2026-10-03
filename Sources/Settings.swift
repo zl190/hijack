@@ -52,6 +52,8 @@ final class SettingsStore: ObservableObject {
             switch phase {
             case "switching": self?.live = L("切到\(detail)…", "Switching to \(detail)…")
             case "listening": self?.live = L("正在听…", "Listening…")
+            // FM-09: the voice tool's own mic has read "off" for 1s while the key is held (Engine.sampleWhileHeld).
+            case "notListening": self?.live = L("\(detail)还没开始听…", "\(detail) isn't listening yet…")
             case "finishing": self?.live = L("说完了，等文字上屏…", "Done talking, waiting for the text…")
             default: self?.live = ""; self?.last = detail.isEmpty ? L("完成", "Done") : detail
             }

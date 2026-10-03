@@ -6,7 +6,7 @@ import ServiceManagement
 // MARK: menu (the whole UI)
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
-    let engine: Engine = Engine()
+    let engine: Engine = Engine.live()
     let m: Model = .shared
     let menu: NSMenu = NSMenu()
     var item: NSStatusItem?
@@ -18,20 +18,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         applyAppearance()
         // Pick up icon/Dock changes made from the CLI or a hand edit.
         // Settings apply when their files change (config, a voice tool's own settings): no polling.
+        // The config folder must exist before the watch starts: the watch covers only folders that exist (FM-18).
+        try? FileManager.default.createDirectory(at: configURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         watch = SettingsWatch(paths: [configURL] + voiceSettingsFiles) { [weak self] in
             Config.shared.reload(); self?.applyAppearance(); self?.engine.refresh()
             NotificationCenter.default.post(name: .hijackSettingsChanged, object: nil)
         }
+        trace("watching settings in \(self.watch!.roots.joined(separator: ", "))")
+        // Registered before start(): start() can post .hijackStateChanged before this function returns
+        // (waiting for Accessibility, or the tap install itself), and the icon must see it (review-4 M1).
+        NotificationCenter.default.addObserver(forName: .hijackStateChanged, object: nil, queue: .main) { [weak self] _ in self?.updateIcon() }
         engine.start()
         // Sleep, wake and lock land in the log, to line them up with a session that stops working.
         let ws = NSWorkspace.shared.notificationCenter
+        // After wake and after unlock the engine also reconciles: a session across sleep stops, the trigger is re-read (FM-25).
         for (name, text) in [(NSWorkspace.willSleepNotification, "system sleep"), (NSWorkspace.didWakeNotification, "system wake"),
                              (NSWorkspace.screensDidSleepNotification, "screens sleep"), (NSWorkspace.screensDidWakeNotification, "screens wake"),
                              (NSWorkspace.sessionDidResignActiveNotification, "session inactive"), (NSWorkspace.sessionDidBecomeActiveNotification, "session active")] {
-            ws.addObserver(forName: name, object: nil, queue: .main) { _ in log(text) }
+            ws.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                log(text)
+                if name == NSWorkspace.willSleepNotification { self?.engine.systemWillSleep() }
+                if name == NSWorkspace.didWakeNotification { self?.engine.reconcileAfterWake(.systemWake) }
+            }
         }
         for (name, text) in [("com.apple.screenIsLocked", "screen locked"), ("com.apple.screenIsUnlocked", "screen unlocked")] {
-            DistributedNotificationCenter.default().addObserver(forName: .init(name), object: nil, queue: .main) { _ in log(text) }
+            DistributedNotificationCenter.default().addObserver(forName: .init(name), object: nil, queue: .main) { [weak self] _ in
+                log(text)
+                if text == "screen locked" { self?.engine.screenLocked() }
+                if text == "screen unlocked" { self?.engine.reconcileAfterWake(.screenUnlock) }
+            }
+        }
+        // Secure Input can only be read live (Accessibility's own); keep state.json fresh at the one other
+        // natural moment besides a menu open — the end of a dictation (docs/hci-review-faults.md §5 item 4).
+        NotificationCenter.default.addObserver(forName: .hijackActivity, object: nil, queue: .main) { [weak self] n in
+            // An app tool's "done" post can come from inside the tap callback (NSNotificationCenter's .main
+            // queue runs inline when the post is already on main): hop off it before the file I/O (review-4 M2).
+            guard (n.userInfo?["phase"] as? String) == "done" else { return }
+            DispatchQueue.main.async { self?.writeSecureInputState() }
         }
         // Reopens Hijack after an installer replaces it (brew can't: its install sandbox denies launching apps).
         // The system keeps the plist from registration time, so re-register when the bundled one changes.
@@ -89,19 +112,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc func recordShortcut() { SettingsWindowController.show(tab: 0); SettingsStore.shared.startRecording(.trigger) }
     @objc func recordTalkKey() { SettingsWindowController.show(tab: 1); SettingsStore.shared.startRecording(.voiceKey(m.voiceID)) }
 
+    /// Two icon states only (Idle, Off): §3.1 ruled out a third "Active" state as main-thread cost on every
+    /// talk-key edge (FM-26). Off covers both a dead key listener (FM-02) and missing/revoked Accessibility.
     func updateIcon() {
-        if Config.shared.showMenuBarIcon, item == nil {
-            let it = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-            let icon = Bundle.main.image(forResource: "HijackMenuTemplate")
-                ?? NSImage(systemSymbolName: "mic", accessibilityDescription: appName)
-            icon?.isTemplate = true                  // follows light/dark menu bar
-            icon?.size = NSSize(width: 18, height: 18)
-            it.button?.image = icon
-            it.menu = menu
-            item = it
-        } else if !Config.shared.showMenuBarIcon, let it = item {
-            NSStatusBar.system.removeStatusItem(it); item = nil
+        guard Config.shared.showMenuBarIcon else {
+            if let it = item { NSStatusBar.system.removeStatusItem(it); item = nil }
+            return
         }
+        let it = item ?? NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        if item == nil { it.menu = menu; item = it }
+        let state = IconState.of(trusted: AXIsProcessTrusted(), tapActive: engine.tap.isEnabled, tapInstalled: engine.tapInstalled)
+        let resource = state == .idle ? "HijackMenuTemplate" : "HijackMenuTemplate-Off"
+        let icon = Bundle.main.image(forResource: resource)
+            ?? NSImage(systemSymbolName: state == .idle ? "mic" : "mic.slash", accessibilityDescription: appName)
+        icon?.isTemplate = true                  // follows light/dark menu bar
+        icon?.size = NSSize(width: 18, height: 18)
+        icon?.accessibilityDescription = state == .idle ? L("Hijack", "Hijack") : L("Hijack：快捷键无效", "Hijack: shortcut not working")
+        it.button?.image = icon
+    }
+
+    /// Secure Input (Carbon's own call) at the two moments state.json is refreshed for it: a menu open, and
+    /// the end of a dictation. The CLI reads it from there — see the comment on `AppState.secureInput`.
+    func writeSecureInputState() {
+        let on = engine.tap.secureInputOn
+        AppState.write(trusted: AXIsProcessTrusted(), tapActive: engine.tap.isEnabled,
+                       secureInput: on, secureInputApp: on ? NSWorkspace.shared.frontmostApplication?.localizedName : nil)
     }
 
     // Rebuilt every time it opens, so it always shows the live state.
@@ -121,9 +156,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         let c = m.c, name = m.voiceName, key = m.trigger.name
 
-        // Status — derived from the same state the engine uses.
+        // Refresh state.json for Secure Input here too, so a CLI check right after the user looks is fresh.
+        writeSecureInputState()
+
+        // Status — derived from the same state the engine uses. At most one fault line replaces the normal
+        // status line (docs/hci-review-faults.md §3.2): a dead key listener first, then a stuck session,
+        // then Secure Input. "No Accessibility" is checked first; it already has its own line and is the
+        // more fundamental cause when both are true.
+        let stillHolding = MenuFaults.stillHoldingTalkKey(toggle: engine.plan.toggle, isActive: engine.machine.isActive,
+                                                           keyIsPhysicallyDown: engine.tap.keyIsDown(engine.plan.trigger.code),
+                                                           talkKeyName: engine.plan.forwardKey.name)
+        let secureApp = engine.tap.secureInputOn ? (NSWorkspace.shared.frontmostApplication?.localizedName ?? L("另一个 app", "Another app")) : nil
+        let fault = MenuFaults.firstLine(tapActive: engine.tap.isEnabled, stillHoldingTalkKey: stillHolding, secureInputApp: secureApp)
         if !AXIsProcessTrusted() {
             add(L("⚠︎ 需要辅助功能权限，点这里去允许…", "⚠︎ Needs Accessibility permission — Allow…"), #selector(openAccessibility))
+        } else if let fault {
+            switch fault {
+            case .keyListenerOff:
+                add(L("⚠︎ 系统关掉了按键监听，快捷键无效，点这里重新打开 Hijack", "⚠︎ macOS turned off the key listener; the shortcut does nothing — Reopen Hijack"), #selector(relaunchApp))
+            case .stillHolding(let talkKey):
+                add(L("⚠︎ Hijack 还按着\(talkKey)，点这里松开", "⚠︎ Hijack is still holding \(talkKey) — Release"), #selector(releaseStuckSession))
+            case .secureInput(let app):
+                add(L("⚠︎ \(app)开着安全输入（常见于密码框），关掉前快捷键无效", "⚠︎ \(app) has Secure Input on (often a password field). The shortcut won't work until it's off"))
+            }
         } else if m.toggleMode {
             add(L("点按\(key)用\(name)听写", "Tap \(key) to dictate with \(name)"))
         } else {
@@ -247,4 +302,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc func openAccessibility() {
         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
     }
+
+    // FM-02: the key listener is off and the retry already failed (Engine.reenableTap). Quitting and
+    // reopening installs a fresh tap; it is also the fix the menu line and `hijack doctor` give.
+    // openApplication(at:) alone activates the already-running copy instead of starting a new one
+    // (createsNewApplicationInstance defaults to false), so terminating right after it would just quit
+    // Hijack with nothing to reopen it (review-4 M4). A detached `open -b` after this process has exited
+    // starts a fresh one instead.
+    @objc func relaunchApp() {
+        log("menu: relaunching after the key listener was found off")
+        let reopen = Process()
+        reopen.executableURL = URL(fileURLWithPath: "/bin/sh")
+        reopen.arguments = ["-c", "sleep 0.5; open -b com.zl190.hijack"]
+        try? reopen.run()
+        NSApp.terminate(nil)
+    }
+
+    // FM-01, FM-04, FM-25: the engine still thinks a session is active, but the physical key is already up.
+    @objc func releaseStuckSession() { engine.stopStuckSession() }
 }

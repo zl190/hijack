@@ -55,16 +55,6 @@ protocol VoiceProvider {
     func windowState() -> WindowState       // is its voice UI on screen
 }
 
-/// What we can see of a voice tool's windows. `.unknown` says why we can't tell.
-enum WindowState {
-    case visible(Int)
-    case none(String)
-    case unknown(String)
-    var busy: Bool? { switch self { case .visible: return true; case .none: return false; case .unknown: return nil } }
-    var text: String {
-        switch self { case .visible(let n): return "\(n) window\(n == 1 ? "" : "s")"; case .none(let why), .unknown(let why): return why }
-    }
-}
 /// On-screen windows owned by these processes. Thread-safe (no input-source calls), for sampling off the main thread.
 func onScreenWindows(of pids: [pid_t]) -> WindowState {
     guard !pids.isEmpty else { return .unknown("not running") }

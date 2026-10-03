@@ -20,6 +20,7 @@ text, write the summary). `docs/diagrams/states.mmd` is generated from the same 
 `press`, `release` — edges of the physical shortcut (repeats and releases whose press we never saw are filtered
 before the machine). `otherKey` — another key while a toggle session runs and "any key stops" is on.
 `keySent` — the switch is ready, send the talk key. `textDone` — the voice window went (or the wait timed out).
+`switchFailed` — the input source did not switch within `maxSwitchWait`: the talk key stays unsent (FM-05).
 
 ## Acceptance (EARS)
 
@@ -33,3 +34,4 @@ before the machine). `otherKey` — another key while a toggle session runs and 
 8. When the shortcut is pressed in `waitingForText`, it shall first finish the previous dictation, then act as a press in `idle`.
 9. When the shortcut is released in `passthrough`, it shall go to `idle` and pass the key.
 10. Every state shall have an outcome for every event (no undefined transitions).
+11. When `switchFailed` arrives in `starting`, it shall go to `idle` and finish without sending the talk key; elsewhere `switchFailed` shall change nothing.

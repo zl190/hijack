@@ -40,6 +40,8 @@ hijack log -f            # follow the log
 
 If the trigger does nothing, confirm that Hijack has Accessibility permission and that your selected voice tool works on its own. Run `hijack doctor` to check permissions, configuration and voice-source availability.
 
+If keys type the wrong thing after Hijack quits unexpectedly, a modifier key may be stuck down. Press and release your talk key once to clear it. Then open Hijack again. Hijack also tries to release a stuck key on its own the next time it starts.
+
 If the `hijack` command is unavailable, run the app binary directly:
 
 ```sh

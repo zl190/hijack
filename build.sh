@@ -22,7 +22,7 @@ else
   iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/Hijack.icns"
 fi
 mkdir -p "$APP/Contents/Library/LaunchAgents" && cp assets/com.zl190.hijack.relauncher.plist "$APP/Contents/Library/LaunchAgents/"
-cp assets/HijackMenuTemplate.png "assets/HijackMenuTemplate@2x.png" "$APP/Contents/Resources/"
+cp assets/HijackMenuTemplate.png assets/HijackMenuTemplate@2x.png assets/HijackMenuTemplate-Off.png assets/HijackMenuTemplate-Off@2x.png "$APP/Contents/Resources/"
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

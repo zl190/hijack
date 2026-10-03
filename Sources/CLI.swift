@@ -108,6 +108,7 @@ func cliStatus(json: Bool) -> Int32 {
         printJSON([
             "version": appVersion, "running": st != nil, "pid": st.map { Int($0.pid) } as Any,
             "accessibility": st.map { $0.trusted } as Any, "keyListener": st.map { $0.tapActive } as Any,
+            "secureInput": st.map { $0.secureInput } as Any, "secureInputApp": st?.secureInputApp as Any,
             "mode": c.triggerMode, "shortcut": m.trigger.name,
             "source": ["id": p.id, "name": p.name, "installed": p.isInstalled],
             "talkKey": ["key": m.forwardKey.name, "origin": keyOrigin(p, user: m.userVoiceKey)],
@@ -118,7 +119,8 @@ func cliStatus(json: Bool) -> Int32 {
     print("Hijack \(appVersion) — " + (st.map { "running (pid \($0.pid))" } ?? "not running"))
     if let st {
         print("  accessibility   " + (st.trusted ? "allowed" : "MISSING — System Settings › Privacy & Security › Accessibility"))
-        print("  key listener    " + (st.tapActive ? "active" : "inactive"))
+        print("  key listener    " + (st.tapActive ? "active" : "OFF — macOS turned it off; quit and reopen Hijack"))
+        if st.secureInput { print("  secure input    on" + (st.secureInputApp.map { " (\($0))" } ?? "")) }
     }
     print("  mode            " + (m.toggleMode ? "toggle (tap to start, tap to stop)" : "hold (hold to talk)"))
     print("  shortcut        \(m.trigger.name)" + (c.trigger == nil ? "  (same as talk key)" : ""))
@@ -141,7 +143,7 @@ func cliDoctor() -> Int32 {
     check(st != nil, "Hijack is running", "open /Applications/Hijack.app")
     if let st {
         check(st.trusted, "Accessibility permission granted", "System Settings › Privacy & Security › Accessibility › turn on Hijack")
-        check(st.tapActive, "key listener installed", "grant Accessibility, or quit and reopen Hijack")
+        check(st.tapActive, "key listener installed", "macOS turned it off; quit and reopen Hijack")
     }
     check(p.isInstalled, "voice source \(p.name) is installed", "install it, or `hijack set source <id>` (see `hijack sources`)")
     let found = p.detected().key
