@@ -1,0 +1,24 @@
+# Class diagram for docs/diagrams (scripts/diagrams.sh). SwiftUI views are left out: they are the settings
+# window's layout, not the architecture.
+elements:
+  havingAccessLevel: [open, public, internal, package, private, fileprivate]
+  showMembersWithAccessLevel: [open, public, internal, package]
+  showExtensions: merged
+  exclude:
+    - KeyRecorder
+    - WindowBlur
+    - GlassCard
+    - Card
+    - Row
+    - Page
+    - ChoiceRow
+    - DictationTab
+    - Bars
+    - SourcesTab
+    - GeneralTab
+    - AdvancedTab
+    - SourceRow
+    - Name
+relationships:
+  inheritance:
+    exclude: [View, Codable, Equatable, Identifiable, CaseIterable, String, ObservableObject, NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDelegate, NSWindowController]

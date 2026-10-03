@@ -1,0 +1,253 @@
+@startuml
+' STYLE START
+hide empty members
+skinparam shadowing false
+' STYLE END
+set namespaceSeparator none
+
+
+class "VoiceProvider" as VoiceProvider << (P, GoldenRod) protocol >> { 
+  ~id : String
+  ~name : String
+  ~isInstalled : Bool
+  ~switchesInputSource : Bool
+  ~readsSettings : Bool
+  ~detected()
+  ~processIDs()
+  ~windowState()
+  ~isBusy() <&bolt> 
+}
+class "AppState" as AppState << (S, SkyBlue) struct >> { 
+  ~pid : Int32
+  ~trusted : Bool
+  ~tapActive : Bool
+  ~updated : Date
+  ~{static} write(trusted:tapActive:)
+  ~{static} read() 
+}
+class "Mod" as Mod << (E, LightSteelBlue) enum >> { 
+  ~ctrl
+  ~flag : CGEventFlags
+  ~symbol : String
+  ~nsBit : Int 
+}
+class "NamedKey" as NamedKey << (S, SkyBlue) struct >> { 
+  ~id : String
+  ~code : Int
+  ~zh : String
+  ~en : String
+  ~device : UInt64
+  ~flag : CGEventFlags? 
+}
+class "KeySpec" as KeySpec << (S, SkyBlue) struct >> { 
+  ~code : Int
+  ~mods : Set<Mod>
+  ~named : NamedKey?
+  ~modifierOnly : Bool
+  ~name : String
+  ~flags : CGEventFlags
+  ~{static} named(_:)
+  ~init(code:mods:)
+  ~init(json:)
+  ~json : Any
+  ~quickID : String?
+  ~init(binding:) 
+}
+class "Plan" as Plan << (S, SkyBlue) struct >> { 
+  ~trigger : _
+  ~provider : _
+  ~voiceID : String
+  ~voiceName : String
+  ~forwardKey : _
+  ~style : String
+  ~toggle : Bool
+  ~stopOnAnyKey : Bool
+  ~holdDelay : Double
+  ~restoreTimeout : Double
+  ~fallbackDelay : Double
+  ~init(_:) 
+}
+class "DictationRecord" as DictationRecord << (S, SkyBlue) struct >> { 
+  ~pressedAt : Date
+  ~keySentMs : Int?
+  ~echoMs : Int?
+  ~releasedAt : Date?
+  ~heldMic : (tool: Bool?, device: Bool?)?
+  ~heldWindow : _
+  ~sawWindow : Bool
+  ~windowGoneMs : Int? 
+}
+class "Engine" as Engine << (C, DarkSeaGreen) >> { 
+  ~m : _
+  ~plan : _
+  ~previous : String?
+  ~generation : Int
+  ~physicalDown : Bool
+  ~forwarded : Bool
+  ~passthrough : Bool
+  ~record : DictationRecord
+  ~restoring : Bool
+  ~tap : CFMachPort?
+  ~active : Bool
+  ~swallowUp : Int?
+  ~paused : Bool
+  ~waitingReported : Bool
+  ~refresh()
+  ~report(_:_:)
+  ~tapKey(after:)
+  ~startVoice()
+  ~endVoice()
+  ~post(_:down:)
+  ~postModifier(_:down:held:)
+  ~ms(since:)
+  ~sendKey()
+  ~pressed()
+  ~released()
+  ~sampleWhileHeld(gen:after:)
+  ~summary(end:)
+  ~reconcile()
+  ~handle(_:_:)
+  ~isPress(_:_:_:)
+  ~start() 
+}
+class "Config" as Config << (C, DarkSeaGreen) >> { 
+  ~{static} shared : Config
+  ~trigger : _
+  ~voiceInput : _
+  ~voiceKeys : _
+  ~triggerMode : String
+  ~stopOnAnyKey : Bool
+  ~voiceStyles : [String : String]
+  ~showMenuBarIcon : Bool
+  ~showDockIcon : Bool
+  ~lastError : String?
+  ~errorText : String?
+  ~language : String
+  ~holdDelay : Double
+  ~restoreTimeout : Double
+  ~fallbackDelay : Double
+  ~init()
+  ~reload(force:)
+  ~save() 
+}
+class "Model" as Model << (C, DarkSeaGreen) >> { 
+  ~{static} shared : Model
+  ~c : Config
+  ~voiceID : String
+  ~provider : _
+  ~voiceName : String
+  ~userVoiceKey : _
+  ~detectedVoiceKey : _
+  ~forwardKey : _
+  ~customTrigger : _
+  ~trigger : _
+  ~toggleMode : Bool
+  ~detectedStyle : String?
+  ~voiceStyle : String 
+}
+class "RecordTarget" as RecordTarget << (E, LightSteelBlue) enum >> { 
+  ~trigger 
+}
+class "SettingsStore" as SettingsStore << (C, DarkSeaGreen) >> { 
+  ~{static} shared : SettingsStore
+  ~triggerMode : String
+  ~stopOnAnyKey : Bool
+  ~trigger : _
+  ~voiceInput : String
+  ~sources : [SourceRow]
+  ~showMenuBarIcon : Bool
+  ~showDockIcon : Bool
+  ~launchAtLogin : Bool
+  ~language : String
+  ~holdDelay : Double
+  ~restoreTimeout : Double
+  ~fallbackDelay : Double
+  ~trusted : Bool
+  ~configError : String?
+  ~recording : RecordTarget?
+  ~live : String
+  ~last : String
+  ~init()
+  ~engine : _
+  ~model : _
+  ~refresh()
+  ~edit(_:)
+  ~currentName : String
+  ~voiceKeyForCurrent : _
+  ~effectiveTrigger : _
+  ~startRecording(_:)
+  ~stopRecording() 
+}
+class "SettingsWindowController" as SettingsWindowController << (C, DarkSeaGreen) >> { 
+  ~{static} shared : SettingsWindowController?
+  ~{static} show(tab:)
+  ~init()
+  ~windowWillClose(_:) 
+}
+class "WindowState" as WindowState << (E, LightSteelBlue) enum >> { 
+  ~visible(_:)
+  ~busy : Bool?
+  ~text : String 
+}
+class "InputMethodProvider" as InputMethodProvider << (S, SkyBlue) struct >> { 
+  ~sourceID : String
+  ~label : (zh: String, en: String)?
+  ~defaultKey : String?
+  ~helpers : [String]
+  ~reader : _
+  ~id : String
+  ~name : String
+  ~isInstalled : Bool
+  ~switchesInputSource : Bool
+  ~readsSettings : Bool
+  ~detected()
+  ~processIDs()
+  ~windowState() 
+}
+class "AppProvider" as AppProvider << (S, SkyBlue) struct >> { 
+  ~bundle : String
+  ~appName : String?
+  ~reader : _
+  ~id : String
+  ~name : String
+  ~isInstalled : Bool
+  ~switchesInputSource : Bool
+  ~readsSettings : Bool
+  ~detected()
+  ~processIDs()
+  ~windowState() 
+}
+class "AppDelegate" as AppDelegate << (C, DarkSeaGreen) >> { 
+  ~engine : _
+  ~m : _
+  ~menu : NSMenu
+  ~item : NSStatusItem?
+  ~applicationDidFinishLaunching(_:)
+  ~applicationShouldHandleReopen(_:hasVisibleWindows:)
+  ~applyAppearance()
+  ~installMainMenu()
+  ~openSettings()
+  ~recordShortcut()
+  ~recordTalkKey()
+  ~updateIcon()
+  ~menuNeedsUpdate(_:)
+  ~pick(_:)
+  ~setTrigger(_:)
+  ~setVoiceKey(_:)
+  ~setTriggerMode(_:)
+  ~toggleStopOnAnyKey()
+  ~setVoiceStyle(_:)
+  ~setVoiceSource(_:)
+  ~setLanguage(_:)
+  ~toggleIcon()
+  ~toggleLogin()
+  ~openConfig()
+  ~openAccessibility() 
+}
+class "Name" as Notification.Name << (X, Orchid) extension >> { 
+  ~{static} hijackActivity : NSNotification.Name 
+}
+VoiceProvider <|.. InputMethodProvider
+VoiceProvider <|.. AppProvider
+
+@enduml
