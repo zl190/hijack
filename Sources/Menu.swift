@@ -18,6 +18,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         applyAppearance()
         // Pick up icon/Dock changes made from the CLI or a hand edit.
         // Settings apply when their files change (config, a voice tool's own settings): no polling.
+        // The config folder must exist before the watch starts: the watch covers only folders that exist (FM-18).
+        try? FileManager.default.createDirectory(at: configURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         watch = SettingsWatch(paths: [configURL] + voiceSettingsFiles) { [weak self] in
             Config.shared.reload(); self?.applyAppearance(); self?.engine.refresh()
             NotificationCenter.default.post(name: .hijackSettingsChanged, object: nil)
