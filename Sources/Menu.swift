@@ -25,6 +25,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             NotificationCenter.default.post(name: .hijackSettingsChanged, object: nil)
         }
         trace("watching settings in \(self.watch!.roots.joined(separator: ", "))")
+        // Registered before start(): start() can post .hijackStateChanged before this function returns
+        // (waiting for Accessibility, or the tap install itself), and the icon must see it (review-4 M1).
+        NotificationCenter.default.addObserver(forName: .hijackStateChanged, object: nil, queue: .main) { [weak self] _ in self?.updateIcon() }
         engine.start()
         // Sleep, wake and lock land in the log, to line them up with a session that stops working.
         let ws = NSWorkspace.shared.notificationCenter
@@ -45,8 +48,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 if text == "screen unlocked" { self?.engine.reconcileAfterWake(.screenUnlock) }
             }
         }
-        // The icon follows the key listener / Accessibility state even while no menu is open (§3.1).
-        NotificationCenter.default.addObserver(forName: .hijackStateChanged, object: nil, queue: .main) { [weak self] _ in self?.updateIcon() }
         // Secure Input can only be read live (Accessibility's own); keep state.json fresh at the one other
         // natural moment besides a menu open — the end of a dictation (docs/hci-review-faults.md §5 item 4).
         NotificationCenter.default.addObserver(forName: .hijackActivity, object: nil, queue: .main) { [weak self] n in
@@ -117,7 +118,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         let it = item ?? NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         if item == nil { it.menu = menu; item = it }
-        let state = IconState.of(trusted: AXIsProcessTrusted(), tapActive: engine.tap.isEnabled)
+        let state = IconState.of(trusted: AXIsProcessTrusted(), tapActive: engine.tap.isEnabled, tapInstalled: engine.tapInstalled)
         let resource = state == .idle ? "HijackMenuTemplate" : "HijackMenuTemplate-Off"
         let icon = Bundle.main.image(forResource: resource)
             ?? NSImage(systemSymbolName: state == .idle ? "mic" : "mic.slash", accessibilityDescription: appName)

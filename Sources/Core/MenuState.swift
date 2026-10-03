@@ -8,7 +8,15 @@ enum IconState: Equatable {
     case idle   // key listener on, Accessibility granted
     case off    // key listener off, or Accessibility missing (FM-02, FM-24 revoked while running)
 
-    static func of(trusted: Bool, tapActive: Bool) -> IconState { (trusted && tapActive) ? .idle : .off }
+    /// `tapInstalled`: has `Engine.start()` ever tried to install the tap? On every normal launch
+    /// `updateIcon()` paints once before that (review-4 M1) — at that moment `tapActive` is trivially
+    /// false, but nothing has failed yet, so it must read as Idle, not as the FM-02 fault. Missing
+    /// Accessibility is Off regardless: `start()` cannot install the tap until it is granted.
+    static func of(trusted: Bool, tapActive: Bool, tapInstalled: Bool) -> IconState {
+        if !trusted { return .off }
+        if !tapInstalled { return .idle }
+        return tapActive ? .idle : .off
+    }
 }
 
 /// One fault the menu can show as its first line, in place of the normal status line. Only one shows at a

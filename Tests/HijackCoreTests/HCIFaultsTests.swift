@@ -5,12 +5,25 @@ import XCTest
 
 final class MenuStateTests: XCTestCase {
 
-    // §3.1: the icon is Off whenever either fact is missing, Idle only when both hold.
+    // §3.1: once the tap has had a chance to install, the icon is Off whenever either fact is missing,
+    // Idle only when both hold.
     func testIconIsOffUnlessBothTrustedAndTapActive() {
-        XCTAssertEqual(IconState.of(trusted: true, tapActive: true), .idle)
-        XCTAssertEqual(IconState.of(trusted: true, tapActive: false), .off)
-        XCTAssertEqual(IconState.of(trusted: false, tapActive: true), .off)
-        XCTAssertEqual(IconState.of(trusted: false, tapActive: false), .off)
+        XCTAssertEqual(IconState.of(trusted: true, tapActive: true, tapInstalled: true), .idle)
+        XCTAssertEqual(IconState.of(trusted: true, tapActive: false, tapInstalled: true), .off)
+        XCTAssertEqual(IconState.of(trusted: false, tapActive: true, tapInstalled: true), .off)
+        XCTAssertEqual(IconState.of(trusted: false, tapActive: false, tapInstalled: true), .off)
+    }
+
+    // review-4 M1: before the tap has ever been installed (the moment between applyAppearance() and
+    // engine.start() on every normal launch), tapActive is necessarily false — that must read as Idle,
+    // not as the FM-02 fault, or every launch flashes "Off".
+    func testIconIsIdleBeforeTheTapHasBeenInstalled() {
+        XCTAssertEqual(IconState.of(trusted: true, tapActive: false, tapInstalled: false), .idle)
+    }
+
+    // Missing Accessibility is still Off even before the tap is installed (it never will be).
+    func testIconIsOffWithoutAccessibilityEvenBeforeInstall() {
+        XCTAssertEqual(IconState.of(trusted: false, tapActive: false, tapInstalled: false), .off)
     }
 
     // §3.2: no fault, no line.
