@@ -6,9 +6,9 @@ import ServiceManagement
 // MARK: menu (the whole UI)
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
-    let engine = Engine()
-    let m = Model.shared
-    let menu = NSMenu()
+    let engine: Engine = Engine()
+    let m: Model = .shared
+    let menu: NSMenu = NSMenu()
     var item: NSStatusItem?
 
     func applicationDidFinishLaunching(_ n: Notification) {

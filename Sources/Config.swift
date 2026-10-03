@@ -9,26 +9,26 @@ import ServiceManagement
 let configURL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".config/hijack/config.json")
 
 final class Config {
-    static let shared = Config()
+    static let shared: Config = Config()
     var trigger: KeySpec?          // nil = "follow" the voice key
-    var voiceInput = weTypeID
+    var voiceInput: String = weTypeID
     var voiceKeys: [String: KeySpec] = [:]   // per voice input; missing = "auto" (detected, or a known default)
-    var triggerMode = "hold"                 // "hold": hold to talk · "toggle": tap to start, tap again to stop
-    var stopOnAnyKey = true                  // toggle: any key also stops (that key is swallowed, never typed)
+    var triggerMode: String = "hold"                 // "hold": hold to talk · "toggle": tap to start, tap again to stop
+    var stopOnAnyKey: Bool = true                  // toggle: any key also stops (that key is swallowed, never typed)
     var voiceStyles: [String: String] = [:]  // per voice input: how it wants its key — "hold" | "tap" | "doubleTap"
-    var showMenuBarIcon = true
-    var showDockIcon = false
+    var showMenuBarIcon: Bool = true
+    var showDockIcon: Bool = false
     var lastError: String?         // why the file couldn't be read (a code; see errorText); previous values stay in effect
     // Localized at display time: the language setting lives in this object, so it can't be read while loading.
     var errorText: String? {
         lastError.map { _ in L("配置文件不是有效的 JSON，正在沿用上一次的设置", "The config file isn't valid JSON; keeping the previous settings") }
     }
-    var language = "system"
-    var holdDelay = 0.2            // minimum hold before the voice method gets its key
-    var restoreTimeout = 5.0       // longest wait after release before switching back
-    var fallbackDelay = 2.5        // used when the voice method shows no window to watch
+    var language: String = "system"
+    var holdDelay: Double = 0.2            // minimum hold before the voice method gets its key
+    var restoreTimeout: Double = 5.0       // longest wait after release before switching back
+    var fallbackDelay: Double = 2.5        // used when the voice method shows no window to watch
     private var loadedAt: Date?
-    private var checkedAt = Date.distantPast
+    private var checkedAt: Date = .distantPast
 
     init() { reload(force: true) }
 
@@ -104,7 +104,7 @@ final class Config {
 }
 
 final class Model {
-    static let shared = Model()
+    static let shared: Model = Model()
     var c: Config { Config.shared.reload(); return Config.shared }
 
     var voiceID: String { c.voiceInput }

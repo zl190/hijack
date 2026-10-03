@@ -27,6 +27,10 @@ class "AppState" as AppState << (S, SkyBlue) struct >> {
 }
 class "Mod" as Mod << (E, LightSteelBlue) enum >> { 
   ~ctrl
+  ~option
+  ~shift
+  ~command
+  ~fn
   ~flag : CGEventFlags
   ~symbol : String
   ~nsBit : Int 
@@ -54,11 +58,11 @@ class "KeySpec" as KeySpec << (S, SkyBlue) struct >> {
   ~init(binding:) 
 }
 class "Plan" as Plan << (S, SkyBlue) struct >> { 
-  ~trigger : _
-  ~provider : _
+  ~trigger : KeySpec
+  ~provider : VoiceProvider
   ~voiceID : String
   ~voiceName : String
-  ~forwardKey : _
+  ~forwardKey : KeySpec
   ~style : String
   ~toggle : Bool
   ~stopOnAnyKey : Bool
@@ -73,13 +77,13 @@ class "DictationRecord" as DictationRecord << (S, SkyBlue) struct >> {
   ~echoMs : Int?
   ~releasedAt : Date?
   ~heldMic : (tool: Bool?, device: Bool?)?
-  ~heldWindow : _
+  ~heldWindow : WindowState?
   ~sawWindow : Bool
   ~windowGoneMs : Int? 
 }
 class "Engine" as Engine << (C, DarkSeaGreen) >> { 
-  ~m : _
-  ~plan : _
+  ~m : Model
+  ~plan : Plan
   ~previous : String?
   ~generation : Int
   ~physicalDown : Bool
@@ -112,12 +116,12 @@ class "Engine" as Engine << (C, DarkSeaGreen) >> {
 }
 class "Config" as Config << (C, DarkSeaGreen) >> { 
   ~{static} shared : Config
-  ~trigger : _
-  ~voiceInput : _
-  ~voiceKeys : _
+  ~trigger : KeySpec?
+  ~voiceInput : String
+  ~voiceKeys : [String: KeySpec]
   ~triggerMode : String
   ~stopOnAnyKey : Bool
-  ~voiceStyles : [String : String]
+  ~voiceStyles : [String: String]
   ~showMenuBarIcon : Bool
   ~showDockIcon : Bool
   ~lastError : String?
@@ -134,25 +138,26 @@ class "Model" as Model << (C, DarkSeaGreen) >> {
   ~{static} shared : Model
   ~c : Config
   ~voiceID : String
-  ~provider : _
+  ~provider : VoiceProvider
   ~voiceName : String
-  ~userVoiceKey : _
-  ~detectedVoiceKey : _
-  ~forwardKey : _
-  ~customTrigger : _
-  ~trigger : _
+  ~userVoiceKey : KeySpec?
+  ~detectedVoiceKey : KeySpec?
+  ~forwardKey : KeySpec
+  ~customTrigger : KeySpec?
+  ~trigger : KeySpec
   ~toggleMode : Bool
   ~detectedStyle : String?
   ~voiceStyle : String 
 }
 class "RecordTarget" as RecordTarget << (E, LightSteelBlue) enum >> { 
-  ~trigger 
+  ~trigger
+  ~voiceKey(_:) 
 }
 class "SettingsStore" as SettingsStore << (C, DarkSeaGreen) >> { 
   ~{static} shared : SettingsStore
   ~triggerMode : String
   ~stopOnAnyKey : Bool
-  ~trigger : _
+  ~trigger : KeySpec?
   ~voiceInput : String
   ~sources : [SourceRow]
   ~showMenuBarIcon : Bool
@@ -168,13 +173,13 @@ class "SettingsStore" as SettingsStore << (C, DarkSeaGreen) >> {
   ~live : String
   ~last : String
   ~init()
-  ~engine : _
-  ~model : _
+  ~engine : Engine?
+  ~model : Model
   ~refresh()
   ~edit(_:)
   ~currentName : String
-  ~voiceKeyForCurrent : _
-  ~effectiveTrigger : _
+  ~voiceKeyForCurrent : KeySpec?
+  ~effectiveTrigger : KeySpec
   ~startRecording(_:)
   ~stopRecording() 
 }
@@ -186,6 +191,8 @@ class "SettingsWindowController" as SettingsWindowController << (C, DarkSeaGreen
 }
 class "WindowState" as WindowState << (E, LightSteelBlue) enum >> { 
   ~visible(_:)
+  ~none(_:)
+  ~unknown(_:)
   ~busy : Bool?
   ~text : String 
 }
@@ -194,7 +201,7 @@ class "InputMethodProvider" as InputMethodProvider << (S, SkyBlue) struct >> {
   ~label : (zh: String, en: String)?
   ~defaultKey : String?
   ~helpers : [String]
-  ~reader : _
+  ~reader : (() -> (key: KeySpec, style: String)?)?
   ~id : String
   ~name : String
   ~isInstalled : Bool
@@ -207,7 +214,7 @@ class "InputMethodProvider" as InputMethodProvider << (S, SkyBlue) struct >> {
 class "AppProvider" as AppProvider << (S, SkyBlue) struct >> { 
   ~bundle : String
   ~appName : String?
-  ~reader : _
+  ~reader : (() -> KeySpec?)?
   ~id : String
   ~name : String
   ~isInstalled : Bool
@@ -218,8 +225,8 @@ class "AppProvider" as AppProvider << (S, SkyBlue) struct >> {
   ~windowState() 
 }
 class "AppDelegate" as AppDelegate << (C, DarkSeaGreen) >> { 
-  ~engine : _
-  ~m : _
+  ~engine : Engine
+  ~m : Model
   ~menu : NSMenu
   ~item : NSStatusItem?
   ~applicationDidFinishLaunching(_:)
@@ -245,9 +252,30 @@ class "AppDelegate" as AppDelegate << (C, DarkSeaGreen) >> {
   ~openAccessibility() 
 }
 class "Name" as Notification.Name << (X, Orchid) extension >> { 
-  ~{static} hijackActivity : NSNotification.Name 
+  ~{static} hijackActivity 
 }
 VoiceProvider <|.. InputMethodProvider
 VoiceProvider <|.. AppProvider
 
+' HAS-A (derived from member types)
+AppDelegate --> Engine : engine
+AppDelegate --> Model : m
+AppProvider --> KeySpec : reader
+Config --> KeySpec : trigger, voiceKeys
+DictationRecord --> WindowState : heldWindow
+Engine --> DictationRecord : record
+Engine --> Model : m
+Engine --> Plan : plan
+InputMethodProvider --> KeySpec : reader
+KeySpec --> Mod : mods
+KeySpec --> NamedKey : named
+Model --> Config : c
+Model --> KeySpec : customTrigger, detectedVoiceKey, forwardKey, trigger, userVoiceKey
+Model --> VoiceProvider : provider
+Plan --> KeySpec : forwardKey, trigger
+Plan --> VoiceProvider : provider
+SettingsStore --> Engine : engine
+SettingsStore --> KeySpec : effectiveTrigger, trigger, voiceKeyForCurrent
+SettingsStore --> Model : model
+SettingsStore --> RecordTarget : recording
 @enduml

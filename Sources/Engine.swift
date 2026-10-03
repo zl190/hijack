@@ -32,32 +32,32 @@ struct Plan {
 
 /// What one dictation did, for the single line it leaves in the log.
 struct DictationRecord {
-    var pressedAt = Date()
+    var pressedAt: Date = Date()
     var keySentMs: Int?          // shortcut down → talk key sent (nil: released before it was sent)
     var echoMs: Int?             // shortcut down → our talk key's press came back through our own tap
     var releasedAt: Date?
     var heldMic: (tool: Bool?, device: Bool?)?   // last sample while the talk key was held
     var heldWindow: WindowState?                 // same sample
-    var sawWindow = false        // its voice window was on screen at some point after release
+    var sawWindow: Bool = false        // its voice window was on screen at some point after release
     var windowGoneMs: Int?       // release → voice window gone (the text is in)
 }
 
 final class Engine {
-    let m = Model.shared
-    private(set) var plan = Plan(Model.shared)
+    let m: Model = .shared
+    private(set) var plan: Plan = Plan(Model.shared)
     var previous: String?
-    var generation = 0
-    var physicalDown = false
-    var forwarded = false
-    var passthrough = false
-    var record = DictationRecord()
-    var restoring = false             // waiting for the text before switching back
+    var generation: Int = 0
+    var physicalDown: Bool = false
+    var forwarded: Bool = false
+    var passthrough: Bool = false
+    var record: DictationRecord = DictationRecord()
+    var restoring: Bool = false             // waiting for the text before switching back
     var tap: CFMachPort?
 
-    var active = false                // a voice session is running (hold: key held · toggle: between taps)
+    var active: Bool = false                // a voice session is running (hold: key held · toggle: between taps)
     var swallowUp: Int?               // key that stopped a toggle session: also eat its key-up
-    var paused = false                // the settings window is recording a key: let every key through
-    var waitingReported = false
+    var paused: Bool = false                // the settings window is recording a key: let every key through
+    var waitingReported: Bool = false
 
     /// Re-read the settings, between sessions only, so a change mid-session can't strand a held key.
     func refresh() {

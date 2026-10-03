@@ -6,7 +6,10 @@ import SwiftUI
 // MARK: settings window — a view of ~/.config/hijack/config.json (the file stays the source of truth).
 // Every change is written to the file at once; hand edits show up within a second.
 
-enum RecordTarget: Equatable { case trigger, voiceKey(String) }
+enum RecordTarget: Equatable {
+    case trigger
+    case voiceKey(String)
+}
 
 struct SourceRow: Identifiable {
     let id: String, name: String
@@ -15,25 +18,25 @@ struct SourceRow: Identifiable {
 }
 
 final class SettingsStore: ObservableObject {
-    static let shared = SettingsStore()
+    static let shared: SettingsStore = SettingsStore()
 
-    @Published var triggerMode = "hold"
-    @Published var stopOnAnyKey = true
+    @Published var triggerMode: String = "hold"
+    @Published var stopOnAnyKey: Bool = true
     @Published var trigger: KeySpec?
-    @Published var voiceInput = ""
+    @Published var voiceInput: String = ""
     @Published var sources: [SourceRow] = []
-    @Published var showMenuBarIcon = true
-    @Published var showDockIcon = false
-    @Published var launchAtLogin = false
-    @Published var language = "system"
-    @Published var holdDelay = 0.2
-    @Published var restoreTimeout = 5.0
-    @Published var fallbackDelay = 2.5
-    @Published var trusted = false
+    @Published var showMenuBarIcon: Bool = true
+    @Published var showDockIcon: Bool = false
+    @Published var launchAtLogin: Bool = false
+    @Published var language: String = "system"
+    @Published var holdDelay: Double = 0.2
+    @Published var restoreTimeout: Double = 5.0
+    @Published var fallbackDelay: Double = 2.5
+    @Published var trusted: Bool = false
     @Published var configError: String?
     @Published var recording: RecordTarget?
-    @Published var live = ""          // what the engine is doing right now
-    @Published var last = ""          // how the last dictation went
+    @Published var live: String = ""          // what the engine is doing right now
+    @Published var last: String = ""          // how the last dictation went
 
     private var timer: Timer?
     private var monitor: Any?
@@ -192,7 +195,7 @@ struct Card<Content: View>: View {
 struct Row<Trailing: View>: View {
     let title: String
     var hint: String? = nil
-    var divider = true
+    var divider: Bool = true
     @ViewBuilder let trailing: Trailing
     var body: some View {
         VStack(spacing: 0) {
@@ -235,7 +238,7 @@ struct ChoiceRow: View {
     let icon: String, title: String
     var detail: String? = nil
     let selected: Bool
-    var divider = true
+    var divider: Bool = true
     let action: () -> Void
     var body: some View {
         VStack(spacing: 0) {

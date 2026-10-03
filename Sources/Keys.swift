@@ -5,7 +5,12 @@ import ServiceManagement
 
 // MARK: keys — any key plus modifiers; a bare modifier key is a "modifier-only" key
 
-enum Mod: String, CaseIterable { case ctrl, option, shift, command, fn
+enum Mod: String, CaseIterable {
+    case ctrl
+    case option
+    case shift
+    case command
+    case fn
     var flag: CGEventFlags {
         switch self { case .ctrl: .maskControl; case .option: .maskAlternate; case .shift: .maskShift
                       case .command: .maskCommand; case .fn: .maskSecondaryFn }
