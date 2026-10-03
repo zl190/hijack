@@ -475,15 +475,17 @@ struct AdvancedTab: View {
     var body: some View {
         Page(store: store) {
             Card {
+                // Ranges shared with Config's load-time clamp and CLI.swift's `hijack set` (review-4 S5,
+                // Sources/Core/ConfigValues.swift): one source of truth for all three entry points.
                 Row(title: L("按住多久才开始", "Hold before starting"), hint: L("太短容易误触发", "Shorter means more accidental starts")) {
-                    stepper(store.holdDelay, range: 0.05...1, step: 0.05) { $0.holdDelay = $1 }
+                    stepper(store.holdDelay, range: holdDelayRange, step: 0.05) { $0.holdDelay = $1 }
                 }
                 Row(title: L("最多等文字上屏", "Longest wait for the text"), hint: L("说长段话时可以调大", "Raise it for long dictations")) {
-                    stepper(store.restoreTimeout, range: 1...15, step: 0.5) { $0.restoreTimeout = $1 }
+                    stepper(store.restoreTimeout, range: restoreTimeoutRange, step: 0.5) { $0.restoreTimeout = $1 }
                 }
                 Row(title: L("语音工具没有窗口时等待", "Wait when the voice tool shows no window"),
                     hint: L("看不到它何时上屏完，就固定等这么久", "Hijack can't tell when it's done, so it waits this long"), divider: false) {
-                    stepper(store.fallbackDelay, range: 0.5...10, step: 0.5) { $0.fallbackDelay = $1 }
+                    stepper(store.fallbackDelay, range: fallbackDelayRange, step: 0.5) { $0.fallbackDelay = $1 }
                 }
             }
             Card {
