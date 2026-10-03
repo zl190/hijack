@@ -22,6 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             Config.shared.reload(); self?.applyAppearance(); self?.engine.refresh()
             NotificationCenter.default.post(name: .hijackSettingsChanged, object: nil)
         }
+        trace("watching settings in \(self.watch!.roots.joined(separator: ", "))")
         engine.start()
         // Sleep, wake and lock land in the log, to line them up with a session that stops working.
         let ws = NSWorkspace.shared.notificationCenter
