@@ -27,8 +27,13 @@ mkdir -p "$APP/Contents/Frameworks"
 ditto "$SPARKLE_DIR/Sparkle.framework" "$APP/Contents/Frameworks/Sparkle.framework"
 rm -rf "$APP/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices"
 # The public key for update signatures. generate_keys prints it once; the placeholder makes every update fail its check.
+# With the placeholder the key is left out of Info.plist: Sparkle would refuse to start and show an alert on every launch.
 SPARKLE_PUBKEY="${HIJACK_SPARKLE_PUBKEY:-$(cat assets/sparkle-public-key.txt)}"
-case "$SPARKLE_PUBKEY" in REPLACE-*) echo "warning: assets/sparkle-public-key.txt is the placeholder; in-app updates will not verify" ;; esac
+SPARKLE_KEY_PLIST="  <key>SUPublicEDKey</key><string>$SPARKLE_PUBKEY</string>"
+case "$SPARKLE_PUBKEY" in REPLACE-*)
+  echo "warning: assets/sparkle-public-key.txt is the placeholder; this build has no in-app updates"
+  SPARKLE_KEY_PLIST="" ;;
+esac
 # App icon: the layered Icon Composer icon (Liquid Glass, Default/Dark/Clear/Tinted) needs Xcode's actool,
 # which also writes a flat Hijack.icns for older macOS. Command Line Tools alone: flat icon from the PNG.
 if xcrun --find actool >/dev/null 2>&1; then
@@ -59,12 +64,13 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>LSMinimumSystemVersion</key><string>13.0</string>
   <key>LSUIElement</key><true/>
   <key>SUFeedURL</key><string>https://github.com/zl190/hijack/releases/latest/download/appcast.xml</string>
-  <key>SUPublicEDKey</key><string>$SPARKLE_PUBKEY</string>
+$SPARKLE_KEY_PLIST
   <key>SUEnableAutomaticChecks</key><true/>
   <key>SUScheduledCheckInterval</key><integer>86400</integer>
 </dict></plist>
 PLIST
-# The framework is signed first, with the same identity as the app, so that --deep verification passes.
+# codesign re-signs the framework itself with the app identity. Autoupdate and Updater.app inside it keep
+# Sparkle's own signature; they run as separate processes and are not checked against the app's identity.
 codesign --force --sign "${HIJACK_SIGN_ID:--}" "$APP/Contents/Frameworks/Sparkle.framework"
 codesign --force --sign "${HIJACK_SIGN_ID:--}" "$APP"
 echo "built $APP $VERSION"

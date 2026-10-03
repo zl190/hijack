@@ -6,6 +6,9 @@ import Sparkle
 
 // MARK: menu (the whole UI)
 
+/// Shown where an update control would be, in a build that has no update key.
+var noUpdateKeyText: String { L("这个版本没有更新密钥，不能检查更新", "This build has no update key") }
+
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let engine: Engine = Engine.live()
     let m: Model = .shared
@@ -13,7 +16,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var item: NSStatusItem?
     var watch: SettingsWatch?
     /// In-app updates (Sparkle). One controller for the app's life; it owns the scheduled check.
-    let updater = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
+    /// A build without SUPublicEDKey (the key file still the placeholder) has no updater: Sparkle would
+    /// refuse to start and show an alert on every launch.
+    static let hasUpdateKey = Bundle.main.object(forInfoDictionaryKey: "SUPublicEDKey") != nil
+    let updater: SPUStandardUpdaterController? = hasUpdateKey
+        ? SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil) : nil
 
     func applicationDidFinishLaunching(_ n: Notification) {
         logInApp = true
@@ -116,7 +123,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Sparkle enables and disables this item itself (it is off while a check runs).
     func checkForUpdatesItem() -> NSMenuItem {
         let i = NSMenuItem(title: L("检查更新…", "Check for Updates…"), action: #selector(SPUStandardUpdaterController.checkForUpdates(_:)), keyEquivalent: "")
-        i.target = updater
+        if let updater { i.target = updater } else { i.isEnabled = false; i.toolTip = noUpdateKeyText }
         return i
     }
     @objc func recordShortcut() { SettingsWindowController.show(tab: 0); SettingsStore.shared.startRecording(.trigger) }

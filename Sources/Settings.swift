@@ -393,11 +393,16 @@ struct SourcesTab: View {
 
 /// In-app updates: two Sparkle settings and a manual check. Sparkle stores both values itself.
 struct UpdatesCard: View {
-    private var updater: SPUUpdater? { (NSApp.delegate as? AppDelegate)?.updater.updater }
+    private var updater: SPUUpdater? { (NSApp.delegate as? AppDelegate)?.updater?.updater }
     @State private var checksAutomatically = true
     @State private var downloadsAutomatically = false
     var body: some View {
         Card(title: L("更新", "Updates")) {
+            if updater == nil {
+                Row(title: L("当前版本", "Version"), hint: appVersion, divider: false) {
+                    Text(noUpdateKeyText).font(.footnote).foregroundStyle(.secondary)
+                }
+            } else {
             Row(title: L("自动检查更新", "Check for Updates Automatically"), hint: L("每天一次，发现新版本会先问你", "Once a day. Sparkle asks before it installs")) {
                 Toggle("", isOn: Binding(get: { checksAutomatically }, set: { v in
                     updater?.automaticallyChecksForUpdates = v; checksAutomatically = v
@@ -410,6 +415,7 @@ struct UpdatesCard: View {
             }
             Row(title: L("当前版本", "Version"), hint: appVersion, divider: false) {
                 Button(L("现在检查", "Check Now")) { updater?.checkForUpdates() }
+            }
             }
         }
         .onAppear {
