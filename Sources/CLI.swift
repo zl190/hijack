@@ -37,14 +37,14 @@ let appBundle: Bundle = {
 }()
 let appVersion = appBundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
 
-/// The running version, and the update Sparkle found at its last check (its own user defaults; no network).
+/// The running version, and the update the app recorded at its last check (no network call).
+/// The app writes HijackUpdateFound from its Sparkle delegate; Sparkle stores only the skipped build.
 func cliVersion() -> Int32 {
     print(appVersion)
     // The CLI is often a symlink outside the bundle, so it reads the app's defaults domain by name.
     let d = UserDefaults.standard.persistentDomain(forName: "com.zl190.hijack") ?? [:]
-    let item = d["SULatestAppcastItemFound"] as? [String: Any]
-    let found = (item?["displayVersionString"] as? String) ?? (item?["versionString"] as? String)
-    if let line = UpdateNotice.line(running: appVersion, found: found, skipped: d["SUSkippedVersion"] as? String) { print(line) }
+    let found = UpdateFound(defaults: d[UpdateFound.defaultsKey] as? [String: Any])
+    if let line = UpdateNotice.line(running: appVersion, found: found, skippedBuild: d["SUSkippedVersion"] as? String) { print(line) }
     return 0
 }
 

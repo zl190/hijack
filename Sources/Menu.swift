@@ -9,6 +9,16 @@ import Sparkle
 /// Shown where an update control would be, in a build that has no update key.
 var noUpdateKeyText: String { L("这个版本没有更新密钥，不能检查更新", "This build has no update key") }
 
+/// Records what the last check found, so `hijack version` can print it. Sparkle keeps no such record itself.
+final class UpdateRecorder: NSObject, SPUUpdaterDelegate {
+    func updater(_ updater: SPUUpdater, didFindValidUpdate item: SUAppcastItem) {
+        UserDefaults.standard.set(UpdateFound(display: item.displayVersionString, build: item.versionString).asDefaults, forKey: UpdateFound.defaultsKey)
+    }
+    func updaterDidNotFindUpdate(_ updater: SPUUpdater) {
+        UserDefaults.standard.removeObject(forKey: UpdateFound.defaultsKey)
+    }
+}
+
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let engine: Engine = Engine.live()
     let m: Model = .shared
@@ -19,8 +29,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// A build without SUPublicEDKey (the key file still the placeholder) has no updater: Sparkle would
     /// refuse to start and show an alert on every launch.
     static let hasUpdateKey = Bundle.main.object(forInfoDictionaryKey: "SUPublicEDKey") != nil
-    let updater: SPUStandardUpdaterController? = hasUpdateKey
-        ? SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil) : nil
+    let updateRecorder = UpdateRecorder()
+    lazy var updater: SPUStandardUpdaterController? = AppDelegate.hasUpdateKey
+        ? SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: updateRecorder, userDriverDelegate: nil) : nil
 
     func applicationDidFinishLaunching(_ n: Notification) {
         logInApp = true
@@ -39,6 +50,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // (waiting for Accessibility, or the tap install itself), and the icon must see it (review-4 M1).
         NotificationCenter.default.addObserver(forName: .hijackStateChanged, object: nil, queue: .main) { [weak self] _ in self?.updateIcon() }
         engine.start()
+        _ = updater   // created now, so the scheduled check starts at launch
         // Sleep, wake and lock land in the log, to line them up with a session that stops working.
         let ws = NSWorkspace.shared.notificationCenter
         // After wake and after unlock the engine also reconciles: a session across sleep stops, the trigger is re-read (FM-25).
