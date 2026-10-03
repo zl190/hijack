@@ -66,13 +66,14 @@ release: test
 	HIJACK_SIGN_ID="$(RELEASE_SIGN_ID)" ./build.sh
 	ditto -c -k --keepParent $(APP) $(ZIP)
 	# Sparkle: one archive per version in dist/ (older zips stay there, out of git). generate_appcast reads
-	# the .md next to the zip as release notes, signs the archive with the EdDSA key from the keychain,
+	# the .md next to the zip as release notes (embedded as Markdown; a link would point at a file that is never uploaded),
+	# signs the archive with the EdDSA key from the keychain,
 	# and writes dist/appcast.xml. The release asset keeps the name Hijack.zip (the cask URL), so the
 	# enclosure URL is rewritten from Hijack-$(VERSION).zip to Hijack.zip.
 	mkdir -p dist
 	cp $(ZIP) dist/Hijack-$(VERSION).zip
 	cp release-notes/v$(VERSION).md dist/Hijack-$(VERSION).md
-	$(SPARKLE_BIN)/generate_appcast --download-url-prefix "$(RELEASE_URL)" dist
+	$(SPARKLE_BIN)/generate_appcast --embed-release-notes --download-url-prefix "$(RELEASE_URL)" dist
 	@grep -q 'sparkle:edSignature=' dist/appcast.xml || { \
 		echo "dist/appcast.xml has no EdDSA signature. Is the Sparkle key in the keychain?"; exit 1; \
 	}

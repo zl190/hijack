@@ -82,7 +82,7 @@ Acceptance:
 2. `Info.plist` gains `SUFeedURL` (D4), `SUPublicEDKey`, `SUEnableAutomaticChecks`, `SUScheduledCheckInterval`.
 3. `Menu.swift` creates one `SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)` and adds "检查更新…" / "Check for Updates…" above "设置…" / "Settings…", target the controller, action `checkForUpdates(_:)`. `Settings.swift` adds the "Updates" card from D7; the toggles read and write `updater.automaticallyChecksForUpdates` and `updater.automaticallyDownloadsUpdates`.
 4. `hijack version` prints the running version. When the last check found a newer one, it prints that too, read from Sparkle's user defaults. The CLI makes no network call.
-5. `make release` signs the zip with `sign_update`, with the key from the keychain. It writes `appcast.xml` with `generate_appcast` over `dist/` and `release-notes/v<VERSION>.html`. The HTML comes from the Markdown through `pandoc` when present, else as the Markdown text in `<pre>`.
+5. `make release` writes `appcast.xml` with `generate_appcast` over `dist/`, which signs the archive with the key from the keychain. The release notes are the Markdown file next to the zip, embedded with `--embed-release-notes` (Sparkle renders `sparkle:format="markdown"`). No HTML file and no `pandoc`.
 6. The cask keeps working. Sparkle and brew both replace `/Applications/Hijack.app`; the relauncher LaunchAgent opens the app only when it is not running, so Sparkle's own relaunch wins. T3 verifies this on a real update (acceptance 3).
 7. One-time owner step, by hand: `generate_keys` (stores the EdDSA key in the login keychain, prints the public key for `SUPublicEDKey`).
 
