@@ -2,6 +2,7 @@ import AppKit
 import ApplicationServices
 import ServiceManagement
 import SwiftUI
+import Sparkle
 
 // MARK: settings window — a view of ~/.config/hijack/config.json (the file stays the source of truth).
 // Every change is written to the file at once; hand edits show up within a second.
@@ -390,6 +391,34 @@ struct SourcesTab: View {
     }
 }
 
+/// In-app updates: two Sparkle settings and a manual check. Sparkle stores both values itself.
+struct UpdatesCard: View {
+    private var updater: SPUUpdater? { (NSApp.delegate as? AppDelegate)?.updater.updater }
+    @State private var checksAutomatically = true
+    @State private var downloadsAutomatically = false
+    var body: some View {
+        Card(title: L("更新", "Updates")) {
+            Row(title: L("自动检查更新", "Check for Updates Automatically"), hint: L("每天一次，发现新版本会先问你", "Once a day. Sparkle asks before it installs")) {
+                Toggle("", isOn: Binding(get: { checksAutomatically }, set: { v in
+                    updater?.automaticallyChecksForUpdates = v; checksAutomatically = v
+                })).toggleStyle(.switch).labelsHidden()
+            }
+            Row(title: L("自动下载并安装", "Download and Install Automatically")) {
+                Toggle("", isOn: Binding(get: { downloadsAutomatically }, set: { v in
+                    updater?.automaticallyDownloadsUpdates = v; downloadsAutomatically = v
+                })).toggleStyle(.switch).labelsHidden()
+            }
+            Row(title: L("当前版本", "Version"), hint: appVersion, divider: false) {
+                Button(L("现在检查", "Check Now")) { updater?.checkForUpdates() }
+            }
+        }
+        .onAppear {
+            checksAutomatically = updater?.automaticallyChecksForUpdates ?? true
+            downloadsAutomatically = updater?.automaticallyDownloadsUpdates ?? false
+        }
+    }
+}
+
 struct GeneralTab: View {
     @ObservedObject var store: SettingsStore
     var body: some View {
@@ -420,6 +449,7 @@ struct GeneralTab: View {
                     }.labelsHidden().frame(width: 130)
                 }
             }
+            UpdatesCard()
             Card {
                 Row(title: L("配置文件", "Config File"), hint: "~/.config/hijack/config.json", divider: false) {
                     Button(L("在编辑器中打开", "Open in Editor")) { (NSApp.delegate as? AppDelegate)?.openConfig() }
