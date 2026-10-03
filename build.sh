@@ -5,13 +5,15 @@
 set -e
 cd "$(dirname "$0")"
 VERSION="${HIJACK_VERSION:-$(cat VERSION)}"
-# CFBundleVersion carries the build identity: VERSION.sha, +dirty when the tree has uncommitted
-# changes. CFBundleShortVersionString stays plain VERSION (what the user sees, what `hijack version`
-# leads with). Sparkle compares updates by CFBundleVersion by default: the appcast's sparkle:version
-# must match this (or use sparkle:shortVersionString consistently) — that wiring is a separate ticket.
+# CFBundleVersion stays plain VERSION (review-4 M2): generate_appcast copies it into sparkle:version, and
+# Sparkle's SUStandardVersionComparator orders two builds of the SAME VERSION by the sha's characters, not
+# by recency — a real risk now that Sparkle is wired up on this branch. The build identity (sha, +dirty
+# when the tree has uncommitted changes) goes in the custom HijackCommit key instead; `hijack version` and
+# `hijack status` print it next to VERSION. `make release` builds at a clean tag, so a release's
+# HijackCommit is always clean.
 GIT_SHA="$(git rev-parse --short=7 HEAD 2>/dev/null || true)"
 if [ -n "$GIT_SHA" ] && [ -n "$(git status --porcelain 2>/dev/null)" ]; then GIT_SHA="${GIT_SHA}+dirty"; fi
-BUILD_VERSION="$VERSION"; [ -n "$GIT_SHA" ] && BUILD_VERSION="$VERSION.$GIT_SHA"
+HIJACK_COMMIT="${GIT_SHA:-unknown}"
 APP=build/Hijack.app
 rm -rf build && mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 # Sparkle (in-app updates), pinned by sha256. The framework is linked by swiftc and embedded in the app.
@@ -72,7 +74,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleIconName</key><string>Hijack</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>$VERSION</string>
-  <key>CFBundleVersion</key><string>$BUILD_VERSION</string>
+  <key>CFBundleVersion</key><string>$VERSION</string>
+  <key>HijackCommit</key><string>$HIJACK_COMMIT</string>
   <key>LSMinimumSystemVersion</key><string>13.0</string>
   <key>LSUIElement</key><true/>
   <key>SUFeedURL</key><string>https://github.com/zl190/hijack/releases/latest/download/appcast.xml</string>
@@ -85,4 +88,4 @@ PLIST
 # Sparkle's own signature; they run as separate processes and are not checked against the app's identity.
 codesign --force --sign "${HIJACK_SIGN_ID:--}" "$APP/Contents/Frameworks/Sparkle.framework"
 codesign --force --sign "${HIJACK_SIGN_ID:--}" "$APP"
-echo "built $APP $VERSION (build $BUILD_VERSION)"
+echo "built $APP $VERSION (commit $HIJACK_COMMIT)"
