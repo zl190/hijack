@@ -141,7 +141,7 @@ struct LiveScheduler: Scheduler {
 
 struct LiveSink: Sink {
     func log(_ line: String) { fileLog(line) }
-    func trace(_ msg: String) { debugTrace(msg) }
+    func trace(_ msg: @autoclosure @escaping () -> String) { debugTrace(msg()) }
     func report(_ phase: String, _ detail: String) {
         NotificationCenter.default.post(name: .hijackActivity, object: nil, userInfo: ["phase": phase, "detail": detail])
     }
@@ -153,7 +153,7 @@ struct LiveSink: Sink {
 func selectSource(_ id: String) -> Bool { select(id) }
 func frontAppLive() -> String { frontApp() }
 func fileLog(_ line: String) { log(line) }
-func debugTrace(_ msg: String) { trace(msg) }
+func debugTrace(_ msg: @autoclosure @escaping () -> String) { trace(msg()) }
 
 let timebase: mach_timebase_info_data_t = { var t = mach_timebase_info_data_t(); mach_timebase_info(&t); return t }()
 func ticksToMs(_ ticks: UInt64) -> Double { Double(ticks) * Double(timebase.numer) / Double(timebase.denom) / 1e6 }

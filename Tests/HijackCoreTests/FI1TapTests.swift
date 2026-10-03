@@ -185,3 +185,18 @@ final class FI1TapTests: XCTestCase {
         XCTAssertEqual(r.keys.posted.count, 0)
     }
 }
+
+// Review-4 S6: trace builds its string only when the sink wants it. The tap callback pays nothing otherwise.
+extension FI1TapTests {
+    func testS6_TraceBuildsNoStringWhenNobodyListens() {
+        let r = Rig()
+        var built = 0
+        r.sink.keepTraces = false
+        r.engine.trace({ built += 1; return "expensive" }())
+        XCTAssertEqual(built, 0)
+        r.sink.keepTraces = true
+        r.engine.trace({ built += 1; return "expensive" }())
+        XCTAssertEqual(built, 1)
+        XCTAssertEqual(r.sink.traces.last, "expensive")
+    }
+}

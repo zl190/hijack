@@ -86,10 +86,11 @@ final class FakeProbes: Probes {
 final class FakeSink: Sink {
     var lines: [String] = []
     var traces: [String] = []
+    var keepTraces = true                  // false: nobody streams the debug log, the string must not be built
     var reports: [(phase: String, detail: String)] = []
     var states: [(trusted: Bool, tapActive: Bool)] = []
     func log(_ line: String) { lines.append(line) }
-    func trace(_ msg: String) { traces.append(msg) }
+    func trace(_ msg: @autoclosure @escaping () -> String) { if keepTraces { traces.append(msg()) } }
     func report(_ phase: String, _ detail: String) { reports.append((phase, detail)) }
     func state(trusted: Bool, tapActive: Bool) { states.append((trusted, tapActive)) }
     func sourceName(_ id: String) -> String { "Name(\(id))" }

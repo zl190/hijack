@@ -75,7 +75,7 @@ final class Engine {
     }
 
     func log(_ line: String) { sink.log(line) }
-    func trace(_ msg: String) { sink.trace(msg) }
+    func trace(_ msg: @autoclosure @escaping () -> String) { sink.trace(msg()) }   // stays lazy: msg() is inside the new autoclosure
 
     /// Re-read the settings, between sessions only, so a change mid-session can't strand a held key.
     func refresh() {

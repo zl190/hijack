@@ -69,7 +69,7 @@ protocol Scheduler {
 /// Where Engine writes: the log file, the trace, the settings window, state.json.
 protocol Sink {
     func log(_ line: String)
-    func trace(_ msg: String)
+    func trace(_ msg: @autoclosure @escaping () -> String)   // built only when someone streams the debug log
     func report(_ phase: String, _ detail: String)
     func state(trusted: Bool, tapActive: Bool)
     func sourceName(_ id: String) -> String
