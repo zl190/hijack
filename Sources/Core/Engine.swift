@@ -63,6 +63,7 @@ final class Engine {
     var span: (id: OSSignpostID, dictation: OSSignpostIntervalState, phase: (name: StaticString, state: OSSignpostIntervalState))?
 
     var swallowUp: Int?               // key that stopped a toggle session: also eat its key-up
+    var quitting: Bool = false        // inside stopForQuit(): endVoice() must post the stop tap synchronously (M1)
     var paused: Bool = false                // the settings window is recording a key: let every key through
     var forwardKeyEdgeSeen: Bool = false    // an edge of the talk key came through the tap since start (S2)
     var waitingReported: Bool = false
@@ -103,7 +104,22 @@ final class Engine {
         }
     }
     func endVoice() {
-        if plan.style == "hold" { post(plan.forwardKey, down: false) } else { tapKey() }   // "press any key to finish"
+        if plan.style == "hold" { post(plan.forwardKey, down: false) }
+        else if quitting { synchronousTapForQuit() }   // M1: a scheduled tapKey() would never run before exit()
+        else { tapKey() }   // "press any key to finish"
+    }
+
+    /// The stop tap, inline (M1, docs/review-4/hardening-review.md): used only from stopForQuit(), where
+    /// terminate() calls exit() right after applicationWillTerminate returns, so a post scheduled through
+    /// clock.after (DispatchQueue.main.asyncAfter on the live Scheduler) would never run. Timing matches
+    /// tapKey()'s own (30ms down-to-up; 120ms from the first tap's down to the second's, for doubleTap).
+    func synchronousTapForQuit() {
+        let key = plan.forwardKey
+        post(key, down: true); usleep(30_000); post(key, down: false)
+        if plan.style == "doubleTap" {
+            usleep(90_000)
+            post(key, down: true); usleep(30_000); post(key, down: false)
+        }
     }
 
     func post(_ key: KeySpec, down: Bool) {
@@ -384,7 +400,9 @@ final class Engine {
     /// process exits right after this call, so `.quit` goes straight to idle instead of `waitingForText`.
     func stopForQuit() {
         guard machine.isActive else { return }
+        quitting = true
         run(.quit)
+        quitting = false
     }
 
     /// Re-enable the tap and check that it took (FM-02). One retry on the next run-loop turn; state.json tells the menu.

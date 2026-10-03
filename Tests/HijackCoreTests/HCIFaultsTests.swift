@@ -160,6 +160,32 @@ final class HCIFaultsTests: XCTestCase {
         XCTAssertEqual(r.engine.machine.state, .idle)
     }
 
+    // M1 (docs/review-4/hardening-review.md): a tap/doubleTap tool's stop key normally goes out through
+    // tapKey(), scheduled with clock.after — DispatchQueue.main.asyncAfter on the live Scheduler. But
+    // terminate() calls exit() right after applicationWillTerminate returns, so a scheduled post never
+    // runs. Quit must post the stop tap synchronously, with no clock advance.
+    func testStopForQuit_TapStyleIsPostedSynchronouslyWithNoClockAdvance() {
+        let r = Rig(start: false)
+        r.plan.style = "tap"
+        r.engine.start()
+        r.pressUntilListening(echo: false)
+        let before = r.keys.posted.count
+        r.engine.stopForQuit()
+        XCTAssertEqual(r.keys.posted[before...].map(\.down), [true, false], "the stop tap's down and up")
+        XCTAssertEqual(r.engine.machine.state, .idle)
+    }
+
+    func testStopForQuit_DoubleTapStyleIsPostedSynchronouslyWithNoClockAdvance() {
+        let r = Rig(start: false)
+        r.plan.style = "doubleTap"
+        r.engine.start()
+        r.pressUntilListening(echo: false)
+        let before = r.keys.posted.count
+        r.engine.stopForQuit()
+        XCTAssertEqual(r.keys.posted[before...].map(\.down), [true, false, true, false], "two full taps")
+        XCTAssertEqual(r.engine.machine.state, .idle)
+    }
+
     // Out-of-range: nothing active (idle) when the app quits, so nothing is posted.
     func testStopForQuit_IdleDoesNothing() {
         let r = Rig()
