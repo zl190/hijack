@@ -32,13 +32,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                              (NSWorkspace.sessionDidResignActiveNotification, "session inactive"), (NSWorkspace.sessionDidBecomeActiveNotification, "session active")] {
             ws.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
                 log(text)
-                if name == NSWorkspace.didWakeNotification { self?.engine.reconcileAfterWake(text) }
+                if name == NSWorkspace.willSleepNotification { self?.engine.systemWillSleep() }
+                if name == NSWorkspace.didWakeNotification { self?.engine.reconcileAfterWake(.systemWake) }
             }
         }
         for (name, text) in [("com.apple.screenIsLocked", "screen locked"), ("com.apple.screenIsUnlocked", "screen unlocked")] {
             DistributedNotificationCenter.default().addObserver(forName: .init(name), object: nil, queue: .main) { [weak self] _ in
                 log(text)
-                if text == "screen unlocked" { self?.engine.reconcileAfterWake(text) }
+                if text == "screen locked" { self?.engine.screenLocked() }
+                if text == "screen unlocked" { self?.engine.reconcileAfterWake(.screenUnlock) }
             }
         }
         // Reopens Hijack after an installer replaces it (brew can't: its install sandbox denies launching apps).

@@ -76,7 +76,7 @@ final class FI1TapTests: XCTestCase {
     func testFM25_WakeDuringHoldStopsTheSession() {
         let r = Rig()
         r.pressUntilListening()
-        r.engine.reconcileAfterWake("system wake")
+        r.engine.reconcileAfterWake(.systemWake)
         XCTAssertTrue(r.sink.has("session was active across system wake"))
         XCTAssertEqual(r.keys.count(Rig.fn, down: false), 1)
         XCTAssertEqual(r.engine.machine.state, .waitingForText)
@@ -87,16 +87,62 @@ final class FI1TapTests: XCTestCase {
         let r = Rig(toggle: true)
         r.press(); r.release(); r.clock.advance(0.3)
         XCTAssertEqual(r.engine.machine.state, .listening)
-        r.engine.reconcileAfterWake("screen unlocked")
+        r.engine.reconcileAfterWake(.screenUnlock)
         XCTAssertEqual(r.keys.count(Rig.fn, down: false), 1)
         XCTAssertEqual(r.engine.machine.state, .waitingForText)
+    }
+
+    // FM-25: wake during starting, before the talk key went out: the session stops, no release is posted.
+    func testFM25_WakeDuringStartingStopsWithoutARelease() {
+        let r = Rig()
+        r.press(); r.clock.advance(0.1)
+        XCTAssertEqual(r.engine.machine.state, .starting)
+        r.engine.reconcileAfterWake(.systemWake)
+        XCTAssertEqual(r.engine.machine.state, .waitingForText)
+        XCTAssertEqual(r.keys.posted.count, 0)
+    }
+
+    // FM-25 (review-4 S3): the wake notification arrives after the user already started a new dictation. Leave it.
+    func testFM25_LateWakeNotificationLeavesAFreshDictationAlone() {
+        let r = Rig()
+        r.engine.systemWillSleep()
+        r.clock.advance(60)
+        r.pressUntilListening()
+        r.engine.reconcileAfterWake(.systemWake)
+        XCTAssertEqual(r.engine.machine.state, .listening, "pressed after the sleep: not ours to stop")
+        XCTAssertEqual(r.keys.count(Rig.fn, down: false), 0)
+    }
+
+    // FM-25 (review-4 S3): the session started before the sleep. The wake stops it.
+    func testFM25_SessionFromBeforeTheSleepIsStopped() {
+        let r = Rig()
+        r.pressUntilListening()
+        r.engine.systemWillSleep()
+        r.clock.advance(60)
+        r.engine.reconcileAfterWake(.systemWake)
+        XCTAssertEqual(r.engine.machine.state, .waitingForText)
+        XCTAssertEqual(r.keys.count(Rig.fn, down: false), 1)
+    }
+
+    // FM-25 (review-4 S3): the same two branches for the screen lock.
+    func testFM25_UnlockUsesTheLockTime() {
+        let r = Rig(toggle: true)
+        r.engine.screenLocked()
+        r.clock.advance(5)
+        r.press(); r.release(); r.clock.advance(0.3)
+        r.engine.reconcileAfterWake(.screenUnlock)
+        XCTAssertEqual(r.engine.machine.state, .listening, "started after the lock")
+        r.engine.screenLocked()
+        r.clock.advance(5)
+        r.engine.reconcileAfterWake(.screenUnlock)
+        XCTAssertEqual(r.engine.machine.state, .waitingForText, "started before this lock")
     }
 
     // FM-25: wake while idle changes nothing.
     func testFM25_WakeWhileIdleIsQuiet() {
         let r = Rig()
         let lines = r.sink.lines.count
-        r.engine.reconcileAfterWake("system wake")
+        r.engine.reconcileAfterWake(.systemWake)
         XCTAssertEqual(r.sink.lines.count, lines)
         XCTAssertEqual(r.keys.posted.count, 0)
     }

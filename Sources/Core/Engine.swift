@@ -310,10 +310,19 @@ final class Engine {
         if !downNow && machine.isActive && !plan.toggle { run(.release) }
     }
 
+    enum Wake { case systemWake, screenUnlock }
+    var sleptAt: Date?      // the last willSleep notification
+    var lockedAt: Date?     // the last screenIsLocked notification
+    func systemWillSleep() { sleptAt = clock.now }
+    func screenLocked() { lockedAt = clock.now }
+
     /// After sleep or unlock the voice tool and the input sources are in an unknown state (FM-25).
-    /// A session that was running stops now, in hold and in toggle mode. Then the trigger is reconciled.
-    func reconcileAfterWake(_ reason: String) {
-        if machine.isActive {
+    /// A session that was running across it stops now, in hold and in toggle mode. A session that started
+    /// after the sleep or the lock is the user's: the notification came late (review-4 S3). Then the trigger is re-read.
+    func reconcileAfterWake(_ wake: Wake) {
+        let reason = wake == .systemWake ? "system wake" : "screen unlocked"
+        let since = wake == .systemWake ? sleptAt : lockedAt
+        if machine.isActive, since.map({ record.pressedAt < $0 }) ?? true {
             log("session was active across \(reason): stopping it")
             run(plan.toggle ? .press : .release)
         }
