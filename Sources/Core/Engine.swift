@@ -307,10 +307,12 @@ final class Engine {
     func summary(end: String) {
         let p = plan, r = record
         let held = (r.releasedAt ?? clock.now).timeIntervalSince(r.pressedAt)
-        var line = "dictation \(p.voiceName) (\(p.toggle ? "toggle" : "hold")): held \(String(format: "%.2f", held))s"
+        // review-5 #17: the tool and the key are logged by their stable id, not `.name`/`.voiceName` (both
+        // run through `localize`), so a language change does not split one tool into two in `hijack stats`.
+        var line = "dictation \(p.providerID) (\(p.toggle ? "toggle" : "hold")): held \(String(format: "%.2f", held))s"
         if let sent = r.keySentMs {
             func onOff(_ b: Bool?) -> String { b.map { $0 ? "on" : "off" } ?? "?" }
-            line += ", \(p.forwardKey.name) sent after \(sent)ms"
+            line += ", \(p.forwardKey.logID) sent after \(sent)ms"
             if p.switchesInput { line += r.windowGoneMs.map { ", window closed \($0)ms after release" } ?? ", window never closed after release" }
             line += ", \(end)"
             line += " | echo \(r.echoMs.map { "after \($0)ms" } ?? "missing"), mic tool \(onOff(r.heldMic?.tool)) device \(onOff(r.heldMic?.device))"
@@ -318,7 +320,7 @@ final class Engine {
         } else if r.switchFailed {
             line += ", \(end)"
         } else {
-            line += ", released before \(p.forwardKey.name) was sent"
+            line += ", released before \(p.forwardKey.logID) was sent"
         }
         if tapInstalled, !tap.isEnabled { line += ", key tap disabled" }
         if tap.secureInputOn { line += ", secure input on" }

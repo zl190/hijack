@@ -270,3 +270,26 @@ extension HCIFaultsTests {
         XCTAssertEqual(r.planReads, before, "still active: nothing to refresh")
     }
 }
+
+// review-5 #17: the summary line must carry stable identifiers, not display names that change with the
+// language, or hijack stats splits one tool into two after a language switch (Stats.swift groups by this
+// line's leading field).
+extension HCIFaultsTests {
+    func testSummaryLine_CarriesStableIdsNotLocalizedNames() {
+        let r = Rig()
+        r.pressUntilListening(); r.release(); r.clock.advance(2.6)
+        let line = r.sink.summaries.last ?? ""
+        XCTAssertTrue(line.hasPrefix("dictation \(Rig.voice) ("), line)
+        XCTAssertTrue(line.contains("\(Rig.fn.logID) sent after"), line)
+        XCTAssertFalse(line.contains("WeType"), "the localized display name must not be on the line: \(line)")
+    }
+
+    // Out-of-range: released before the talk key went out still names the key by its stable id, not "Fn".
+    // App mode (switchesInput: false) finishes synchronously on this release, no clock advance needed.
+    func testSummaryLine_TooShortAlsoUsesTheStableKeyId() {
+        let r = Rig(switchesInput: false, trigger: KeySpec.named("right_option")!)
+        r.press(); r.release()
+        let line = r.sink.summaries.last ?? ""
+        XCTAssertTrue(line.contains("released before \(Rig.fn.logID) was sent"), line)
+    }
+}

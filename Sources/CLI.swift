@@ -295,11 +295,15 @@ func cliStats(_ args: [String], json: Bool) -> Int32 {
     let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"
     let s = DictationStats.compute(lines: lines, days: days, today: f.string(from: Date()))
     let span = days.map { "last \($0) days" } ?? "all of the log"
+    // review-5 #17: s.tools is keyed by whatever Engine.summary wrote (a provider id since this change, a
+    // display name on an older line). voiceProvider(for:) resolves a known id to its display name; an
+    // unresolved key (an old line, or an id no longer installed) comes back unchanged.
+    let toolNames = Dictionary(s.tools.map { (voiceProvider(for: $0.key).name, $0.value) }, uniquingKeysWith: +)
     if json {
         var d: [String: Any] = ["span": span, "dictations": s.dictations, "tooShort": s.tooShort,
             "outcomes": Dictionary(uniqueKeysWithValues: s.outcomes.map { ($0.key.rawValue, $0.value) }),
             "failureCauses": Dictionary(uniqueKeysWithValues: s.causes.map { ($0.key.rawValue, $0.value) }),
-            "tools": s.tools, "keyTapPaused": s.tapPaused, "slowKeyEvents": s.slowKeys, "triggerCaughtUp": s.caughtUp]
+            "tools": toolNames, "keyTapPaused": s.tapPaused, "slowKeyEvents": s.slowKeys, "triggerCaughtUp": s.caughtUp]
         if let r = s.successRate { d["successRate"] = (r * 1000).rounded() / 1000 }
         for (k, v) in [("talkKeyMsP50", s.sentP50), ("talkKeyMsP95", s.sentP95), ("textInMsP50", s.textInP50), ("textInMsP95", s.textInP95)] {
             if let v { d[k] = v }
@@ -321,6 +325,6 @@ func cliStats(_ args: [String], json: Bool) -> Int32 {
     print("Talk key sent after".padding(toLength: 24, withPad: " ", startingAt: 0) + "p50 \(ms(s.sentP50))   p95 \(ms(s.sentP95))")
     print("Text in after release".padding(toLength: 24, withPad: " ", startingAt: 0) + "p50 \(ms(s.textInP50))   p95 \(ms(s.textInP95))")
     print("Incidents".padding(toLength: 24, withPad: " ", startingAt: 0) + "key tap paused by macOS \(s.tapPaused) · slow key events \(s.slowKeys) · shortcut caught up \(s.caughtUp)")
-    if s.tools.count > 1 { print("By voice tool".padding(toLength: 24, withPad: " ", startingAt: 0) + s.tools.sorted { $0.value > $1.value }.map { "\($0.key) \($0.value)" }.joined(separator: " · ")) }
+    if toolNames.count > 1 { print("By voice tool".padding(toLength: 24, withPad: " ", startingAt: 0) + toolNames.sorted { $0.value > $1.value }.map { "\($0.key) \($0.value)" }.joined(separator: " · ")) }
     return 0
 }
