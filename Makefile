@@ -75,8 +75,8 @@ release: test
 	cp $(ZIP) dist/Hijack-$(VERSION).zip
 	cp release-notes/v$(VERSION).md dist/Hijack-$(VERSION).md
 	$(SPARKLE_BIN)/generate_appcast --embed-release-notes --maximum-versions 1 --download-url-prefix "$(RELEASE_URL)" dist
-	@grep -q 'sparkle:edSignature=' dist/appcast.xml || { \
-		echo "dist/appcast.xml has no EdDSA signature. Is the Sparkle key in the keychain?"; exit 1; \
+	@grep 'Hijack-$(VERSION)\.zip"' dist/appcast.xml | grep -q 'sparkle:edSignature=' || { \
+		echo "The $(VERSION) item in dist/appcast.xml has no EdDSA signature. Is the Sparkle key in the keychain, and does it match the public key in the app?"; exit 1; \
 	}
 	sed -i '' 's|/Hijack-$(VERSION)\.zip"|/Hijack.zip"|' dist/appcast.xml
 	gh release upload "v$(VERSION)" $(ZIP) dist/appcast.xml --clobber
