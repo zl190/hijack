@@ -19,9 +19,12 @@ final class SettingsWatch {
         let callback: FSEventStreamCallback = { _, info, _, _, _, _ in
             Unmanaged<SettingsWatch>.fromOpaque(info!).takeUnretainedValue().onChange()
         }
-        // NoDefer (FSEvents.h): a change after a quiet spell is delivered at once (measured: 12-14 ms after a
-        // config write); only changes within `latency` of a delivery are batched. Without it, every change would
-        // wait `latency` first.
+        // NoDefer: FSEvents sends the first change after a quiet period immediately (FSEvents.h).
+        // Measured on 2026-10-03, 8 config writes for each setting, 1.2 s apart:
+        //   With NoDefer: 11 ms to 13 ms.
+        //   Without NoDefer: 317 ms for the first write, then 14 ms to 82 ms.
+        // FSEvents.h does not explain the short delays without NoDefer.
+        // Keep NoDefer. It gives a stable delay.
         stream = FSEventStreamCreate(nil, callback, &context, folders as CFArray,
                                      FSEventStreamEventId(kFSEventStreamEventIdSinceNow), latency,
                                      FSEventStreamCreateFlags(kFSEventStreamCreateFlagFileEvents | kFSEventStreamCreateFlagNoDefer))
