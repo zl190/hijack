@@ -172,6 +172,7 @@ final class Engine {
         if (before == .starting || before == .listening) && (machine.state == .waitingForText || machine.state == .idle) {
             record.releasedAt = Date(); enterPhase("waiting for text")
         }
+        defer { if machine.state == .idle { refresh() } }   // settings changed mid-dictation apply now
         var pass = false
         for effect in effects {
             switch effect {
@@ -416,4 +417,7 @@ func micInUse(by pids: [pid_t]?) -> Bool? {
     return false
 }
 
-extension Notification.Name { static let hijackActivity = Notification.Name("HijackActivity") }
+extension Notification.Name {
+    static let hijackActivity = Notification.Name("HijackActivity")
+    static let hijackSettingsChanged = Notification.Name("HijackSettingsChanged")
+}

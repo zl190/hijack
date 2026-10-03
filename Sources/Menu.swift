@@ -10,13 +10,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let m: Model = .shared
     let menu: NSMenu = NSMenu()
     var item: NSStatusItem?
+    var watch: SettingsWatch?
 
     func applicationDidFinishLaunching(_ n: Notification) {
         logInApp = true
         menu.delegate = self
         applyAppearance()
         // Pick up icon/Dock changes made from the CLI or a hand edit.
-        Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in Config.shared.reload(); self?.applyAppearance(); self?.engine.refresh() }
+        // Settings apply when their files change (config, a voice tool's own settings): no polling.
+        watch = SettingsWatch(paths: [configURL] + voiceSettingsFiles) { [weak self] in
+            Config.shared.reload(); self?.applyAppearance(); self?.engine.refresh()
+            NotificationCenter.default.post(name: .hijackSettingsChanged, object: nil)
+        }
         engine.start()
         // Sleep, wake and lock land in the log, to line them up with a session that stops working.
         let ws = NSWorkspace.shared.notificationCenter

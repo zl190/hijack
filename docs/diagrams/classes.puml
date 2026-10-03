@@ -261,6 +261,8 @@ class "SettingsStore" as SettingsStore << (C, DarkSeaGreen) >> {
   ~recording : RecordTarget?
   ~live : String
   ~last : String
+  ~startLive()
+  ~stopLive()
   ~init()
   ~engine : Engine?
   ~model : Model
@@ -318,6 +320,7 @@ class "AppDelegate" as AppDelegate << (C, DarkSeaGreen) >> {
   ~m : Model
   ~menu : NSMenu
   ~item : NSStatusItem?
+  ~watch : SettingsWatch?
   ~applicationDidFinishLaunching(_:)
   ~applicationShouldHandleReopen(_:hasVisibleWindows:)
   ~applyAppearance()
@@ -339,6 +342,10 @@ class "AppDelegate" as AppDelegate << (C, DarkSeaGreen) >> {
   ~toggleLogin()
   ~openConfig()
   ~openAccessibility() 
+}
+class "SettingsWatch" as SettingsWatch << (C, DarkSeaGreen) >> { 
+  ~init(paths:latency:onChange:)
+  ~deinit 
 }
 class "DictationEntry" as DictationEntry0 << (S, SkyBlue) struct >> { 
   ~day : String
@@ -423,7 +430,8 @@ class "SessionMachine" as SessionMachine8 << (S, SkyBlue) struct >> {
   ~{static} transition(_:_:_:) 
 }
 class "Name" as Notification.Name << (X, Orchid) extension >> { 
-  ~{static} hijackActivity 
+  ~{static} hijackActivity
+  ~{static} hijackSettingsChanged 
 }
 VoiceProvider <|.. InputMethodProvider
 VoiceProvider <|.. AppProvider
@@ -435,6 +443,7 @@ DictationEntry0 +-- DictationEntry.Cause2
 ' HAS-A (derived from member types)
 AppDelegate --> Engine : engine
 AppDelegate --> Model : m
+AppDelegate --> SettingsWatch : watch
 AppProvider --> KeySpec : reader
 Config --> KeySpec : trigger, voiceKeys
 DictationRecord --> WindowState : heldWindow

@@ -39,11 +39,14 @@ final class SettingsStore: ObservableObject {
     @Published var last: String = ""          // how the last dictation went
 
     private var timer: Timer?
+    /// While the window is open: Accessibility permission and the running state have no file to watch.
+    func startLive() { timer?.invalidate(); timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.refresh() } }
+    func stopLive() { timer?.invalidate(); timer = nil }
     private var monitor: Any?
 
     init() {
         refresh()
-        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.refresh() }
+        NotificationCenter.default.addObserver(forName: .hijackSettingsChanged, object: nil, queue: .main) { [weak self] _ in self?.refresh() }
         NotificationCenter.default.addObserver(forName: .hijackActivity, object: nil, queue: .main) { [weak self] n in
             let phase = n.userInfo?["phase"] as? String ?? "", detail = n.userInfo?["detail"] as? String ?? ""
             switch phase {
@@ -461,7 +464,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         let c = shared ?? SettingsWindowController()
         shared = c
         if let tab, let tabs = c.window?.contentViewController as? NSTabViewController { tabs.selectedTabViewItemIndex = tab }
-        SettingsStore.shared.refresh()
+        SettingsStore.shared.refresh(); SettingsStore.shared.startLive()
         NSApp.activate(ignoringOtherApps: true)      // accessory apps otherwise open it behind other windows
         c.window?.makeKeyAndOrderFront(nil)
     }
@@ -492,5 +495,5 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         window.center()
     }
 
-    func windowWillClose(_ n: Notification) { SettingsStore.shared.stopRecording() }
+    func windowWillClose(_ n: Notification) { SettingsStore.shared.stopRecording(); SettingsStore.shared.stopLive() }
 }

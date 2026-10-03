@@ -9,9 +9,10 @@ import ServiceManagement
 // Values are [length][bytes]: keyCodes is a string like "[61]", modifiers a varint of NSEvent flags.
 // Push-to-talk ("voicePTTShortcut_*") wins; if only the tap-to-toggle shortcut ("voiceToggleShortcut_*") is
 // set, use that with tap or double-tap (tapCount). Returns the key and how to press it.
+let weTypeSettingsURL = FileManager.default.homeDirectoryForCurrentUser
+    .appendingPathComponent("Library/Application Support/WeType/mmkv/wetype.settings")
 func weTypeVoice() -> (key: KeySpec, style: String)? {
-    let url = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent("Library/Application Support/WeType/mmkv/wetype.settings")
+    let url = weTypeSettingsURL
     guard let data = try? Data(contentsOf: url), data.count > 4 else { return nil }
     let live = Int(data.prefix(4).withUnsafeBytes { $0.loadUnaligned(as: UInt32.self).littleEndian })
     guard live > 0, 4 + live <= data.count,
@@ -123,9 +124,10 @@ struct AppProvider: VoiceProvider {
 }
 
 // Handy: settings_store.json, bindings.transcribe.current_binding like "option_left+space".
+let handySettingsURL = FileManager.default.homeDirectoryForCurrentUser
+    .appendingPathComponent("Library/Application Support/com.pais.handy/settings_store.json")
 func handyVoiceKey() -> KeySpec? {
-    let url = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent("Library/Application Support/com.pais.handy/settings_store.json")
+    let url = handySettingsURL
     guard let data = try? Data(contentsOf: url),
           let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
     let settings = root["settings"] as? [String: Any] ?? root
@@ -148,3 +150,6 @@ func voiceProvider(for id: String) -> VoiceProvider {
     return id.hasPrefix("app:") ? AppProvider(bundle: String(id.dropFirst(4))) : InputMethodProvider(sourceID: id)
 }
 func installedProviders() -> [VoiceProvider] { builtInProviders.filter(\.isInstalled) }
+
+/// Files whose changes can change a talk key (watched by SettingsWatch).
+let voiceSettingsFiles: [URL] = [weTypeSettingsURL, handySettingsURL]
