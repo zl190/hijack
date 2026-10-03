@@ -36,9 +36,12 @@ install: build
 	echo "Hijack installed. Allow it in System Settings > Privacy & Security > Accessibility."
 
 # Publish the GitHub release and bump the Homebrew cask. Run on the maintainer's Mac only.
-# Order: check the draft tag, check the signing identity, build, zip, sign for Sparkle,
+# Order: run the tests, check that HEAD is the tag, check the draft tag, check the signing identity, build, zip, sign for Sparkle,
 # write the appcast, upload the assets, publish the release, bump the cask.
-release:
+release: test
+	@git describe --tags --exact-match HEAD 2>/dev/null | grep -qx "v$(VERSION)" || { \
+		echo "HEAD is not tagged v$(VERSION). Check out the tag before you release."; exit 1; \
+	}
 	@draft_tag="$$(gh release list --limit 20 --json tagName,isDraft -q '.[] | select(.isDraft) | .tagName' | head -1)"; \
 	if [ -z "$$draft_tag" ]; then \
 		echo "No draft release found. VERSION is $(VERSION). Create a draft first: gh release create v$(VERSION) --draft"; \
