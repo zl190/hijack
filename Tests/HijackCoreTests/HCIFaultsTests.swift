@@ -139,7 +139,12 @@ final class HCIFaultsTests: XCTestCase {
     // Nothing active: a stray call does nothing (no spurious effects).
     func testStopStuckSession_NoSessionDoesNothing() {
         let r = Rig()
+        let tracesBefore = r.sink.traces.count
         r.engine.stopStuckSession()
+        // State and posted keys alone don't prove the guard ran: run(.release) in .idle only swallows the
+        // key and stays .idle either way (review-4: "vacuous"). engine.run() always traces once when it's
+        // called, so an unchanged trace count proves run() was never reached.
+        XCTAssertEqual(r.sink.traces.count, tracesBefore, "run() must not be called when nothing is active")
         XCTAssertEqual(r.engine.machine.state, .idle)
         XCTAssertEqual(r.keys.posted.count, 0)
     }
@@ -181,8 +186,13 @@ final class HCIFaultsTests: XCTestCase {
         let r = Rig()
         r.pressUntilListening(); r.release()
         r.clock.advance(2.4)   // short of fallbackDelay (2.5): the dictation hasn't ended yet
+        XCTAssertFalse(r.sink.reports.contains { $0.phase == "done" }, "not before fallbackDelay")
+        // review-4: at 2.4s the old code is ALSO silent (finish() itself hasn't run yet), so that
+        // assertion alone passes on a revert. The discriminating moment is here: past fallbackDelay
+        // (finish() has run and started the restore) but before the 0.1s confirm it waits on.
+        r.clock.advance(0.2)   // cumulative ~2.6s: finish() has run; the 0.1s confirm has not
         XCTAssertFalse(r.sink.reports.contains { $0.phase == "done" }, "not before the 0.1s confirm")
-        r.clock.advance(0.4)   // past fallbackDelay, and past the 0.1s confirm that follows it
+        r.clock.advance(0.3)   // past the confirm
         let done = r.sink.reports.last { $0.phase == "done" }
         XCTAssertTrue(done?.detail.contains("back to") == true, done?.detail ?? "nil")
     }
