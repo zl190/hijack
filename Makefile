@@ -1,5 +1,5 @@
 # Hijack maintainer tasks. Run `make <target>`. See docs/distribution-spec.md for the full spec.
-.PHONY: build test install release release-checks release-assets release-publish cask diagrams clean
+.PHONY: build test lint fmt install release release-checks release-assets release-publish cask diagrams clean
 
 # SIGN_ID: the codesign identity. Empty means ad-hoc; build.sh signs ad-hoc when the identity is empty.
 # build and install use SIGN_ID as given (empty by default, so a dev build stays ad-hoc).
@@ -24,6 +24,14 @@ build:
 # Run the HijackCore unit tests.
 test:
 	swift test
+
+# Check formatting against .swift-format without changing files; see docs/swift-format.md.
+lint:
+	xcrun swift-format lint --strict --recursive Sources Tests
+
+# Rewrite files in place to match .swift-format; see docs/swift-format.md.
+fmt:
+	xcrun swift-format format --in-place --recursive Sources Tests
 
 # Build, then install to /Applications and link the hijack command.
 install: build
