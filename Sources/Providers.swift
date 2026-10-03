@@ -50,8 +50,27 @@ protocol VoiceProvider {
     var switchesInputSource: Bool { get }
     var readsSettings: Bool { get }         // detected() comes from its own settings, not a built-in guess
     func detected() -> (key: KeySpec?, style: String?)
-    func isBusy() -> Bool?                  // its voice UI is on screen; nil = can't tell
-    func windowReport() -> String           // what isBusy() saw, for the log when no window showed up
+    func processIDs() -> [pid_t]            // its running processes (for its windows and its microphone use)
+    func windowState() -> WindowState       // is its voice UI on screen
+}
+
+/// What we can see of a voice tool's windows. `.unknown` says why we can't tell.
+enum WindowState {
+    case visible(Int), none(String), unknown(String)
+    var busy: Bool? { switch self { case .visible: return true; case .none: return false; case .unknown: return nil } }
+    var text: String {
+        switch self { case .visible(let n): return "\(n) window\(n == 1 ? "" : "s")"; case .none(let why), .unknown(let why): return why }
+    }
+}
+/// On-screen windows owned by these processes. Thread-safe (no input-source calls), for sampling off the main thread.
+func onScreenWindows(of pids: [pid_t]) -> WindowState {
+    guard !pids.isEmpty else { return .unknown("not running") }
+    let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
+    let n = list.filter { pids.contains(($0[kCGWindowOwnerPID as String] as? Int32) ?? -1) }.count
+    return n > 0 ? .visible(n) : .none("no window (pid \(pids.map(String.init).joined(separator: ",")))")
+}
+extension VoiceProvider {
+    func isBusy() -> Bool? { windowState().busy }
 }
 
 struct InputMethodProvider: VoiceProvider {
@@ -72,22 +91,14 @@ struct InputMethodProvider: VoiceProvider {
     }
     // Its voice window stays up until the dictated text is finally committed (rough text first, then the
     // tidied version); switching away earlier drops the uncommitted text. Owner/bounds need no Screen Recording.
-    func isBusy() -> Bool? {
-        guard let bundle = source(sourceID).flatMap({ prop($0, kTISPropertyBundleID) }) else { return nil }
+    func processIDs() -> [pid_t] {
+        guard let bundle = source(sourceID).flatMap({ prop($0, kTISPropertyBundleID) }) else { return [] }
         let owners = Set([bundle] + helpers)
-        let pids = Set(NSWorkspace.shared.runningApplications.filter { owners.contains($0.bundleIdentifier ?? "") }.map(\.processIdentifier))
-        guard !pids.isEmpty else { return nil }
-        let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
-        return list.contains { pids.contains(($0[kCGWindowOwnerPID as String] as? Int32) ?? -1) }
+        return NSWorkspace.shared.runningApplications.filter { owners.contains($0.bundleIdentifier ?? "") }.map(\.processIdentifier)
     }
-    func windowReport() -> String {
-        guard let bundle = source(sourceID).flatMap({ prop($0, kTISPropertyBundleID) }) else { return "no bundle id for \(sourceID)" }
-        let owners = Set([bundle] + helpers)
-        let pids = NSWorkspace.shared.runningApplications.filter { owners.contains($0.bundleIdentifier ?? "") }.map(\.processIdentifier)
-        guard !pids.isEmpty else { return "no running process for \(owners.sorted().joined(separator: ","))" }
-        let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
-        let mine = list.filter { pids.contains(($0[kCGWindowOwnerPID as String] as? Int32) ?? -1) }.count
-        return "pids \(pids.map(String.init).joined(separator: ",")) have \(mine) on-screen windows (of \(list.count))"
+    func windowState() -> WindowState {
+        guard source(sourceID).flatMap({ prop($0, kTISPropertyBundleID) }) != nil else { return .unknown("no bundle id for \(sourceID)") }
+        return onScreenWindows(of: processIDs())
     }
 }
 
@@ -105,8 +116,8 @@ struct AppProvider: VoiceProvider {
     var switchesInputSource: Bool { false }
     var readsSettings: Bool { reader != nil }
     func detected() -> (key: KeySpec?, style: String?) { (reader?(), nil) }
-    func isBusy() -> Bool? { nil }
-    func windowReport() -> String { "an app: its window isn't watched" }
+    func processIDs() -> [pid_t] { NSRunningApplication.runningApplications(withBundleIdentifier: bundle).map(\.processIdentifier) }
+    func windowState() -> WindowState { .unknown("an app: its window isn't watched") }
 }
 
 // Handy: settings_store.json, bindings.transcribe.current_binding like "option_left+space".

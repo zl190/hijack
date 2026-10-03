@@ -12,10 +12,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var item: NSStatusItem?
 
     func applicationDidFinishLaunching(_ n: Notification) {
+        logInApp = true
         menu.delegate = self
         applyAppearance()
         // Pick up icon/Dock changes made from the CLI or a hand edit.
-        Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in Config.shared.reload(); self?.applyAppearance() }
+        Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in Config.shared.reload(); self?.applyAppearance(); self?.engine.refresh() }
         engine.start()
         // Sleep, wake and lock land in the log, to line them up with a session that stops working.
         let ws = NSWorkspace.shared.notificationCenter
@@ -23,6 +24,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                              (NSWorkspace.screensDidSleepNotification, "screens sleep"), (NSWorkspace.screensDidWakeNotification, "screens wake"),
                              (NSWorkspace.sessionDidResignActiveNotification, "session inactive"), (NSWorkspace.sessionDidBecomeActiveNotification, "session active")] {
             ws.addObserver(forName: name, object: nil, queue: .main) { _ in log(text) }
+        }
+        for (name, text) in [("com.apple.screenIsLocked", "screen locked"), ("com.apple.screenIsUnlocked", "screen unlocked")] {
+            DistributedNotificationCenter.default().addObserver(forName: .init(name), object: nil, queue: .main) { _ in log(text) }
         }
         // Reopens Hijack after an installer replaces it (brew can't: its install sandbox denies launching apps).
         // The system keeps the plist from registration time, so re-register when the bundled one changes.

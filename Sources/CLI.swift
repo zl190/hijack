@@ -261,6 +261,6 @@ func cliLog(_ args: [String]) -> Int32 {
     }
     let tail = Process()
     tail.executableURL = URL(fileURLWithPath: "/usr/bin/tail")
-    tail.arguments = (follow ? ["-f"] : []) + ["-n", "\(n)", logURL.path]
+    tail.arguments = (follow ? ["-F"] : []) + ["-n", "\(n)", logURL.path]
     do { try tail.run(); tail.waitUntilExit(); return tail.terminationStatus } catch { return fail("can't read \(logURL.path)") }
 }
