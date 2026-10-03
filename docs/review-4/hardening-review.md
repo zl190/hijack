@@ -156,6 +156,8 @@ The window is small. It opens when the main thread is busy and the next press is
 Fix (root cause): make `makePlan()` free of file I/O. Read the provider's settings file in the `SettingsWatch` callback, off the tap, and cache the result in `Model`. Then `refresh()` can stay synchronous.
 Fix (minimum): change the comment to say a press in the same run-loop turn keeps the old plan for one dictation. Add P2 as a test.
 
+**Accepted, not fixed in this pass.** The window is one run-loop turn (`clock.after(0)`), open only when the main thread is already busy and the next press is already queued at the moment the previous dictation ends — a dictation that then runs on the just-superseded settings for one more press, not indefinitely. The root-cause fix (caching the provider's settings off the tap, in `Model`) is a larger change than this pass's scope; the minimum fix (a corrected comment, plus P2 as a regression test) is deferred to the same follow-up as S4(a)-(c) in the verdict below. No code or test change for S3 in this pass.
+
 #### S4. The single-instance guard can leave zero or two instances
 - `main.swift:18-22` asks `NSRunningApplication` for another process with the bundle id. It is a check, then an exit, with no lock.
 - (a) Two copies start within the same few milliseconds. Neither is registered yet: both run, with two taps.
