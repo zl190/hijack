@@ -14,11 +14,29 @@ if let code = runCLI(Array(CommandLine.arguments.dropFirst())) { exit(code) }
 
 // A second launch (double-click, Spotlight, the relauncher after an update) must not install a second
 // event tap. Checked after the CLI dispatch above, so `hijack status` still works while the app runs.
-let myPID = ProcessInfo.processInfo.processIdentifier
-if let other = NSRunningApplication.runningApplications(withBundleIdentifier: "com.zl190.hijack")
-    .first(where: { $0.processIdentifier != myPID }) {
-    log("another Hijack is running (pid \(other.processIdentifier)), exiting")
+//
+// An exclusive flock on a lock file (S4), not a process list: NSRunningApplication is a point-in-time
+// snapshot with no exclusivity — two launches close together can each see zero others and both proceed,
+// or each see the other mid-launch and both exit. The kernel releases the lock when a process dies, even
+// to SIGKILL, so `make install` (pkill, then open) and the menu's Reopen action cannot race an instance
+// that is still exiting: the new process just finds the lock held and exits cleanly instead.
+let lockDir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Hijack")
+try? FileManager.default.createDirectory(at: lockDir, withIntermediateDirectories: true)
+let lockPath = lockDir.appendingPathComponent("instance.lock").path
+let lockFD = open(lockPath, O_CREAT | O_RDWR, 0o644)
+if lockFD < 0 {
+    log("couldn't open \(lockPath) for the instance lock (errno \(errno)); continuing without the guard")
+} else if flock(lockFD, LOCK_EX | LOCK_NB) != 0 {
+    let holder = (try? String(contentsOfFile: lockPath, encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines)
+    log("another Hijack holds the instance lock (pid \(holder ?? "?")), exiting")
     exit(0)
+} else {
+    // Held: record our pid, for the next instance's log line if it loses the race. ftruncate first, so a
+    // shorter new pid does not leave stale digits from whatever held the lock before us.
+    ftruncate(lockFD, 0)
+    let pid = Data("\(ProcessInfo.processInfo.processIdentifier)".utf8)
+    pid.withUnsafeBytes { _ = write(lockFD, $0.baseAddress, $0.count) }
+    // lockFD is deliberately never closed: the lock, and the fd holding it, live for the process lifetime.
 }
 
 let app = NSApplication.shared
