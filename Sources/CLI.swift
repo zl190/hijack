@@ -36,11 +36,14 @@ let appBundle: Bundle = {
     return Bundle(url: exe.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()) ?? Bundle.main
 }()
 let appVersion = appBundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
+// CFBundleVersion carries the build identity build.sh writes: VERSION.sha, +dirty when built from an
+// unclean tree. Sparkle compares updates by this value by default (see build.sh for the appcast note).
+let appBuildVersion = appBundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? appVersion
 
 /// The running version, and the update the app recorded at its last check (no network call).
 /// The app writes HijackUpdateFound from its Sparkle delegate; Sparkle stores only the skipped build.
 func cliVersion() -> Int32 {
-    print(appVersion)
+    print("Hijack \(appVersion) (build \(appBuildVersion))")
     // The CLI is often a symlink outside the bundle, so it reads the app's defaults domain by name.
     let d = UserDefaults.standard.persistentDomain(forName: "com.zl190.hijack") ?? [:]
     let found = UpdateFound(defaults: d[UpdateFound.defaultsKey] as? [String: Any])
@@ -127,7 +130,7 @@ func cliStatus(json: Bool) -> Int32 {
         ])
         return 0
     }
-    print("Hijack \(appVersion) — " + (st.map { "running (pid \($0.pid))" } ?? "not running"))
+    print("Hijack \(appVersion) (build \(appBuildVersion)) — " + (st.map { "running (pid \($0.pid))" } ?? "not running"))
     if let st {
         print("  accessibility   " + (st.trusted ? "allowed" : "MISSING — System Settings › Privacy & Security › Accessibility"))
         print("  key listener    " + (st.tapActive ? "active" : st.trusted ? "OFF — macOS turned it off; quit and reopen Hijack" : "off — waiting for Accessibility"))
