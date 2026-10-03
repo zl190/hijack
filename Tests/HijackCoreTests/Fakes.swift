@@ -10,7 +10,16 @@ final class FakeClock: Scheduler {
     private var queue: [(at: Date, seq: Int, work: () -> Void)] = []
     private var seq = 0
     func after(_ seconds: Double, _ work: @escaping () -> Void) { seq += 1; queue.append((now.addingTimeInterval(seconds), seq, work)) }
-    func offMain<T>(_ work: @escaping () -> T, then done: @escaping (T) -> Void) { done(work()) }   // inline: deterministic
+    // Inline by default: deterministic, and every existing test relies on that. A test that needs to
+    // reproduce a real hop-off-and-back race (review-4 S1) sets deferOffMain and flushes by hand, so it
+    // can run other engine calls (like a release) in between the dispatch and the completion.
+    var deferOffMain = false
+    private var heldOffMain: [() -> Void] = []
+    func offMain<T>(_ work: @escaping () -> T, then done: @escaping (T) -> Void) {
+        let result = work()
+        if deferOffMain { heldOffMain.append { done(result) } } else { done(result) }
+    }
+    func flushOffMain() { let held = heldOffMain; heldOffMain = []; for f in held { f() } }
     /// Move time forward. Due work runs in order, at its own time.
     func advance(_ seconds: Double) {
         let target = now.addingTimeInterval(seconds)

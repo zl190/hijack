@@ -187,6 +187,21 @@ final class HCIFaultsTests: XCTestCase {
         XCTAssertTrue(done?.detail.contains("back to") == true, done?.detail ?? "nil")
     }
 
+    // review-4 S1: a sample dispatched while listening can complete after the release. Its stale result
+    // must not overwrite whatever "Try it" text the release itself produced.
+    func testS1_SampleCompletingAfterReleaseDoesNotReport() {
+        let r = Rig()
+        r.probes.micTool = false
+        r.pressUntilListening(hold: 0.6, echo: false)   // exactly one sample has completed; micOffSince is set
+        r.probes.micTool = true                          // the tool "recovers" — the next sample would report it
+        r.clock.deferOffMain = true
+        r.clock.advance(0.5)                              // the second sample's work runs; its completion is held
+        r.release()
+        let lastPhaseAfterRelease = r.sink.reports.last?.phase
+        r.clock.flushOffMain()                            // now let the held (stale) completion run
+        XCTAssertEqual(r.sink.reports.last?.phase, lastPhaseAfterRelease, "a stale sample must not report after release")
+    }
+
     // FM-16: when the restore never sticks (even after the retry), the report must not claim success.
     func testFM16_DoneReportSaysSoWhenNotConfirmed() {
         let r = Rig()

@@ -282,13 +282,17 @@ final class Engine {
             }) { [self] mic, window in
                 guard gen == generation else { return }
                 record.heldMic = mic; record.heldWindow = window
-                // FM-09: the tool's own mic reads off. Say so once it's held for 1s (a blip isn't a fault);
-                // an "unknown" (nil) reading never overrides "正在听…" (FM-12: the probe itself can be wrong).
-                if mic.0 == false {
-                    if micOffSince == nil { micOffSince = clock.now }
-                    else if clock.now.timeIntervalSince(micOffSince!) >= 1.0 { report("notListening", plan.voiceName) }
-                } else if micOffSince != nil {
-                    micOffSince = nil; report("listening", plan.voiceName)   // recovered (or now unknown): back to normal
+                // A sample started before the release can complete after it (review-4 S1): the dictation
+                // is already over, so its reading is stale and must not overwrite the UI's post-release text.
+                if machine.state == .listening {
+                    // FM-09: the tool's own mic reads off. Say so once it's held for 1s (a blip isn't a fault);
+                    // an "unknown" (nil) reading never overrides "正在听…" (FM-12: the probe itself can be wrong).
+                    if mic.0 == false {
+                        if micOffSince == nil { micOffSince = clock.now }
+                        else if clock.now.timeIntervalSince(micOffSince!) >= 1.0 { report("notListening", plan.voiceName) }
+                    } else if micOffSince != nil {
+                        micOffSince = nil; report("listening", plan.voiceName)   // recovered (or now unknown): back to normal
+                    }
                 }
                 sampleWhileHeld(gen: gen, after: 0.5)
             }
