@@ -237,7 +237,7 @@ final class Engine {
         let p = plan
         if record.switchFailed { summary(end: "input source never switched"); report("done", ""); return }
         guard p.switchesInput else { summary(end: "no switch back needed"); report("done", p.voiceName); return }
-        guard let prev = previous else { summary(end: "started inside \(p.voiceName), no switch back needed"); report("done", p.voiceName); return }
+        guard let prev = previous else { summary(end: "started inside \(p.voiceName), nothing to switch back to"); report("done", p.voiceName); return }
         guard sources.current() == p.voiceID else {
             summary(end: "input source already changed, not switched back"); report("done", ""); return
         }
