@@ -243,3 +243,30 @@ final class HCIFaultsTests: XCTestCase {
         XCTAssertEqual(done?.detail, "Didn't switch back; the input source is still WeType")
     }
 }
+
+// review-5 #3: refresh() rebuilds the Plan, and a provider's detected() reads a settings file from disk
+// (WeType's MMKV, Handy's JSON). An app tool (switchesInput == false) reaches idle inside the tap's own
+// key event on every release, so that read used to happen synchronously inside the tap callback.
+extension HCIFaultsTests {
+    func testRefreshPlan_IsDeferredOffTheReleaseInAppMode() {
+        let r = Rig(switchesInput: false, trigger: KeySpec.named("right_option")!)
+        r.pressUntilListening()
+        let before = r.planReads
+        r.release()
+        XCTAssertEqual(r.planReads, before, "no plan (file) read synchronously inside the key event")
+        r.clock.advance(0)
+        XCTAssertEqual(r.planReads, before + 1, "exactly one refresh after the tick")
+    }
+
+    // Out-of-range: a release that does not reach idle (toggle mode, still listening) must not schedule
+    // a refresh at all.
+    func testRefreshPlan_ToggleReleaseStayingActiveSchedulesNothing() {
+        let r = Rig(toggle: true, switchesInput: false, trigger: KeySpec.named("right_option")!)
+        r.pressUntilListening()
+        let before = r.planReads
+        r.release()   // toggle: releasing the trigger alone keeps the session running
+        XCTAssertEqual(r.engine.machine.state, .listening, "setup: toggle keeps going")
+        r.clock.advance(0)
+        XCTAssertEqual(r.planReads, before, "still active: nothing to refresh")
+    }
+}

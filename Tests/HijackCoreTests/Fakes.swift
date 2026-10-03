@@ -130,6 +130,7 @@ final class Rig {
     static let voice = "com.tencent.inputmethod.wetype.pinyin"
 
     var plan: Plan
+    var planReads = 0   // how many times Engine called the plan closure (review-5 #3: this stands in for a provider's file read)
     let clock = FakeClock()
     let keys = FakeKeys()
     let sources: FakeSources
@@ -143,7 +144,7 @@ final class Rig {
                     forwardKey: Rig.fn, style: "hold", toggle: toggle, stopOnAnyKey: true,
                     holdDelay: 0.2, restoreTimeout: 5.0, fallbackDelay: 2.5)
         sources = FakeSources(current)
-        engine = Engine(plan: { [unowned self] in self.plan },
+        engine = Engine(plan: { [unowned self] in self.planReads += 1; return self.plan },
                         deps: Deps(keys: keys, sources: sources, tap: tap, probes: probes, clock: clock, sink: sink))
         if start { engine.start() }
     }

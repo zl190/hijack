@@ -172,7 +172,10 @@ final class Engine {
         if (before == .starting || before == .listening) && (machine.state == .waitingForText || machine.state == .idle) {
             record.releasedAt = clock.now; enterPhase("waiting for text")
         }
-        defer { if machine.state == .idle { refresh() } }   // settings changed mid-dictation apply now
+        // Settings changed mid-dictation apply now. refresh() rebuilds the Plan, which can read a voice
+        // provider's own settings file (review-5 #3): off the tap, not inline, so a key event never does
+        // file I/O. refresh()'s own guard (idle, !physicalDown) still covers a press that comes first.
+        defer { if machine.state == .idle { clock.after(0) { [self] in refresh() } } }
         var pass = false
         for effect in effects {
             switch effect {
