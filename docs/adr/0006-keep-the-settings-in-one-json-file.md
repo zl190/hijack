@@ -1,5 +1,6 @@
 # 0006. Keep the settings in one JSON file
 
+- Topic: Settings
 - Status: Accepted
 - Date: 2026-10-01
 - Evidence: b5c3b10, 3c5911b

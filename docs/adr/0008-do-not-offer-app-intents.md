@@ -1,5 +1,6 @@
 # 0008. Do not offer App Intents
 
+- Topic: Distribution and signing
 - Status: Accepted
 - Date: 2026-10-01
 - Evidence: 3ddb549, b784b68

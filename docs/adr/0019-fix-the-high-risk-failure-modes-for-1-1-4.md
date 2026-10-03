@@ -1,5 +1,6 @@
 # 0019. Fix the high-risk failure modes for 1.1.4
 
+- Topic: Faults and reliability
 - Status: Proposed
 - Date: 2026-10-03
 - Evidence: a329863, 4c701e0, docs/fmea.md

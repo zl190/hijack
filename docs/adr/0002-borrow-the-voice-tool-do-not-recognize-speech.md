@@ -1,5 +1,6 @@
 # 0002. Borrow the voice tool, do not recognize speech
 
+- Topic: Voice tool integration
 - Status: Accepted
 - Date: 2026-10-01
 - Evidence: c6c10c5, 2632947

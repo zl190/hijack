@@ -1,5 +1,6 @@
 # 0001. Catch the shortcut with an event tap at the HID level
 
+- Topic: Key handling
 - Status: Accepted
 - Date: 2026-10-01
 - Evidence: c6c10c5, cec5eea

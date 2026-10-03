@@ -1,5 +1,6 @@
 # 0016. Apply settings when their files change
 
+- Topic: Settings
 - Status: Accepted
 - Date: 2026-10-03
 - Evidence: d322e5e, 65897a1

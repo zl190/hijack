@@ -1,5 +1,6 @@
 # 0009. Reopen the app after an installer replaces it
 
+- Topic: Distribution and signing
 - Status: Accepted
 - Date: 2026-10-01
 - Evidence: 866db72

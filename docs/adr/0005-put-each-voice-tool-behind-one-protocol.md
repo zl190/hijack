@@ -1,5 +1,6 @@
 # 0005. Put each voice tool behind one protocol
 
+- Topic: Voice tool integration
 - Status: Accepted
 - Date: 2026-10-01
 - Evidence: 74a1103, eef656b

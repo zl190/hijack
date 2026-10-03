@@ -1,5 +1,6 @@
 # 0013. Decide each key press in one pure state machine
 
+- Topic: Key handling
 - Status: Accepted
 - Date: 2026-10-03
 - Evidence: eb6d207, docs/state-machine.md

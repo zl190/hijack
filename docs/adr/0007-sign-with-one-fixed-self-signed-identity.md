@@ -1,5 +1,6 @@
 # 0007. Sign with one fixed self-signed identity
 
+- Topic: Distribution and signing
 - Status: Accepted
 - Date: 2026-10-01
 - Evidence: 03b1eb4

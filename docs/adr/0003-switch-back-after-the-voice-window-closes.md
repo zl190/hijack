@@ -1,5 +1,6 @@
 # 0003. Switch back after the voice window closes
 
+- Topic: Voice tool integration
 - Status: Accepted
 - Date: 2026-10-01
 - Evidence: cb1ab6a

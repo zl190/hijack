@@ -1,5 +1,6 @@
 # 0018. Show faults with true menu text and an Off icon
 
+- Topic: Faults and reliability
 - Status: Accepted
 - Date: 2026-10-03
 - Evidence: 7161a0e, docs/hci-review-faults.md §5a

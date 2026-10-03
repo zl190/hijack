@@ -1,5 +1,6 @@
 # 0015. Mark timing with signposts
 
+- Topic: Observability and docs
 - Status: Accepted
 - Date: 2026-10-03
 - Evidence: 7570709, bf6852b

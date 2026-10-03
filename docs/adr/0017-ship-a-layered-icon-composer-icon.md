@@ -1,5 +1,6 @@
 # 0017. Ship a layered Icon Composer icon
 
+- Topic: Distribution and signing
 - Status: Accepted
 - Date: 2026-10-01
 - Evidence: a4d5f1c, c6068f7

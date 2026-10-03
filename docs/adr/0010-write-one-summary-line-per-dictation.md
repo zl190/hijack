@@ -1,5 +1,6 @@
 # 0010. Write one summary line per dictation
 
+- Topic: Observability and docs
 - Status: Accepted
 - Date: 2026-10-03
 - Evidence: 6aa8349, 8b51586, 3bde067

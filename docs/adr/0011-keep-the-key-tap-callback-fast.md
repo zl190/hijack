@@ -1,5 +1,6 @@
 # 0011. Keep the key-tap callback fast
 
+- Topic: Key handling
 - Status: Accepted
 - Date: 2026-10-03
 - Evidence: e9b25c5, 7570709

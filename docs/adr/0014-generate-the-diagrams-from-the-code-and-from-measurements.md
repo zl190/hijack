@@ -1,5 +1,6 @@
 # 0014. Generate the diagrams from the code and from measurements
 
+- Topic: Observability and docs
 - Status: Accepted
 - Date: 2026-10-03
 - Evidence: 2217df4, 2ee5fa9, eb6d207, bfbb962

@@ -1,5 +1,6 @@
 # 0004. Read the talk key from the voice tool's own settings
 
+- Topic: Voice tool integration
 - Status: Accepted
 - Date: 2026-10-01
 - Evidence: 3da1071, fb69ecf
