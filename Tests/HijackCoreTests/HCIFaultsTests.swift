@@ -68,4 +68,57 @@ final class HCIFaultsTests: XCTestCase {
         XCTAssertEqual(r.engine.machine.state, .idle)
         XCTAssertEqual(r.keys.posted.count, 0)
     }
+
+    // FM-09: the probe reads the tool's mic "off" for >= 1s while the key is held; "Try it" must say so.
+    // (The first sample fires 0.3s after the talk key goes out, itself ~0.2s (holdDelay) after the press.)
+    func testFM09_MicOffForASecondReportsNotListening() {
+        let r = Rig()
+        r.probes.micTool = false
+        r.press(); r.clock.advance(0.52)               // first sample: mic off starts now
+        XCTAssertFalse(r.sink.reports.contains { $0.phase == "notListening" }, "not yet 1s")
+        r.clock.advance(0.5)                           // second sample: ~0.5s since the mic first read off
+        XCTAssertFalse(r.sink.reports.contains { $0.phase == "notListening" })
+        r.clock.advance(0.5)                           // third sample: ~1.0s since the mic first read off
+        XCTAssertTrue(r.sink.reports.contains { $0.phase == "notListening" && $0.detail == "WeType" })
+    }
+
+    // A quick blip (recovers before 1s) never reports anything.
+    func testFM09_ABriefMicBlipDoesNotReport() {
+        let r = Rig()
+        r.probes.micTool = false
+        r.press(); r.clock.advance(0.52)
+        r.probes.micTool = true
+        r.clock.advance(0.5)
+        XCTAssertFalse(r.sink.reports.contains { $0.phase == "notListening" })
+    }
+
+    // FM-12 control: an unknown ("nil") reading never claims the tool isn't listening.
+    func testFM09_UnknownMicNeverReportsNotListening() {
+        let r = Rig()
+        r.probes.micTool = nil
+        r.press(); r.clock.advance(0.52); r.clock.advance(0.5); r.clock.advance(0.5)
+        XCTAssertFalse(r.sink.reports.contains { $0.phase == "notListening" })
+    }
+
+    // FM-16: "Try it" must not say "back to X" before the restore is confirmed, and must say so honestly
+    // once it is confirmed (the normal, successful case).
+    func testFM16_DoneReportWaitsForConfirmationThenConfirms() {
+        let r = Rig()
+        r.pressUntilListening(); r.release()
+        r.clock.advance(2.4)   // short of fallbackDelay (2.5): the dictation hasn't ended yet
+        XCTAssertFalse(r.sink.reports.contains { $0.phase == "done" }, "not before the 0.1s confirm")
+        r.clock.advance(0.4)   // past fallbackDelay, and past the 0.1s confirm that follows it
+        let done = r.sink.reports.last { $0.phase == "done" }
+        XCTAssertTrue(done?.detail.contains("back to") == true, done?.detail ?? "nil")
+    }
+
+    // FM-16: when the restore never sticks (even after the retry), the report must not claim success.
+    func testFM16_DoneReportSaysSoWhenNotConfirmed() {
+        let r = Rig()
+        r.sources.refuse = [Rig.english]
+        r.pressUntilListening(); r.release()
+        r.clock.advance(2.8)
+        let done = r.sink.reports.last { $0.phase == "done" }
+        XCTAssertEqual(done?.detail, "Didn't switch back; the input source is still WeType")
+    }
 }

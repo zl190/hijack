@@ -66,6 +66,7 @@ final class Engine {
     var paused: Bool = false                // the settings window is recording a key: let every key through
     var forwardKeyEdgeSeen: Bool = false    // an edge of the talk key came through the tap since start (S2)
     var waitingReported: Bool = false
+    var micOffSince: Date?             // when the held-mic sample first read "off"; reset each dictation (FM-09)
 
     init(plan: @escaping () -> Plan, deps: Deps) {
         makePlan = plan
@@ -140,11 +141,17 @@ final class Engine {
     }
 
     /// Select and confirm: re-read the current source a moment later and retry once if it didn't stick.
-    func switchTo(_ id: String, _ label: String) {
+    /// `confirmed`, when given, reports whether `id` is current after that check (FM-16: a caller must not
+    /// tell the user the switch happened before this runs).
+    func switchTo(_ id: String, _ label: String, confirmed: ((Bool) -> Void)? = nil) {
         let ok = sources.select(id)
         clock.after(0.1) { [self] in
-            if sources.current() == id { trace("\(label) \(id) ok=\(ok)") }
-            else { log("\(label) \(id) didn't stick, retry ok=\(sources.select(id))") }
+            if sources.current() == id { trace("\(label) \(id) ok=\(ok)"); confirmed?(true) }
+            else {
+                let retryOK = sources.select(id)
+                log("\(label) \(id) didn't stick, retry ok=\(retryOK)")
+                confirmed?(sources.current() == id)
+            }
         }
     }
 
@@ -174,7 +181,7 @@ final class Engine {
             case .swallowKeyAndItsRelease: pass = false; swallowUp = keyCode
             case .finishPrevious: summary(end: "interrupted by the next press")   // the retry after a failure must not erase it
             case .begin:
-                generation += 1; record = DictationRecord(pressedAt: clock.now); voicePIDs = []; beginDictation()
+                generation += 1; record = DictationRecord(pressedAt: clock.now); voicePIDs = []; micOffSince = nil; beginDictation()
             case .switchToVoice:
                 let cur = sources.current()
                 if let cur, cur != p.voiceID { previous = cur }
@@ -253,9 +260,13 @@ final class Engine {
             summary(end: "input source already changed, not switched back"); report("done", ""); return
         }
         summary(end: "back after \(String(format: "%.2f", waited))s")
-        switchTo(prev, "restore")
-        let name = sink.sourceName(prev)
-        report("done", localize("等上屏 \(String(format: "%.1f", waited)) 秒，已切回 \(name)", "waited \(String(format: "%.1f", waited))s for the text, back to \(name)"))
+        let name = sink.sourceName(prev), voiceName = p.voiceName, waitedText = waited
+        // "Try it" must not say "back to X" until the switch is confirmed (FM-16): report only once we know.
+        switchTo(prev, "restore") { [self] confirmed in
+            report("done", confirmed
+                ? localize("等上屏 \(String(format: "%.1f", waitedText)) 秒，已切回 \(name)", "waited \(String(format: "%.1f", waitedText))s for the text, back to \(name)")
+                : localize("没切回，输入源仍是\(voiceName)", "Didn't switch back; the input source is still \(voiceName)"))
+        }
     }
 
     /// While the talk key is held: is the voice tool listening, and is its window up? Sampled every half
@@ -271,6 +282,14 @@ final class Engine {
             }) { [self] mic, window in
                 guard gen == generation else { return }
                 record.heldMic = mic; record.heldWindow = window
+                // FM-09: the tool's own mic reads off. Say so once it's held for 1s (a blip isn't a fault);
+                // an "unknown" (nil) reading never overrides "正在听…" (FM-12: the probe itself can be wrong).
+                if mic.0 == false {
+                    if micOffSince == nil { micOffSince = clock.now }
+                    else if clock.now.timeIntervalSince(micOffSince!) >= 1.0 { report("notListening", plan.voiceName) }
+                } else if micOffSince != nil {
+                    micOffSince = nil; report("listening", plan.voiceName)   // recovered (or now unknown): back to normal
+                }
                 sampleWhileHeld(gen: gen, after: 0.5)
             }
         }
