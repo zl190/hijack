@@ -44,8 +44,9 @@ public struct MetricsSummary: Equatable {
     public var longestHangSeconds: Double?
     public var crashCount = 0
     public var lastCrashDate: Date?
-    /// yyyy-MM-dd (local time, matching the rest of the app's day keys) -> seconds, summed over every
-    /// metric payload whose `timeStampBegin` falls on that day.
+    /// yyyy-MM-dd (UTC calendar day — review 6, S3: a day key fixed to one time zone so this field does
+    /// not depend on the host machine's zone) -> seconds, summed over every metric payload whose
+    /// `timeStampBegin` falls on that day.
     public var cpuSecondsByDay: [String: Double] = [:]
     public var peakMemoryBytes: Double?
     /// True when a hangDuration/cumulativeCPUTime/peakMemoryUsage key was present in at least one file,
@@ -191,8 +192,14 @@ public struct MetricsSummary: Equatable {
             let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = pattern; return f
         }
     }()
+    // review 6 (S3): timeZone fixed to UTC, not the host's current zone — otherwise a payload stamped
+    // near midnight UTC buckets under a different calendar day depending on where `summarize` runs
+    // (verified: 2026-10-01T00:00:00.000+0000 reads "2026-09-30" under America/Los_Angeles, "2026-10-01"
+    // under UTC, without this line).
     private static let dayFormatter: DateFormatter = {
-        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"; return f
+        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"
+        f.timeZone = TimeZone(identifier: "UTC")
+        return f
     }()
     static func day(_ d: Date) -> String { dayFormatter.string(from: d) }
 }
