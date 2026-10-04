@@ -125,6 +125,8 @@ public struct KeySpec: Equatable {
             }
         }
         if let code { self.init(code: code, mods: mods); return }
+        // "fn" is a literal id in namedKeys (quickKeys); see KeysTests.testW5_QuickKeysAlwaysResolveToANamedKey.
+        // swift-format-ignore: NeverForceUnwrap
         if binding.lowercased() == "fn" { self = KeySpec.named("fn")!; return }
         // A lone side-specific modifier, e.g. "option_right" → right_option
         let parts = binding.lowercased().split(separator: "_").map(String.init)

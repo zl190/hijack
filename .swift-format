@@ -8,6 +8,8 @@
   "rules": {
     "AlwaysUseLowerCamelCase": false,
     "DoNotUseSemicolons": false,
-    "OneVariableDeclarationPerLine": false
+    "OneVariableDeclarationPerLine": false,
+    "NeverForceUnwrap": true,
+    "NeverUseImplicitlyUnwrappedOptionals": true
   }
 }
