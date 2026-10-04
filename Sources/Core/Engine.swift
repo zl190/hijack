@@ -338,10 +338,12 @@ public final class Engine {
                     // FM-09: the tool's own mic reads off. Say so once it's held for 1s (a blip isn't a fault);
                     // an "unknown" (nil) reading never overrides "正在听…" (FM-12: the probe itself can be wrong).
                     if mic.0 == false {
-                        if micOffSince == nil {
+                        if let since = micOffSince {
+                            if clock.now.timeIntervalSince(since) >= 1.0 {
+                                report("notListening", plan.voiceName)
+                            }
+                        } else {
                             micOffSince = clock.now
-                        } else if clock.now.timeIntervalSince(micOffSince!) >= 1.0 {
-                            report("notListening", plan.voiceName)
                         }
                     } else if micOffSince != nil {
                         micOffSince = nil; report("listening", plan.voiceName)  // recovered (or now unknown): back to normal
