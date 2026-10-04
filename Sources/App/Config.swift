@@ -81,8 +81,8 @@ final class Config {
                 "config: reloaded (trigger \(trigger?.name ?? "follow"), voiceInput \(voiceInput), voiceKeys \(voiceKeys.mapValues(\.name)))"
             )
         }
-        if d["trigger"] != nil, (d["trigger"] as? String) != "follow", trigger == nil {
-            log("config: unknown trigger \(d["trigger"]!), following the voice key")
+        if let rawTrigger = d["trigger"], (rawTrigger as? String) != "follow", trigger == nil {
+            log("config: unknown trigger \(rawTrigger), following the voice key")
         }
     }
 
@@ -129,6 +129,8 @@ final class Model {
     // Voice key precedence: the user's explicit choice, else what the provider detects (or its default).
     var userVoiceKey: KeySpec? { c.voiceKeys[voiceID] }
     var detectedVoiceKey: KeySpec? { provider.detected().key }
+    // "right_option" is a literal id in namedKeys (quickKeys); see KeysTests.testW5_QuickKeysAlwaysResolveToANamedKey.
+    // swift-format-ignore: NeverForceUnwrap
     var forwardKey: KeySpec { userVoiceKey ?? detectedVoiceKey ?? KeySpec.named("right_option")! }
     // Trigger precedence: the user's explicit choice, else follow the voice key.
     var customTrigger: KeySpec? { c.trigger }
