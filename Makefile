@@ -11,7 +11,7 @@ VERSION := $(shell cat VERSION)
 APP     := build/Hijack.app
 ZIP     := build/Hijack.zip
 # Sparkle tools; build.sh extracts them with the framework, one folder per version.
-SPARKLE_VERSION := $(shell sed -n 's/^SPARKLE_VERSION=//p' build.sh)
+SPARKLE_VERSION := $(shell scripts/fetch-sparkle.sh --print-version)
 SPARKLE_BIN ?= .sparkle/$(SPARKLE_VERSION)/bin
 RELEASE_URL := https://github.com/zl190/hijack/releases/download/v$(VERSION)/
 # TAP_DIR: path to the zl190/homebrew-tap checkout. Override for a different layout.
@@ -23,6 +23,7 @@ build:
 
 # Run the HijackCore unit tests.
 test:
+	scripts/fetch-sparkle.sh
 	swift test
 
 # Check formatting against .swift-format without changing files; see docs/swift-format.md.
@@ -124,4 +125,4 @@ diagrams:
 
 # Remove build output.
 clean:
-	rm -rf build dist
+	rm -rf build dist .build

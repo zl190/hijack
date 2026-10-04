@@ -1,3 +1,4 @@
+import HijackCore
 import AppKit
 import ApplicationServices
 

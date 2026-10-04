@@ -1,3 +1,4 @@
+import HijackCore
 import AppKit
 
 // MARK: app state — what the running app knows that a CLI process can't check itself

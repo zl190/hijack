@@ -3,13 +3,13 @@ import Foundation
 
 // MARK: keys — any key plus modifiers; a bare modifier key is a "modifier-only" key
 
-enum Mod: String, CaseIterable {
+public enum Mod: String, CaseIterable {
     case ctrl
     case option
     case shift
     case command
     case fn
-    var flag: CGEventFlags {
+    public var flag: CGEventFlags {
         switch self {
         case .ctrl: .maskControl;
         case .option: .maskAlternate;
@@ -18,7 +18,7 @@ enum Mod: String, CaseIterable {
         case .fn: .maskSecondaryFn
         }
     }
-    var symbol: String {
+    public var symbol: String {
         switch self {
         case .ctrl: "⌃";
         case .option: "⌥";
@@ -28,7 +28,7 @@ enum Mod: String, CaseIterable {
         }
     }
     // NSEvent.ModifierFlags bits, as WeType stores them
-    var nsBit: Int {
+    public var nsBit: Int {
         switch self {
         case .shift: 1 << 17;
         case .ctrl: 1 << 18;
@@ -39,9 +39,19 @@ enum Mod: String, CaseIterable {
     }
 }
 
-struct NamedKey { let id: String; let code: Int; let zh: String; let en: String; let device: UInt64; let flag: CGEventFlags? }
+public struct NamedKey {
+    public let id: String
+    public let code: Int
+    public let zh: String
+    public let en: String
+    public let device: UInt64
+    public let flag: CGEventFlags?
+    public init(id: String, code: Int, zh: String, en: String, device: UInt64, flag: CGEventFlags?) {
+        self.id = id; self.code = code; self.zh = zh; self.en = en; self.device = device; self.flag = flag
+    }
+}
 
-let namedKeys: [NamedKey] =
+public let namedKeys: [NamedKey] =
     [
         NamedKey(id: "right_option", code: 61, zh: "右 Option", en: "Right Option", device: 0x40, flag: .maskAlternate),
         NamedKey(id: "left_option", code: 58, zh: "左 Option", en: "Left Option", device: 0x20, flag: .maskAlternate),
@@ -62,29 +72,29 @@ let namedKeys: [NamedKey] =
     .map { NamedKey(id: $0.0, code: $0.1, zh: $0.0.uppercased(), en: $0.0.uppercased(), device: 0, flag: nil) }
 
 // Menu quick picks; anything else goes in the config file.
-let quickKeys = ["right_option", "left_option", "right_command", "fn"]
+public let quickKeys = ["right_option", "left_option", "right_command", "fn"]
 
-struct KeySpec: Equatable {
-    var code: Int
-    var mods: Set<Mod> = []
-    var named: NamedKey? { namedKeys.first { $0.code == code } }
-    var modifierOnly: Bool { mods.isEmpty && named?.flag != nil }
-    var name: String {
+public struct KeySpec: Equatable {
+    public var code: Int
+    public var mods: Set<Mod> = []
+    public var named: NamedKey? { namedKeys.first { $0.code == code } }
+    public var modifierOnly: Bool { mods.isEmpty && named?.flag != nil }
+    public var name: String {
         let base = named.map { localize($0.zh, $0.en) } ?? "keyCode \(code)"
         return Mod.allCases.filter { mods.contains($0) }.map(\.symbol).joined() + base
     }
     /// A stable identifier for logs and stats (review-5 #17): never runs through `localize`, unlike `name`.
     /// Same shape `hijack set` and `KeySpec(binding:)` parse: a named key's id, or "mod+mod+base".
-    var logID: String {
+    public var logID: String {
         let base = named?.id ?? "keyCode\(code)"
         return (Mod.allCases.filter { mods.contains($0) }.map(\.rawValue) + [base]).joined(separator: "+")
     }
-    var flags: CGEventFlags { mods.reduce(into: CGEventFlags()) { $0.insert($1.flag) } }
-    static func named(_ id: String) -> KeySpec? { namedKeys.first { $0.id == id }.map { KeySpec(code: $0.code) } }
+    public var flags: CGEventFlags { mods.reduce(into: CGEventFlags()) { $0.insert($1.flag) } }
+    public static func named(_ id: String) -> KeySpec? { namedKeys.first { $0.id == id }.map { KeySpec(code: $0.code) } }
 
     // JSON: "right_option" | {"keyCode": 49, "modifiers": ["ctrl", "option"]}
-    init(code: Int, mods: Set<Mod> = []) { self.code = code; self.mods = mods }
-    init?(json: Any?) {
+    public init(code: Int, mods: Set<Mod> = []) { self.code = code; self.mods = mods }
+    public init?(json: Any?) {
         if let s = json as? String, let k = KeySpec.named(s) { self = k; return }
         guard let d = json as? [String: Any] else { return nil }
         let code = (d["keyCode"] as? Int) ?? (d["key"] as? String).flatMap { KeySpec.named($0)?.code }
@@ -92,16 +102,16 @@ struct KeySpec: Equatable {
         self.code = code
         self.mods = Set(((d["modifiers"] as? [String]) ?? []).compactMap(Mod.init(rawValue:)))
     }
-    var json: Any {
+    public var json: Any {
         if mods.isEmpty, let n = named { return n.id }
         var d: [String: Any] = named.map { ["key": $0.id] } ?? ["keyCode": code]
         d["modifiers"] = Mod.allCases.filter { mods.contains($0) }.map(\.rawValue)
         return d
     }
-    var quickID: String? { mods.isEmpty ? named.map(\.id) : nil }
+    public var quickID: String? { mods.isEmpty ? named.map(\.id) : nil }
 
     // "option_left+space", "ctrl+shift+d" (Handy / Tauri-style bindings)
-    init?(binding: String) {
+    public init?(binding: String) {
         var mods: Set<Mod> = [], code: Int?
         for raw in binding.lowercased().split(separator: "+").map(String.init) {
             let base = raw.replacingOccurrences(of: "_left", with: "").replacingOccurrences(of: "_right", with: "")

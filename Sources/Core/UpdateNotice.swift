@@ -18,15 +18,15 @@ public struct UpdateFound: Equatable {
 }
 
 /// What `hijack version` says about an update. The CLI makes no network call.
-enum UpdateNotice {
+public enum UpdateNotice {
     /// nil: nothing to say. Otherwise one short line for the CLI.
-    static func line(running: String, found: UpdateFound?, skippedBuild: String?) -> String? {
+    public static func line(running: String, found: UpdateFound?, skippedBuild: String?) -> String? {
         guard let found, compare(found.display, running) == .orderedDescending else { return nil }
         return "update available: \(found.display)" + (skippedBuild == found.build ? " (skipped)" : "")
     }
 
     /// Numeric, component by component; a missing component counts as 0 ("1.2" == "1.2.0").
-    static func compare(_ a: String, _ b: String) -> ComparisonResult {
+    public static func compare(_ a: String, _ b: String) -> ComparisonResult {
         let x = a.split(separator: ".").map { Int($0) ?? 0 }, y = b.split(separator: ".").map { Int($0) ?? 0 }
         for i in 0..<max(x.count, y.count) {
             let p = i < x.count ? x[i] : 0, q = i < y.count ? y[i] : 0

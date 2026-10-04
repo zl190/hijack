@@ -1,5 +1,5 @@
 #!/bin/sh
-# Build build/Hijack.app (Apple silicon). Needs Xcode Command Line Tools.
+# Build build/Hijack.app (Apple silicon). Needs Xcode Command Line Tools. The binary is built by SwiftPM.
 # HIJACK_SIGN_ID: signing identity. Releases use one fixed identity so the Accessibility
 # grant survives updates; unset = ad-hoc (re-grant after every build).
 set -e
@@ -16,27 +16,14 @@ if [ -n "$GIT_SHA" ] && [ -n "$(git status --porcelain 2>/dev/null)" ]; then GIT
 HIJACK_COMMIT="${GIT_SHA:-unknown}"
 APP=build/Hijack.app
 rm -rf build && mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-# Sparkle (in-app updates), pinned by sha256. The framework is linked by swiftc and embedded in the app.
-# The XPC services are for sandboxed apps only; Hijack is not sandboxed, so they are not copied.
-SPARKLE_VERSION=2.10.0
-SPARKLE_SHA256=c2bf58aa8387266ac179357b1415d6f2635f044da8be41042af32425dae6da0c
-# The cache is one folder per version. The download and the extraction land under temporary names and
-# move into place only when complete, so a stopped build never leaves a half cache that the next build trusts.
-SPARKLE_DIR=".sparkle/$SPARKLE_VERSION"
-if [ ! -d "$SPARKLE_DIR/Sparkle.framework" ] || [ ! -x "$SPARKLE_DIR/bin/generate_appcast" ]; then
-  rm -rf "$SPARKLE_DIR" "$SPARKLE_DIR.part"; mkdir -p "$SPARKLE_DIR.part"
-  SPARKLE_TAR="$SPARKLE_DIR.part/Sparkle-$SPARKLE_VERSION.tar.xz"
-  curl -fsSL -o "$SPARKLE_TAR" \
-    "https://github.com/sparkle-project/Sparkle/releases/download/$SPARKLE_VERSION/Sparkle-$SPARKLE_VERSION.tar.xz"
-  echo "$SPARKLE_SHA256  $SPARKLE_TAR" | shasum -a 256 -c - >/dev/null \
-    || { rm -rf "$SPARKLE_DIR.part"; echo "Sparkle $SPARKLE_VERSION download does not match the pinned sha256; nothing was kept"; exit 1; }
-  tar -xJf "$SPARKLE_TAR" -C "$SPARKLE_DIR.part" Sparkle.framework bin
-  rm "$SPARKLE_TAR"
-  mv "$SPARKLE_DIR.part" "$SPARKLE_DIR"
-fi
-swiftc -O -target arm64-apple-macos13 -F "$SPARKLE_DIR" -framework Sparkle \
-  -Xlinker -rpath -Xlinker @executable_path/../Frameworks \
-  Sources/*.swift Sources/Core/*.swift -o "$APP/Contents/MacOS/Hijack"
+# Sparkle (in-app updates): scripts/fetch-sparkle.sh keeps .sparkle/<version>/ (pinned by sha256).
+# Package.swift links the framework from there; the app embeds it below. The XPC services are for
+# sandboxed apps only; Hijack is not sandboxed, so they are not copied.
+scripts/fetch-sparkle.sh
+SPARKLE_DIR="$(scripts/fetch-sparkle.sh --print-dir)"
+# The binary comes from SwiftPM (Package.swift: targets HijackCore and Hijack). build.sh assembles the bundle.
+swift build -c release --product Hijack
+cp "$(swift build -c release --show-bin-path)/Hijack" "$APP/Contents/MacOS/Hijack"
 mkdir -p "$APP/Contents/Frameworks"
 ditto "$SPARKLE_DIR/Sparkle.framework" "$APP/Contents/Frameworks/Sparkle.framework"
 rm -rf "$APP/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices"

@@ -4,8 +4,8 @@ import Foundation
 // Pure: takes log lines, returns numbers, so the tests can feed it real lines.
 
 /// One dictation, as its summary line tells it.
-struct DictationEntry: Equatable {
-    enum Outcome: String, CaseIterable {
+public struct DictationEntry: Equatable {
+    public enum Outcome: String, CaseIterable {
         case textArrived = "text arrived"  // the voice window came and went
         case noWindow = "no voice window"  // the talk key went out, but no window was seen
         case interrupted = "interrupted"  // the next press came before the text
@@ -13,26 +13,26 @@ struct DictationEntry: Equatable {
         case tooShort = "too short to start"  // released before the talk key was sent
     }
     /// Why a dictation with no voice window failed, from the checks on its line.
-    enum Cause: String, CaseIterable {
+    public enum Cause: String, CaseIterable {
         case keyNotSent = "talk key never went out (echo missing)"
         case toolDidntListen = "voice tool didn't start listening (mic off)"
         case windowNotSeen = "tool listened, its window wasn't seen (mic on)"
         case unknown = "not enough checks on the line"
         case sourceNotSwitched = "input source never switched (talk key not sent)"
     }
-    var day: String  // yyyy-MM-dd
-    var tool: String
-    var toggle: Bool
-    var heldMs: Int
-    var sentMs: Int?
-    var textInMs: Int?  // release → voice window gone
-    var outcome: Outcome
-    var cause: Cause?
-    var tapDisabled: Bool
-    var secureInput: Bool
+    public var day: String  // yyyy-MM-dd
+    public var tool: String
+    public var toggle: Bool
+    public var heldMs: Int
+    public var sentMs: Int?
+    public var textInMs: Int?  // release → voice window gone
+    public var outcome: Outcome
+    public var cause: Cause?
+    public var tapDisabled: Bool
+    public var secureInput: Bool
 
     /// Parses a summary line written since 1.1.2 ("yyyy-MM-dd HH:mm:ss.SSS dictation …"); nil for any other line.
-    static func parse(_ line: String) -> DictationEntry? {
+    public static func parse(_ line: String) -> DictationEntry? {
         guard line.count > 24, line.dropFirst(23).hasPrefix(" dictation "),
             line.prefix(4).allSatisfy(\.isNumber)
         else { return nil }
@@ -80,25 +80,25 @@ struct DictationEntry: Equatable {
 }
 
 /// The numbers for a set of dictations (and the incidents logged around them).
-struct DictationStats: Equatable {
-    var dictations: Int  // the talk key went out (too-short taps not counted)
-    var outcomes: [DictationEntry.Outcome: Int]
-    var causes: [DictationEntry.Cause: Int]
-    var tooShort: Int
-    var sentP50: Int?, sentP95: Int?
-    var textInP50: Int?, textInP95: Int?
-    var tapPaused: Int, slowKeys: Int, caughtUp: Int
-    var tools: [String: Int]
-    var firstDay: String?, lastDay: String?
+public struct DictationStats: Equatable {
+    public var dictations: Int  // the talk key went out (too-short taps not counted)
+    public var outcomes: [DictationEntry.Outcome: Int]
+    public var causes: [DictationEntry.Cause: Int]
+    public var tooShort: Int
+    public var sentP50: Int?, sentP95: Int?
+    public var textInP50: Int?, textInP95: Int?
+    public var tapPaused: Int, slowKeys: Int, caughtUp: Int
+    public var tools: [String: Int]
+    public var firstDay: String?, lastDay: String?
 
     /// Share of judged dictations (text arrived or no window) where the text arrived; nil when none were judged.
-    var successRate: Double? {
+    public var successRate: Double? {
         let ok = outcomes[.textArrived, default: 0], judged = ok + outcomes[.noWindow, default: 0]
         return judged == 0 ? nil : Double(ok) / Double(judged)
     }
 
     /// `days`: keep the last N calendar days ending at `today` (yyyy-MM-dd); nil keeps everything.
-    static func compute(lines: [String], days: Int? = nil, today: String) -> DictationStats {
+    public static func compute(lines: [String], days: Int? = nil, today: String) -> DictationStats {
         let from: String? = days.map { d in
             let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"
             let t = f.date(from: today) ?? Date()

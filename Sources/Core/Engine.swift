@@ -5,107 +5,119 @@ import os
 // MARK: engine — carries out what the state machine decides, through the seams in Seams.swift.
 // No live system call in this file. The app injects them (Sources/System.swift); the tests inject fakes.
 
-let capsuleGrace = 0.15  // after its voice window disappears, wait this long, then switch back
-let maxSwitchWait = 1.0  // give up waiting for the input source switch after this long
+public let capsuleGrace = 0.15  // after its voice window disappears, wait this long, then switch back
+public let maxSwitchWait = 1.0  // give up waiting for the input source switch after this long
 
 /// Timing marks for Instruments (Points of Interest): one interval per dictation, its phases, and key moments.
 /// Free when nothing is recording. `scripts/sequence.sh` turns a recording into the sequence diagram.
-let signposter = OSSignposter(subsystem: "com.zl190.hijack", category: .pointsOfInterest)
+public let signposter = OSSignposter(subsystem: "com.zl190.hijack", category: .pointsOfInterest)
 
 /// Everything a session needs from the settings, read once per session. The app builds it from `Model`.
-struct Plan: Equatable {
-    var trigger: KeySpec
-    var providerID: String  // the voice tool, for its processes
-    var switchesInput: Bool  // an input method: switch to it and back. false: an app with its own hotkey
-    var voiceID: String
-    var voiceName: String
-    var forwardKey: KeySpec
-    var style: String  // how the voice tool wants its key: "hold" | "tap" | "doubleTap"
-    var toggle: Bool
-    var stopOnAnyKey: Bool
-    var holdDelay: Double
-    var restoreTimeout: Double
-    var fallbackDelay: Double
+public struct Plan: Equatable {
+    public var trigger: KeySpec
+    public var providerID: String  // the voice tool, for its processes
+    public var switchesInput: Bool  // an input method: switch to it and back. false: an app with its own hotkey
+    public var voiceID: String
+    public var voiceName: String
+    public var forwardKey: KeySpec
+    public var style: String  // how the voice tool wants its key: "hold" | "tap" | "doubleTap"
+    public var toggle: Bool
+    public var stopOnAnyKey: Bool
+    public var holdDelay: Double
+    public var restoreTimeout: Double
+    public var fallbackDelay: Double
+
+    // A public struct has no public memberwise init; this one keeps the same argument order.
+    public init(
+        trigger: KeySpec, providerID: String, switchesInput: Bool, voiceID: String, voiceName: String,
+        forwardKey: KeySpec, style: String, toggle: Bool, stopOnAnyKey: Bool, holdDelay: Double,
+        restoreTimeout: Double, fallbackDelay: Double
+    ) {
+        self.trigger = trigger; self.providerID = providerID; self.switchesInput = switchesInput
+        self.voiceID = voiceID; self.voiceName = voiceName; self.forwardKey = forwardKey; self.style = style
+        self.toggle = toggle; self.stopOnAnyKey = stopOnAnyKey; self.holdDelay = holdDelay
+        self.restoreTimeout = restoreTimeout; self.fallbackDelay = fallbackDelay
+    }
 }
 
 /// What one dictation did, for the single line it leaves in the log.
-struct DictationRecord {
-    var pressedAt: Date
-    var keySentMs: Int?  // shortcut down → talk key sent (nil: released before it was sent)
-    var echoMs: Int?  // shortcut down → our talk key's press came back through our own tap
-    var releasedAt: Date?
-    var heldMic: (tool: Bool?, device: Bool?)?  // last sample while the talk key was held
-    var heldWindow: WindowState?  // same sample
-    var sawWindow: Bool = false  // its voice window was on screen at some point after release
-    var windowGoneMs: Int?  // release → voice window gone (the text is in)
-    var switchFailed: Bool = false  // the input source never switched: the talk key was not sent (FM-05)
+public struct DictationRecord {
+    public var pressedAt: Date
+    public var keySentMs: Int?  // shortcut down → talk key sent (nil: released before it was sent)
+    public var echoMs: Int?  // shortcut down → our talk key's press came back through our own tap
+    public var releasedAt: Date?
+    public var heldMic: (tool: Bool?, device: Bool?)?  // last sample while the talk key was held
+    public var heldWindow: WindowState?  // same sample
+    public var sawWindow: Bool = false  // its voice window was on screen at some point after release
+    public var windowGoneMs: Int?  // release → voice window gone (the text is in)
+    public var switchFailed: Bool = false  // the input source never switched: the talk key was not sent (FM-05)
 }
 
-final class Engine {
-    let makePlan: () -> Plan
-    let keys: KeyPoster
-    let sources: InputSources
-    let tap: TapControl
-    let probes: Probes
-    let clock: Scheduler
-    let sink: Sink
+public final class Engine {
+    public let makePlan: () -> Plan
+    public let keys: KeyPoster
+    public let sources: InputSources
+    public let tap: TapControl
+    public let probes: Probes
+    public let clock: Scheduler
+    public let sink: Sink
 
-    private(set) var plan: Plan
-    var previous: String?  // the input source to restore after this dictation
-    var generation: Int = 0
-    var physicalDown: Bool = false  // the shortcut as the keyboard has it (edges go to the machine)
-    var machine: SessionMachine = SessionMachine()  // what a press does: Sources/Core/SessionMachine.swift
-    var mode: SessionMode = SessionMode()  // fixed per press
-    var record: DictationRecord
-    var waited: TimeInterval = 0  // release → switch back, for the summary
+    public private(set) var plan: Plan
+    public var previous: String?  // the input source to restore after this dictation
+    public var generation: Int = 0
+    public var physicalDown: Bool = false  // the shortcut as the keyboard has it (edges go to the machine)
+    public var machine: SessionMachine = SessionMachine()  // what a press does: Sources/Core/SessionMachine.swift
+    public var mode: SessionMode = SessionMode()  // fixed per press
+    public var record: DictationRecord
+    public var waited: TimeInterval = 0  // release → switch back, for the summary
     /// The voice tool's processes, looked up once per dictation.
     /// Listing running apps asks other processes. That is too slow to repeat every 50 ms.
-    var voicePIDs: [pid_t] = []
-    var tapInstalled: Bool = false
-    var span: (id: OSSignpostID, dictation: OSSignpostIntervalState, phase: (name: StaticString, state: OSSignpostIntervalState))?
+    public var voicePIDs: [pid_t] = []
+    public var tapInstalled: Bool = false
+    public var span: (id: OSSignpostID, dictation: OSSignpostIntervalState, phase: (name: StaticString, state: OSSignpostIntervalState))?
 
-    var swallowUp: Int?  // key that stopped a toggle session: also eat its key-up
-    var quitting: Bool = false  // inside stopForQuit(): endVoice() must post the stop tap synchronously (M1)
-    var paused: Bool = false  // the settings window is recording a key: let every key through
-    var forwardKeyEdgeSeen: Bool = false  // an edge of the talk key came through the tap since start (S2)
-    var waitingReported: Bool = false
-    var micOffSince: Date?  // when the held-mic sample first read "off"; reset each dictation (FM-09)
+    public var swallowUp: Int?  // key that stopped a toggle session: also eat its key-up
+    public var quitting: Bool = false  // inside stopForQuit(): endVoice() must post the stop tap synchronously (M1)
+    public var paused: Bool = false  // the settings window is recording a key: let every key through
+    public var forwardKeyEdgeSeen: Bool = false  // an edge of the talk key came through the tap since start (S2)
+    public var waitingReported: Bool = false
+    public var micOffSince: Date?  // when the held-mic sample first read "off"; reset each dictation (FM-09)
 
-    init(plan: @escaping () -> Plan, deps: Deps) {
+    public init(plan: @escaping () -> Plan, deps: Deps) {
         makePlan = plan
         keys = deps.keys; sources = deps.sources; tap = deps.tap; probes = deps.probes; clock = deps.clock; sink = deps.sink
         self.plan = plan()
         record = DictationRecord(pressedAt: deps.clock.now)
     }
 
-    func log(_ line: String) { sink.log(line) }
-    func trace(_ msg: @autoclosure @escaping () -> String) { sink.trace(msg()) }  // stays lazy: msg() is inside the new autoclosure
+    public func log(_ line: String) { sink.log(line) }
+    public func trace(_ msg: @autoclosure @escaping () -> String) { sink.trace(msg()) }  // stays lazy: msg() is inside the new autoclosure
 
     /// Re-read the settings, between sessions only, so a change mid-session can't strand a held key.
-    func refresh() {
+    public func refresh() {
         guard machine.state == .idle, !physicalDown else { return }
         plan = makePlan()
     }
 
     // Live progress for the settings window's "Try it" area.
-    func report(_ phase: String, _ detail: String = "") { sink.report(phase, detail) }
+    public func report(_ phase: String, _ detail: String = "") { sink.report(phase, detail) }
 
     // Turn the session into what the voice method expects: hold its key, or tap / double-tap it.
-    func tapKey(after delay: Double = 0) {
+    public func tapKey(after delay: Double = 0) {
         let key = plan.forwardKey
         clock.after(delay) { [self] in
             post(key, down: true)
             clock.after(0.03) { [self] in post(key, down: false) }
         }
     }
-    func startVoice() {
+    public func startVoice() {
         switch plan.style {
         case "tap": tapKey()
         case "doubleTap": tapKey(); tapKey(after: 0.12)
         default: post(plan.forwardKey, down: true)
         }
     }
-    func endVoice() {
+    public func endVoice() {
         if plan.style == "hold" {
             post(plan.forwardKey, down: false)
         } else if quitting {
@@ -120,7 +132,7 @@ final class Engine {
     /// terminate() calls exit() right after applicationWillTerminate returns, so a post scheduled through
     /// clock.after (DispatchQueue.main.asyncAfter on the live Scheduler) would never run. Timing matches
     /// tapKey()'s own (30ms down-to-up; 120ms from the first tap's down to the second's, for doubleTap).
-    func synchronousTapForQuit() {
+    public func synchronousTapForQuit() {
         let key = plan.forwardKey
         post(key, down: true); usleep(30_000); post(key, down: false)
         if plan.style == "doubleTap" {
@@ -129,31 +141,31 @@ final class Engine {
         }
     }
 
-    func post(_ key: KeySpec, down: Bool) {
+    public func post(_ key: KeySpec, down: Bool) {
         if !keys.post(key, down: down) { log("couldn't create the \(key.name) \(down ? "press" : "release") event") }
     }
 
-    func ms(since d: Date) -> Int { Int(clock.now.timeIntervalSince(d) * 1000) }
+    public func ms(since d: Date) -> Int { Int(clock.now.timeIntervalSince(d) * 1000) }
 
     // Phases of one dictation: "starting" (press → talk key sent), "listening" (→ release), "waiting for text" (→ switch back).
-    func beginDictation() {
+    public func beginDictation() {
         let id = signposter.makeSignpostID()
         span = (id, signposter.beginInterval("dictation", id: id), ("starting", signposter.beginInterval("starting", id: id)))
     }
-    func enterPhase(_ name: StaticString) {
+    public func enterPhase(_ name: StaticString) {
         guard let s = span else { return }
         signposter.endInterval(s.phase.name, s.phase.state)
         span?.phase = (name, signposter.beginInterval(name, id: s.id))
     }
-    func endDictation() {
+    public func endDictation() {
         guard let s = span else { return }
         signposter.endInterval(s.phase.name, s.phase.state)
         signposter.endInterval("dictation", s.dictation)
         span = nil
     }
-    func mark(_ name: StaticString) { if let s = span { signposter.emitEvent(name, id: s.id) } }
+    public func mark(_ name: StaticString) { if let s = span { signposter.emitEvent(name, id: s.id) } }
 
-    func sendKey() {
+    public func sendKey() {
         voicePIDs = probes.processIDs(ofProvider: plan.providerID)
         record.keySentMs = ms(since: record.pressedAt)
         enterPhase("listening"); mark("talk key sent")
@@ -166,7 +178,7 @@ final class Engine {
     /// Select and confirm: re-read the current source a moment later and retry once if it didn't stick.
     /// `confirmed`, when given, reports whether `id` is current after that check (FM-16: a caller must not
     /// tell the user the switch happened before this runs).
-    func switchTo(_ id: String, _ label: String, confirmed: ((Bool) -> Void)? = nil) {
+    public func switchTo(_ id: String, _ label: String, confirmed: ((Bool) -> Void)? = nil) {
         let ok = sources.select(id)
         clock.after(0.1) { [self] in
             if sources.current() == id {
@@ -181,7 +193,7 @@ final class Engine {
 
     /// Hand an event to the state machine and carry out what it returns. Returns whether the key event passes.
     @discardableResult
-    func run(_ event: SessionEvent, keyCode: Int? = nil) -> Bool {
+    public func run(_ event: SessionEvent, keyCode: Int? = nil) -> Bool {
         let p = plan
         if event == .press {
             // The shortcut is the tool's own key and the tool is already in front: it gets the real key.
@@ -228,7 +240,7 @@ final class Engine {
 
     /// Send the talk key once the input source is ready and the hold delay is over (an app: after the delay).
     /// When the source is still wrong after `maxSwitchWait`, the dictation ends without the talk key (FM-05).
-    func scheduleTalkKey() {
+    public func scheduleTalkKey() {
         let p = plan, gen = generation, start = clock.now
         func whenReady() {
             guard machine.state == .starting, gen == generation else { trace("released before forward"); return }
@@ -248,7 +260,7 @@ final class Engine {
     }
 
     /// Watch the voice window: when it goes (plus a short grace), or the wait runs out, the text is in.
-    func waitForText() {
+    public func waitForText() {
         let p = plan, gen = generation, released = record.releasedAt ?? clock.now
         var windowGone: Date?
         func poll() {
@@ -271,7 +283,7 @@ final class Engine {
     }
 
     /// The dictation is over: write its line; an input method also switches back to where you were.
-    func finish() {
+    public func finish() {
         let p = plan
         let prev = previous; previous = nil  // consumed here, not at .begin: a chained dictation keeps it (FM-17)
         if record.switchFailed {
@@ -309,7 +321,7 @@ final class Engine {
 
     /// While the talk key is held: is the voice tool listening, and is its window up? Sampled every half
     /// second off the main thread (CoreAudio and the window list are slow for a key tap); release keeps the last.
-    func sampleWhileHeld(gen: Int, after delay: Double) {
+    public func sampleWhileHeld(gen: Int, after delay: Double) {
         clock.after(delay) { [self] in
             guard machine.state == .listening, gen == generation else { return }
             let pids = voicePIDs, watched = plan.switchesInput, probes = probes
@@ -342,7 +354,7 @@ final class Engine {
 
     // The one line per dictation that goes to the file. When it didn't work, the checks tell which step failed:
     // the key never went out (echo), the voice tool didn't start listening (mic), or we missed its window.
-    func summary(end: String) {
+    public func summary(end: String) {
         let p = plan, r = record
         let held = (r.releasedAt ?? clock.now).timeIntervalSince(r.pressedAt)
         // review-5 #17: the tool and the key are logged by their stable id, not `.name`/`.voiceName` (both
@@ -371,7 +383,7 @@ final class Engine {
 
     /// The tap was off for a while, so key events may have been missed: line our idea of the trigger up with
     /// the keyboard. A missed release would leave the talk key held and the next press swallowed.
-    func reconcile() {
+    public func reconcile() {
         let downNow = tap.keyIsDown(plan.trigger.code)
         guard downNow != physicalDown else { return }
         log("trigger is \(downNow ? "down" : "up") but we had it \(physicalDown ? "down" : "up"): catching up")
@@ -379,16 +391,16 @@ final class Engine {
         if !downNow && machine.isActive && !plan.toggle { run(.release) }
     }
 
-    enum Wake { case systemWake, screenUnlock }
-    var sleptAt: Date?  // the last willSleep notification
-    var lockedAt: Date?  // the last screenIsLocked notification
-    func systemWillSleep() { sleptAt = clock.now }
-    func screenLocked() { lockedAt = clock.now }
+    public enum Wake { case systemWake, screenUnlock }
+    public var sleptAt: Date?  // the last willSleep notification
+    public var lockedAt: Date?  // the last screenIsLocked notification
+    public func systemWillSleep() { sleptAt = clock.now }
+    public func screenLocked() { lockedAt = clock.now }
 
     /// After sleep or unlock the voice tool and the input sources are in an unknown state (FM-25).
     /// A session that was running across it stops now, in hold and in toggle mode. A session that started
     /// after the sleep or the lock is the user's: the notification came late (review-4 S3). Then the trigger is re-read.
-    func reconcileAfterWake(_ wake: Wake) {
+    public func reconcileAfterWake(_ wake: Wake) {
         let reason = wake == .systemWake ? "system wake" : "screen unlocked"
         let since = wake == .systemWake ? sleptAt : lockedAt
         if machine.isActive, since.map({ record.pressedAt < $0 }) ?? true {
@@ -402,7 +414,7 @@ final class Engine {
     /// Runs 1 s after the tap starts. The system state cannot tell a stuck key from a key the user holds:
     /// an edge of the key through the tap in that second means a hand is on it, so nothing is posted.
     /// Limit: a user who holds the talk key for more than 1 s across a launch gets one release posted.
-    func clearStuckModifier() {
+    public func clearStuckModifier() {
         guard !physicalDown, !forwardKeyEdgeSeen else { return }
         let key = plan.forwardKey
         let down = key.modifierOnly ? key.named?.flag.map { tap.modifierIsDown($0) } ?? false : tap.keyIsDown(key.code)
@@ -413,7 +425,7 @@ final class Engine {
 
     /// Stop a session the menu finds still active with the physical key already up (FM-01, FM-04, FM-25):
     /// the same stop path `reconcileAfterWake` uses after sleep or unlock.
-    func stopStuckSession() {
+    public func stopStuckSession() {
         guard machine.isActive else { return }
         run(plan.toggle ? .press : .release)
         physicalDown = tap.keyIsDown(plan.trigger.code)  // resync, as reconcileAfterWake does (review-4 M3):
@@ -423,7 +435,7 @@ final class Engine {
     /// The app is quitting (AppDelegate.applicationWillTerminate, or SIGTERM routed through it): a held
     /// talk key must not outlive the process (FM-10, at the source). No restore-input-source wait — the
     /// process exits right after this call, so `.quit` goes straight to idle instead of `waitingForText`.
-    func stopForQuit() {
+    public func stopForQuit() {
         // S2: one log line either way, so a field log can show whether a quit released a key.
         guard machine.isActive else { log("quit: nothing held"); return }
         let releasing = machine.state == .listening  // the only state where a talk key was actually sent
@@ -435,7 +447,7 @@ final class Engine {
     }
 
     /// Re-enable the tap and check that it took (FM-02). One retry on the next run-loop turn; state.json tells the menu.
-    func reenableTap(_ why: String) {
+    public func reenableTap(_ why: String) {
         guard tap.trusted else {  // Accessibility was revoked while running (FM-24): re-enabling can't work
             log("event tap disabled (\(why)): Accessibility permission is gone")
             clock.after(0) { [self] in sink.state(trusted: false, tapActive: false) }  // off the tap callback (review-4 M2)
@@ -459,7 +471,7 @@ final class Engine {
     }
 
     /// One key event from the tap. Returns true when the event passes to the system, false when Engine swallows it.
-    func handle(_ input: KeyInput) -> Bool {
+    public func handle(_ input: KeyInput) -> Bool {
         if input.kind == .tapDisabledByTimeout || input.kind == .tapDisabledByUserInput {
             reenableTap(input.kind == .tapDisabledByTimeout ? "timeout" : "user input")
             return true
@@ -502,13 +514,13 @@ final class Engine {
         return run(down ? .press : .release)
     }
 
-    func isPress(_ input: KeyInput, _ key: KeySpec) -> Bool {
+    public func isPress(_ input: KeyInput, _ key: KeySpec) -> Bool {
         if input.kind == .keyDown { return true }
         guard input.kind == .flagsChanged, let flag = key.named?.flag else { return false }
         return input.flags.contains(flag)
     }
 
-    func start() {
+    public func start() {
         guard tap.trusted else {
             if !waitingReported { sink.state(trusted: false, tapActive: false); waitingReported = true }
             clock.after(1) { self.start() }  // wait for the grant

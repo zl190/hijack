@@ -10,13 +10,13 @@ import Foundation
 // The stream itself is the one live system service inside Core, behind the FolderEvents seam
 // (Sources/Core/Seams.swift): most tests drive a fake by hand, one keeps a real FSEvents stream.
 
-final class SettingsWatch {
+public final class SettingsWatch {
     private let events: FolderEvents
     /// The folders FSEvents watches: each file's folder, when it exists.
-    let roots: [String]
-    let isWatching: Bool
+    public let roots: [String]
+    public let isWatching: Bool
 
-    init(paths: [URL], latency: Double = 0.3, events: FolderEvents = LiveFolderEvents(), onChange: @escaping () -> Void) {
+    public init(paths: [URL], latency: Double = 0.3, events: FolderEvents = LiveFolderEvents(), onChange: @escaping () -> Void) {
         self.events = events
         // Watch each file's folder (a file replaced on save gets a new identity; the folder stays).
         roots = Array(Set(paths.map { $0.deletingLastPathComponent().path }))
@@ -26,11 +26,13 @@ final class SettingsWatch {
 }
 
 /// FSEvents, for real: the live `FolderEvents`.
-final class LiveFolderEvents: FolderEvents {
+public final class LiveFolderEvents: FolderEvents {
     private var stream: FSEventStreamRef?
     private var onChange: (() -> Void)?
 
-    @discardableResult func start(roots: [String], latency: Double, onChange: @escaping () -> Void) -> Bool {
+    public init() {}
+
+    @discardableResult public func start(roots: [String], latency: Double, onChange: @escaping () -> Void) -> Bool {
         guard !roots.isEmpty else { return false }
         self.onChange = onChange
         var context = FSEventStreamContext(

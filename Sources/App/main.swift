@@ -2,6 +2,7 @@
 // comes back after release. Settings live in ~/.config/hijack/config.json; the menu bar menu edits the common
 // ones and the settings window (⌘, or open the app again) all of them.
 // Build: ./build.sh (all files in Sources/)
+import HijackCore
 import AppKit
 import ApplicationServices
 import Carbon
