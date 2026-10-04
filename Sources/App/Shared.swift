@@ -20,6 +20,19 @@ func zh() -> Bool {
 }
 func L(_ zhText: String, _ en: String) -> String { zh() ? spaced(zhText) : en }
 
+// Review-5 #7, review-6 M1: the one wording for "Accessibility is not trusted" shared by the menu first
+// line, Settings' Try It card and `hijack doctor`. AXIsProcessTrusted() cannot tell a first run (Hijack is
+// not in the list yet) from a stale entry (a build swap, ad-hoc over signed or the reverse, leaves System
+// Settings showing the switch already on) — so the text must stay true in both cases: turn it on, and if
+// it is already on, remove it and add it again, rather than naming only one of the two causes.
+// `hijack doctor` and the other CLI output stay English-only (keyOrigin, etc. do too), so it gets the
+// plain English constant instead of the L()-wrapped one the menu and Settings use.
+let accessibilityNotTrustedGuidanceEnglish =
+    "Turn on Hijack in System Settings › Privacy & Security › Accessibility. If it is already on, select it, click −, and add it again."
+var accessibilityNotTrustedGuidance: String {
+    L("在「系统设置 › 隐私与安全性 › 辅助功能」里打开 Hijack。如果已经是打开的，选中它，按 −，再加一次。", accessibilityNotTrustedGuidanceEnglish)
+}
+
 // Chinese typesetting: one space between CJK and Latin letters/digits, so "按住右 Option用Handy听写"
 // reads "按住右 Option 用 Handy 听写". Applied to every Chinese string, so copy never spaces by hand.
 func spaced(_ s: String) -> String {

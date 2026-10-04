@@ -22,17 +22,26 @@ public enum IconState: Equatable {
 /// One fault the menu can show as its first line, in place of the normal status line. Only one shows at a
 /// time.
 public enum MenuFault: Equatable {
+    case recordingPaused  // Settings is recording a key: Engine.paused is true (review-5 #8)
     case keyListenerOff
     case stillHolding(talkKey: String)  // a session the engine thinks is active, with the physical key already up
     case secureInput(app: String)
 }
 
 public enum MenuFaults {
-    /// `tapActive` false wins first (nothing works until it's fixed). Then a stuck session, which traps the
-    /// user's next press. Then Secure Input, which only blocks the next dictation.
-    public static func firstLine(tapActive: Bool, stillHoldingTalkKey: String? = nil, secureInputApp: String? = nil) -> MenuFault? {
+    /// `tapActive` false wins first (nothing works until it's fixed, and it is the only one of these four
+    /// with an actual fix action — "Reopen Hijack"). Review-6 S2: `recordingPaused` ranked above it in
+    /// review-5 #8, which hid that fix behind "Recording a shortcut" even though the key recorder's local
+    /// NSEvent monitor (Settings.swift) works whether or not the tap is active — recording never actually
+    /// depends on `tapActive`, so there is nothing for it to win over there. Then a stuck session, which
+    /// traps the user's next press, then a recording in progress, then Secure Input, which only blocks the
+    /// next dictation.
+    public static func firstLine(
+        tapActive: Bool, stillHoldingTalkKey: String? = nil, secureInputApp: String? = nil, recordingPaused: Bool = false
+    ) -> MenuFault? {
         if !tapActive { return .keyListenerOff }
         if let talkKey = stillHoldingTalkKey { return .stillHolding(talkKey: talkKey) }
+        if recordingPaused { return .recordingPaused }
         if let app = secureInputApp { return .secureInput(app: app) }
         return nil
     }

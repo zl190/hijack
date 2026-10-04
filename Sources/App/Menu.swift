@@ -92,13 +92,47 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         // Reopens Hijack after an installer replaces it (brew can't: its install sandbox denies launching apps).
         // The system keeps the plist from registration time, so re-register when the bundled one changes.
+        // Review-5 #16, review-6 M2: read the status first and register from .notRegistered (never
+        // registered) or .notFound (the reviewer found a never-registered agent on macOS 27.0 reports
+        // .notFound, not .notRegistered) — the old code compared against `!= .enabled`, so a pending
+        // .requiresApproval re-ran unregister+register on every launch with nothing for it to fix, and
+        // every error from either call was swallowed (try?).
         let plist = "com.zl190.hijack.relauncher.plist"
         let relauncher = SMAppService.agent(plistName: plist)
         let current = (try? Data(contentsOf: Bundle.main.bundleURL.appendingPathComponent("Contents/Library/LaunchAgents/" + plist)))?
             .base64EncodedString()
-        if relauncher.status != .enabled || UserDefaults.standard.string(forKey: "relauncherPlist") != current {
-            try? relauncher.unregister()
-            if (try? relauncher.register()) != nil { UserDefaults.standard.set(current, forKey: "relauncherPlist") }
+        let plistChanged = UserDefaults.standard.string(forKey: "relauncherPlist") != current
+        switch relauncher.status {
+        case .notRegistered, .notFound:
+            do {
+                try relauncher.register()
+                UserDefaults.standard.set(current, forKey: "relauncherPlist")
+            } catch { log("relauncher agent register failed: \(error)") }
+        case .enabled where plistChanged:
+            do {
+                try relauncher.unregister()
+                try relauncher.register()
+                UserDefaults.standard.set(current, forKey: "relauncherPlist")
+            } catch { log("relauncher agent re-register failed: \(error)") }
+        case .enabled:
+            break
+        case .requiresApproval:
+            log("relauncher agent needs approval in System Settings › General › Login Items")
+        @unknown default:
+            log("relauncher agent status unknown")
+        }
+        // Review-6 M2 ("same for the login item"): Open at Login (Settings.swift) only ever registers or
+        // unregisters on an explicit toggle — unlike the relauncher, there is no launch-time auto-register
+        // to fix here, since the user, not Hijack, decides whether this one is on. Still log the same two
+        // cases the relauncher does, so a pending approval or a future status shows up in the field log
+        // even when Settings is never opened.
+        switch SMAppService.mainApp.status {
+        case .requiresApproval:
+            log("login item needs approval in System Settings › General › Login Items")
+        case .notRegistered, .notFound, .enabled:
+            break
+        @unknown default:
+            log("login item status unknown")
         }
         if !AXIsProcessTrusted() {  // first run: the window explains what's missing; the system prompt adds us to the list
             SettingsWindowController.show()
@@ -215,19 +249,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         // Status — derived from the same state the engine uses. At most one fault line replaces the normal
         // status line (docs/hci-review-faults.md §3.2): a dead key listener first, then a stuck session,
-        // then Secure Input. "No Accessibility" is checked first; it already has its own line and is the
-        // more fundamental cause when both are true.
+        // then a recording in progress (review-6 S2: ranked below the first two, since recording works
+        // whether or not the tap is active, and a stuck session traps the very next press), then Secure
+        // Input. "No Accessibility" is checked first; it already has its own line and is the more
+        // fundamental cause when both are true.
         let stillHolding = MenuFaults.stillHoldingTalkKey(
             toggle: engine.plan.toggle, isActive: engine.machine.isActive,
             keyIsPhysicallyDown: engine.tap.keyIsDown(engine.plan.trigger.code),
             talkKeyName: engine.plan.forwardKey.name)
         let secureApp =
             engine.tap.secureInputOn ? (NSWorkspace.shared.frontmostApplication?.localizedName ?? L("另一个 app", "Another app")) : nil
-        let fault = MenuFaults.firstLine(tapActive: engine.tap.isEnabled, stillHoldingTalkKey: stillHolding, secureInputApp: secureApp)
+        let fault = MenuFaults.firstLine(
+            tapActive: engine.tap.isEnabled, stillHoldingTalkKey: stillHolding, secureInputApp: secureApp, recordingPaused: engine.paused)
         if !AXIsProcessTrusted() {
-            add(L("⚠︎ 需要辅助功能权限，点这里去允许…", "⚠︎ Needs Accessibility permission — Allow…"), #selector(openAccessibility))
+            // Review-6 S4: a menu item cannot wrap, so the full accessibilityNotTrustedGuidance sentence
+            // (M1) widened the whole menu. Name the step only here; the full text stays in Settings' Try
+            // It card and `hijack doctor`.
+            add(L("⚠︎ 辅助功能未生效，点这里看怎么修", "⚠︎ Accessibility not in effect — how to fix"), #selector(openAccessibility))
         } else if let fault {
             switch fault {
+            case .recordingPaused:
+                add(L("正在录制快捷键，听写暂停", "Recording a shortcut; dictation paused"))
             case .keyListenerOff:
                 add(
                     L("⚠︎ 系统关掉了按键监听，快捷键无效，点这里重新打开 Hijack", "⚠︎ macOS turned off the key listener; the shortcut does nothing — Reopen Hijack"),
@@ -351,9 +393,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let c = Config.shared; c.reload(); c.triggerMode = sender.representedObject as? String ?? "hold"; c.save()
         log("trigger mode set to \(c.triggerMode)")
     }
-    @objc func toggleStopOnAnyKey() {
-        let c = Config.shared; c.reload(); c.stopOnAnyKey.toggle(); c.save()
-    }
     @objc func setVoiceStyle(_ sender: NSMenuItem) {
         let c = Config.shared; c.reload()
         let v = sender.representedObject as? String
@@ -364,15 +403,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard let id = sender.representedObject as? String else { return }
         let c = Config.shared; c.reload(); c.voiceInput = id; c.save()
         log("voice source set to \(id)")
-    }
-    @objc func setLanguage(_ sender: NSMenuItem) {
-        let c = Config.shared; c.reload(); c.language = sender.representedObject as? String ?? "system"; c.save()
-    }
-    @objc func toggleIcon() {
-        let c = Config.shared; c.reload(); c.showMenuBarIcon.toggle(); c.save(); updateIcon()
-    }
-    @objc func toggleLogin() {
-        if SMAppService.mainApp.status == .enabled { try? SMAppService.mainApp.unregister() } else { try? SMAppService.mainApp.register() }
     }
     @objc func openConfig() {
         Config.shared.reload()

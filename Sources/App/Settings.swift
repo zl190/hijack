@@ -30,6 +30,7 @@ final class SettingsStore: ObservableObject {
     @Published var showMenuBarIcon: Bool = true
     @Published var showDockIcon: Bool = false
     @Published var launchAtLogin: Bool = false
+    @Published var loginItemStatus: SMAppService.Status = .notRegistered  // review-5 #16: surfaces .requiresApproval
     @Published var language: String = "system"
     @Published var holdDelay: Double = 0.2
     @Published var restoreTimeout: Double = 5.0
@@ -77,7 +78,8 @@ final class SettingsStore: ObservableObject {
         showMenuBarIcon = c.showMenuBarIcon; showDockIcon = c.showDockIcon; language = c.language
         holdDelay = c.holdDelay; restoreTimeout = c.restoreTimeout; fallbackDelay = c.fallbackDelay
         configError = c.errorText
-        launchAtLogin = SMAppService.mainApp.status == .enabled
+        loginItemStatus = SMAppService.mainApp.status
+        launchAtLogin = loginItemStatus == .enabled
         trusted = AXIsProcessTrusted()
         var rows = installedProviders()
         if !rows.contains(where: { $0.id == c.voiceInput }) { rows.append(voiceProvider(for: c.voiceInput)) }
@@ -105,7 +107,13 @@ final class SettingsStore: ObservableObject {
     func startRecording(_ target: RecordTarget) {
         stopRecording()
         recording = target
-        engine?.paused = true  // otherwise pressing the current trigger would start a dictation
+        // Otherwise pressing the current trigger would start a dictation. Review-5 #8: paused clears on
+        // its own after Engine.recordingPauseTimeout (30s) if this recording is never finished or cancelled
+        // (switching apps, say), so dictation cannot stay dead with no signal why. Review-6 S1: the
+        // timeout only cleared the engine's flag, leaving the button reading "Press a Key…" with the
+        // monitor still installed, so wire the engine's callback to end the recording here too.
+        engine?.onKeyRecordingTimeout = { [weak self] in self?.stopRecording() }
+        engine?.pauseForKeyRecording()
         var downModifier: Int?, sawOtherKey = false
         monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged]) { [weak self] e in
             guard let self, let target = self.recording else { return e }
@@ -147,7 +155,7 @@ final class SettingsStore: ObservableObject {
 
     func stopRecording() {
         if let monitor { NSEvent.removeMonitor(monitor) }
-        monitor = nil; recording = nil; engine?.paused = false
+        monitor = nil; recording = nil; engine?.resumeFromKeyRecording()
     }
 }
 
@@ -298,6 +306,7 @@ struct DictationTab: View {
                     Row(title: L("按任意键也可停止", "Any Key Also Stops"), divider: false) {
                         Toggle("", isOn: Binding(get: { store.stopOnAnyKey }, set: { v in store.edit { $0.stopOnAnyKey = v } }))
                             .toggleStyle(.switch).labelsHidden()
+                            .accessibilityLabel(L("按任意键也可停止", "Any Key Also Stops"))
                     }
                 }
             }
@@ -325,11 +334,10 @@ struct DictationTab: View {
             }
             Card(title: L("试一下", "Try It")) {
                 if !store.trusted {
-                    Row(
-                        title: L("还没有辅助功能权限", "No Accessibility permission yet"),
-                        hint: L("没有它，Hijack 收不到快捷键", "Without it Hijack can't see the shortcut")
-                    ) {
-                        Button(L("去允许…", "Allow…")) { if let accessibilityURL { NSWorkspace.shared.open(accessibilityURL) } }
+                    Row(title: L("辅助功能未生效", "Accessibility isn't working"), hint: accessibilityNotTrustedGuidance) {
+                        Button(L("去系统设置…", "Open System Settings…")) {
+                            if let accessibilityURL { NSWorkspace.shared.open(accessibilityURL) }
+                        }
                     }
                 }
                 HStack(spacing: 12) {
@@ -429,6 +437,7 @@ struct SourcesTab: View {
                                 Picker("", selection: Binding(get: { s.style }, set: { v in store.edit { $0.voiceStyles[s.id] = v } })) {
                                     ForEach(["hold", "tap", "doubleTap"], id: \.self) { Text(styleNames[$0] ?? $0).tag($0) }
                                 }.pickerStyle(.segmented).labelsHidden().frame(width: 230)
+                                    .accessibilityLabel(L("启动方式", "Starts With"))
                             }
                         } else {
                             Button(L("它不支持按住说话？更改启动方式…", "Doesn't support hold-to-talk? Change how it starts…")) { showStyle = true }
@@ -467,6 +476,7 @@ struct UpdatesCard: View {
                                 updater?.automaticallyChecksForUpdates = v; checksAutomatically = v
                             })
                     ).toggleStyle(.switch).labelsHidden()
+                        .accessibilityLabel(L("自动检查更新", "Check for Updates Automatically"))
                 }
                 Row(title: L("自动下载并安装", "Download and Install Automatically")) {
                     Toggle(
@@ -477,6 +487,7 @@ struct UpdatesCard: View {
                                 updater?.automaticallyDownloadsUpdates = v; downloadsAutomatically = v
                             })
                     ).toggleStyle(.switch).labelsHidden()
+                        .accessibilityLabel(L("自动下载并安装", "Download and Install Automatically"))
                 }
                 Row(title: L("当前版本", "Version"), hint: appVersion, divider: false) {
                     Button(L("现在检查", "Check Now")) { updater?.checkForUpdates() }
@@ -504,20 +515,35 @@ struct GeneralTab: View {
                 }
             }
             Card {
-                Row(title: L("开机启动", "Open at Login")) {
+                Row(title: L("开机启动", "Open at Login"), divider: store.loginItemStatus != .requiresApproval) {
                     Toggle(
                         "",
                         isOn: Binding(
                             get: { store.launchAtLogin },
                             set: { on in
-                                if on { try? SMAppService.mainApp.register() } else { try? SMAppService.mainApp.unregister() }
+                                // Review-5 #16: SMAppService errors were swallowed (try?), so a failed
+                                // register/unregister left the toggle wrong with no trace in the log.
+                                do {
+                                    if on { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
+                                } catch {
+                                    log("login item \(on ? "register" : "unregister") failed: \(error)")
+                                }
                                 store.refresh()
                             })
                     ).toggleStyle(.switch).labelsHidden()
+                        .accessibilityLabel(L("开机启动", "Open at Login"))
+                }
+                // .requiresApproval: macOS registered it but the user hasn't approved it in System
+                // Settings yet. The toggle alone showed this as plainly off, with no reason given.
+                if store.loginItemStatus == .requiresApproval {
+                    Row(title: L("需要在「系统设置 › 通用 › 登录项」里允许", "Needs approval in System Settings › General › Login Items"), divider: false) {
+                        Button(L("去设置…", "Open Settings…")) { SMAppService.openSystemSettingsLoginItems() }
+                    }
                 }
                 Row(title: L("在菜单栏显示图标", "Show in Menu Bar")) {
                     Toggle("", isOn: Binding(get: { store.showMenuBarIcon }, set: { v in store.edit { $0.showMenuBarIcon = v } }))
                         .toggleStyle(.switch).labelsHidden()
+                        .accessibilityLabel(L("在菜单栏显示图标", "Show in Menu Bar"))
                 }
                 Row(
                     title: L("在 Dock 显示图标", "Show in Dock"),
@@ -527,11 +553,13 @@ struct GeneralTab: View {
                     Toggle("", isOn: Binding(get: { store.showDockIcon }, set: { v in store.edit { $0.showDockIcon = v } })).toggleStyle(
                         .switch
                     ).labelsHidden()
+                        .accessibilityLabel(L("在 Dock 显示图标", "Show in Dock"))
                 }
                 Row(title: L("语言", "Language"), divider: false) {
                     Picker("", selection: Binding(get: { store.language }, set: { v in store.edit { $0.language = v } })) {
                         Text(L("跟随系统", "System")).tag("system"); Text("English").tag("en"); Text("中文").tag("zh")
                     }.labelsHidden().frame(width: 130)
+                        .accessibilityLabel(L("语言", "Language"))
                 }
             }
             UpdatesCard()
@@ -546,10 +574,14 @@ struct GeneralTab: View {
 
 struct AdvancedTab: View {
     @ObservedObject var store: SettingsStore
-    func stepper(_ value: Double, range: ClosedRange<Double>, step: Double, set: @escaping (Config, Double) -> Void) -> some View {
+    func stepper(
+        _ value: Double, range: ClosedRange<Double>, step: Double, label: String, set: @escaping (Config, Double) -> Void
+    ) -> some View {
         Stepper(value: Binding(get: { value }, set: { v in store.edit { set($0, (v * 100).rounded() / 100) } }), in: range, step: step) {
             Text(String(format: L("%.2g 秒", "%.2g s"), value)).monospacedDigit().frame(width: 52, alignment: .trailing)
         }
+        .accessibilityLabel(label)
+        .accessibilityValue(String(format: L("%.2g 秒", "%.2g s"), value))
     }
     var body: some View {
         Page(store: store) {
@@ -557,16 +589,23 @@ struct AdvancedTab: View {
                 // Ranges shared with Config's load-time clamp and CLI.swift's `hijack set` (review-4 S5,
                 // Sources/Core/ConfigValues.swift): one source of truth for all three entry points.
                 Row(title: L("按住多久才开始", "Hold before starting"), hint: L("太短容易误触发", "Shorter means more accidental starts")) {
-                    stepper(store.holdDelay, range: holdDelayRange, step: 0.05) { $0.holdDelay = $1 }
+                    stepper(store.holdDelay, range: holdDelayRange, step: 0.05, label: L("按住多久才开始", "Hold before starting")) {
+                        $0.holdDelay = $1
+                    }
                 }
                 Row(title: L("最多等文字上屏", "Longest wait for the text"), hint: L("说长段话时可以调大", "Raise it for long dictations")) {
-                    stepper(store.restoreTimeout, range: restoreTimeoutRange, step: 0.5) { $0.restoreTimeout = $1 }
+                    stepper(
+                        store.restoreTimeout, range: restoreTimeoutRange, step: 0.5, label: L("最多等文字上屏", "Longest wait for the text")
+                    ) { $0.restoreTimeout = $1 }
                 }
                 Row(
                     title: L("语音工具没有窗口时等待", "Wait when the voice tool shows no window"),
                     hint: L("看不到它何时上屏完，就固定等这么久", "Hijack can't tell when it's done, so it waits this long"), divider: false
                 ) {
-                    stepper(store.fallbackDelay, range: fallbackDelayRange, step: 0.5) { $0.fallbackDelay = $1 }
+                    stepper(
+                        store.fallbackDelay, range: fallbackDelayRange, step: 0.5,
+                        label: L("语音工具没有窗口时等待", "Wait when the voice tool shows no window")
+                    ) { $0.fallbackDelay = $1 }
                 }
             }
             Card {
@@ -580,6 +619,11 @@ struct AdvancedTab: View {
 
 final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     static var shared: SettingsWindowController?
+
+    // Review-5 #18: the tab titles and symbols, as (symbol, title-provider) pairs in the same order the
+    // tabs were added — kept so relocalizeChrome() can rebuild each tab's label and the window's title
+    // from L() again after a language change, instead of only at launch.
+    private var tabSymbols: [(symbol: String, title: () -> String)] = []
 
     static func show(tab: Int? = nil) {
         let c = shared ?? SettingsWindowController()
@@ -614,7 +658,30 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         self.init(window: window)
         window.delegate = self
         window.center()
+        tabSymbols = [
+            ("mic", { L("听写", "Dictation") }), ("waveform", { L("语音来源", "Voice Source") }),
+            ("gearshape", { L("通用", "General") }), ("slider.horizontal.3", { L("高级", "Advanced") }),
+        ]
+        // AppDelegate posts this (object: nil) on every settings change, including a language switch.
+        NotificationCenter.default.addObserver(forName: .hijackSettingsChanged, object: nil, queue: .main) { [weak self] _ in
+            self?.relocalizeChrome()
+        }
+    }
+
+    // Review-5 #18: the window title and tab labels were only ever set once, at the language the app
+    // launched with. Rebuild them from L() on every settings change (a language switch posts the same
+    // notification as everything else), so they follow the picker with no relaunch.
+    func relocalizeChrome() {
+        guard let tabs = window?.contentViewController as? NSTabViewController else { return }
+        for (item, (_, title)) in zip(tabs.tabViewItems, tabSymbols) {
+            let t = title()
+            item.label = t
+            item.image?.accessibilityDescription = t
+        }
+        window?.title = L("\(appName) 设置", "\(appName) Settings")
     }
 
     func windowWillClose(_ n: Notification) { SettingsStore.shared.stopRecording(); SettingsStore.shared.stopLive() }
+
+    deinit { NotificationCenter.default.removeObserver(self) }
 }

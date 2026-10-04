@@ -176,7 +176,7 @@ func cliDoctor() -> Int32 {
     check(c.lastError == nil, "config file is valid JSON", "fix or revert ~/.config/hijack/config.json")
     check(st != nil, "Hijack is running", "open /Applications/Hijack.app")
     if let st {
-        check(st.trusted, "Accessibility permission granted", "System Settings › Privacy & Security › Accessibility › turn on Hijack")
+        check(st.trusted, "Accessibility permission granted", accessibilityNotTrustedGuidanceEnglish)
         check(
             st.tapActive, "key listener installed", st.trusted ? "macOS turned it off; quit and reopen Hijack" : "grant Accessibility first"
         )

@@ -53,9 +53,34 @@ final class MenuStateTests: XCTestCase {
             MenuFaults.firstLine(tapActive: true, stillHoldingTalkKey: "Fn", secureInputApp: "Terminal"), .stillHolding(talkKey: "Fn"))
     }
 
-    // A dead key listener wins over both of the others at once.
+    // A dead key listener wins over every other fault at once, recordingPaused included (review-6 S2).
     func testKeyListenerOffWinsOverEverything() {
-        XCTAssertEqual(MenuFaults.firstLine(tapActive: false, stillHoldingTalkKey: "Fn", secureInputApp: "Terminal"), .keyListenerOff)
+        XCTAssertEqual(
+            MenuFaults.firstLine(
+                tapActive: false, stillHoldingTalkKey: "Fn", secureInputApp: "Terminal", recordingPaused: true), .keyListenerOff)
+    }
+
+    // Review-5 #8: a recording in progress shows on its own when nothing else is wrong.
+    func testRecordingPausedShowsAlone() {
+        XCTAssertEqual(MenuFaults.firstLine(tapActive: true, recordingPaused: true), .recordingPaused)
+    }
+
+    // Review-6 S2: the key listener being off has the only fix action of the four ("Reopen Hijack"), and
+    // the key recorder's local NSEvent monitor works whether or not the tap is active, so recordingPaused
+    // must not hide it. (Folded into testKeyListenerOffWinsOverEverything above too.)
+    func testKeyListenerOffWinsOverRecordingPaused() {
+        XCTAssertEqual(MenuFaults.firstLine(tapActive: false, recordingPaused: true), .keyListenerOff)
+    }
+
+    // A stuck session also outranks a recording in progress: it traps the user's very next press.
+    func testStillHoldingWinsOverRecordingPaused() {
+        XCTAssertEqual(
+            MenuFaults.firstLine(tapActive: true, stillHoldingTalkKey: "Fn", recordingPaused: true), .stillHolding(talkKey: "Fn"))
+    }
+
+    // recordingPaused still wins over Secure Input, which only blocks the next dictation.
+    func testRecordingPausedWinsOverSecureInput() {
+        XCTAssertEqual(MenuFaults.firstLine(tapActive: true, secureInputApp: "Terminal", recordingPaused: true), .recordingPaused)
     }
 
     // review-4 M3: the "still holding" condition, moved into Core so it's testable without AppKit.
@@ -317,6 +342,83 @@ final class HCIFaultsTests: XCTestCase {
         r.clock.advance(2.8)
         let done = r.sink.reports.last { $0.phase == "done" }
         XCTAssertEqual(done?.detail, "Didn't switch back; the input source is still WeType")
+    }
+
+    // Review-5 #8: Settings' key recorder pauses the engine with no timeout. 30s after it starts, the
+    // pause must clear on its own so a forgotten recording (switched apps, etc.) does not kill dictation
+    // for good.
+    func testKeyRecordingPause_ClearsAt30Seconds() {
+        let r = Rig()
+        r.engine.pauseForKeyRecording()
+        r.clock.advance(30)
+        XCTAssertFalse(r.engine.paused)
+    }
+
+    // Boundary, just under: still paused, so the trigger is ignored (passed through, nothing starts).
+    func testKeyRecordingPause_PressAt29_9SecondsIsStillIgnored() {
+        let r = Rig()
+        r.engine.pauseForKeyRecording()
+        r.clock.advance(29.9)
+        XCTAssertTrue(r.press(), "still paused: passed through, no dictation started")
+        XCTAssertEqual(r.engine.machine.state, .idle)
+    }
+
+    // Boundary, just over: the timeout has cleared the pause, so the same press now runs.
+    func testKeyRecordingPause_PressAt30_1SecondsRuns() {
+        let r = Rig()
+        r.engine.pauseForKeyRecording()
+        r.clock.advance(30.1)
+        XCTAssertFalse(r.press(), "timeout cleared the pause: the trigger is swallowed and starts a dictation")
+        XCTAssertNotEqual(r.engine.machine.state, .idle)
+    }
+
+    // Review-6 S3: resumeFromKeyRecording had no test of its own effect — a mutation that flipped its
+    // `paused = false` to `paused = true` survived every test. A normal, finished recording (well before
+    // the 30s timeout) must leave dictation working: the trigger is swallowed and starts a session.
+    func testResumeFromKeyRecording_PressRunsAfterANormalFinish() {
+        let r = Rig()
+        r.engine.pauseForKeyRecording()
+        r.clock.advance(5)  // well short of the 30s timeout
+        r.engine.resumeFromKeyRecording()
+        XCTAssertFalse(r.press(), "resumed: the trigger is swallowed and starts a dictation")
+        XCTAssertNotEqual(r.engine.machine.state, .idle)
+    }
+
+    // The timeout from a recording that already finished must not reach into a later one: starting a
+    // second recording has to invalidate the first recording's scheduled clear.
+    func testKeyRecordingPause_StaleTimeoutDoesNotCancelANewerRecording() {
+        let r = Rig()
+        r.engine.pauseForKeyRecording()  // schedules a clear at t=30
+        r.clock.advance(10)
+        r.engine.resumeFromKeyRecording()  // the user finished recording a key at t=10
+        r.engine.pauseForKeyRecording()  // a second recording starts right away; schedules a clear at t=40
+        r.clock.advance(20)  // now at t=30: the first (stale) timeout must not fire here
+        XCTAssertTrue(r.engine.paused, "the stale timeout from the first recording must not clear the second")
+    }
+
+    // Review-6 S1: the timeout must tell Settings to end the recording too (its button still read "Press
+    // a Key…" after only `paused` cleared), not just clear the engine's own flag.
+    func testKeyRecordingPause_TimeoutCallsOnKeyRecordingTimeout() {
+        let r = Rig()
+        var fired = false
+        r.engine.onKeyRecordingTimeout = { fired = true }
+        r.engine.pauseForKeyRecording()
+        r.clock.advance(30)
+        XCTAssertTrue(fired, "the timeout must notify Settings so it can end the recording on its side too")
+    }
+
+    // A stale timeout (superseded by a second recording) must not call back either, the same guard as
+    // testKeyRecordingPause_StaleTimeoutDoesNotCancelANewerRecording but for the new callback.
+    func testKeyRecordingPause_StaleTimeoutDoesNotCallOnKeyRecordingTimeout() {
+        let r = Rig()
+        var fireCount = 0
+        r.engine.onKeyRecordingTimeout = { fireCount += 1 }
+        r.engine.pauseForKeyRecording()  // token=1, scheduled to fire at t=30
+        r.clock.advance(10)
+        r.engine.resumeFromKeyRecording()  // token=2
+        r.engine.pauseForKeyRecording()  // token=3, scheduled to fire at t=40
+        r.clock.advance(20)  // now at t=30: the stale (token=1) closure must not call back
+        XCTAssertEqual(fireCount, 0, "a stale timeout must not call the callback either")
     }
 }
 
