@@ -2,6 +2,7 @@ import HijackCore
 import AppKit
 import ApplicationServices
 import Carbon
+import MetricKit
 import ServiceManagement
 import Sparkle
 
@@ -35,6 +36,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     lazy var updater: SPUStandardUpdaterController? =
         AppDelegate.hasUpdateKey
         ? SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: updateRecorder, userDriverDelegate: nil) : nil
+    let metricsRecorder = MetricsRecorder()
 
     func applicationDidFinishLaunching(_ n: Notification) {
         logInApp = true
@@ -56,6 +58,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         engine.start()
         _ = updater  // created now, so the scheduled check starts at launch
+        MXMetricManager.shared.add(metricsRecorder)  // never on the tap path: Sources/Metrics.swift writes off the main thread
         // Sleep, wake and lock land in the log, to line them up with a session that stops working.
         let ws = NSWorkspace.shared.notificationCenter
         // After wake and after unlock the engine also reconciles: a session across sleep stops, the trigger is re-read (FM-25).
