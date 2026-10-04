@@ -14,6 +14,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Pin the newest Xcode on the runner. The default (16.x) ships an older swift-format
+      # that rejects config keys this repo uses; the Swift toolchain follows the same pick.
+      - name: Select the newest Xcode
+        run: |
+          XCODE="$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+          xcrun swift-format --version
+
       # Blocking since the full format on 2026-10-04 (see docs/swift-format.md).
       - name: Check formatting
         run: make lint

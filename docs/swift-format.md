@@ -61,6 +61,11 @@ rule toggles:
 These were formatting differences, not config errors. The full `make fmt` pass resolved them on 2026-10-04
 (28 files, +805/-487 lines).
 
+## Config shape
+
+`.swift-format` lists only the keys that differ from the tool's defaults (`xcrun swift-format dump-configuration`).
+An older swift-format rejects keys it does not know, so a full dump breaks CI. CI selects the newest Xcode on the runner for the same reason.
+
 ## Status
 
 Done on 2026-10-04:
