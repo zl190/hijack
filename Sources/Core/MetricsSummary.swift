@@ -73,6 +73,16 @@ public struct MetricsSummary: Equatable {
     /// Every `cumulativeCPUTime`, summed, across every day: the total CPU time in the folder.
     public var totalCPUSeconds: Double { cpuSecondsByDay.values.reduce(0, +) }
 
+    /// `doctor`'s "a crash report newer than the last start" rule (review 6, S2), as a pure comparison:
+    /// `startedAt` must be the app's actual start time, not a field rewritten on every later state write
+    /// (the old rule compared against `state.json`'s `updated`, which moves on every dictation and menu
+    /// open — a crash before the latest `updated` but after the real start went unreported). Equal
+    /// timestamps are not "newer"; no crash is never newer than anything.
+    public static func crashIsNewerThanStart(lastCrash: Date?, startedAt: Date) -> Bool {
+        guard let lastCrash else { return false }
+        return lastCrash > startedAt
+    }
+
     /// Reads every `*.json` file directly inside `folder` and folds it into one summary. A file that
     /// isn't valid JSON, or isn't a dictionary at its top level, is skipped — one bad file never drops
     /// the rest. Missing folder: an empty summary, not an error (stats/doctor show "no payloads yet").

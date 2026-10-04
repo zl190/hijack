@@ -206,8 +206,11 @@ func cliDoctor() -> Int32 {
             "\(p.name) isn't running now; Hijack falls back to waiting \(c.fallbackDelay)s")
     }
     // MetricKit crash diagnostics only come in a few hours after the crash (review-5 #17's own kind of
-    // delay): a crash that post-dates the app's own last start is still worth a look now.
-    if let st, let lastCrash = currentMetricsSummary().lastCrashDate, lastCrash > st.updated {
+    // delay): a crash that post-dates the app's own last start is still worth a look now. Compared
+    // against `st.startedAt` (review 6, S2), not `st.updated` — `updated` moves on every dictation and
+    // menu open, so it can hide a crash that happened before the latest one of those but after this run
+    // actually started.
+    if let st, MetricsSummary.crashIsNewerThanStart(lastCrash: currentMetricsSummary().lastCrashDate, startedAt: st.startedAt) {
         check(nil, "a crash report newer than the last start", "see `hijack stats` and ~/Library/Logs/Hijack-metrics")
     }
     print(failed ? "\nSomething needs fixing." : "\nAll good.")

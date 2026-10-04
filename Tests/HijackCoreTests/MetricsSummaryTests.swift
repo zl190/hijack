@@ -178,4 +178,25 @@ final class MetricsSummaryTests: XCTestCase {
         XCTAssertEqual(s.parseWarnings, 0)
         XCTAssertFalse(s.cpuTimeUnparsed); XCTAssertFalse(s.peakMemoryUnparsed); XCTAssertFalse(s.longestHangUnparsed)
     }
+
+    // MARK: review 6 (S2) — "newer than the last start" is a pure comparison; AppState owns the wiring.
+
+    func testACrashOneSecondAfterStartIsNewerThanStart() {
+        let start = Date()
+        XCTAssertTrue(MetricsSummary.crashIsNewerThanStart(lastCrash: start.addingTimeInterval(1), startedAt: start))
+    }
+
+    func testACrashOneSecondBeforeStartIsNotNewerThanStart() {
+        let start = Date()
+        XCTAssertFalse(MetricsSummary.crashIsNewerThanStart(lastCrash: start.addingTimeInterval(-1), startedAt: start))
+    }
+
+    func testACrashAtExactlyStartIsNotNewerThanStart() {
+        let start = Date()
+        XCTAssertFalse(MetricsSummary.crashIsNewerThanStart(lastCrash: start, startedAt: start))
+    }
+
+    func testNoCrashIsNeverNewerThanStart() {
+        XCTAssertFalse(MetricsSummary.crashIsNewerThanStart(lastCrash: nil, startedAt: Date()))
+    }
 }
