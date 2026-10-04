@@ -1,0 +1,14 @@
+{
+  "timeStampBegin": "2026-10-03T00:00:00.000+0000",
+  "timeStampEnd": "2026-10-04T00:00:00.000+0000",
+  "crashDiagnostics": [
+    {
+      "terminationReason": "Namespace SIGNAL, Code 0x6",
+      "exceptionType": 6,
+      "exceptionCode": 0,
+      "signal": 6,
+      "applicationVersion": "1.2.1",
+      "metaData": { "appBuildVersion": "121", "osVersion": "iPhone OS 17.0 (21A5248v)", "pid": 900 }
+    }
+  ]
+}

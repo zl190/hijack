@@ -20,6 +20,8 @@ let package = Package(
             linkerSettings: [
                 .unsafeFlags(["-F", sparkleDir, "-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])
             ]),
-        .testTarget(name: "HijackCoreTests", dependencies: ["HijackCore"], path: "Tests/HijackCoreTests"),
+        .testTarget(
+            name: "HijackCoreTests", dependencies: ["HijackCore"], path: "Tests/HijackCoreTests",
+            resources: [.copy("Fixtures")]),
     ]
 )

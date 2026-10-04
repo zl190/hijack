@@ -1,0 +1,13 @@
+{
+  "timeStampBegin": "2026-10-01T00:00:00.000+0000",
+  "timeStampEnd": "2026-10-02T00:00:00.000+0000",
+  "applicationTimeMetrics": {
+    "cumulativeForegroundTime": { "value": 3600.0, "unit": "s" }
+  },
+  "cpuMetrics": {
+    "cumulativeCPUTime": { "value": 120.5, "unit": "s" }
+  },
+  "memoryMetrics": {
+    "peakMemoryUsage": { "value": 256.0, "unit": "MB" }
+  }
+}
