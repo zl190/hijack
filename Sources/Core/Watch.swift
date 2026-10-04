@@ -38,6 +38,8 @@ public final class LiveFolderEvents: FolderEvents {
         var context = FSEventStreamContext(
             version: 0, info: Unmanaged.passUnretained(self).toOpaque(),
             retain: nil, release: nil, copyDescription: nil)
+        // FSEventStreamContext always sets info to our pointer, never nil; see WatchTests.testLive_RealFSEventsSeesAWrite.
+        // swift-format-ignore: NeverForceUnwrap
         let callback: FSEventStreamCallback = { _, info, _, _, _, _ in
             Unmanaged<LiveFolderEvents>.fromOpaque(info!).takeUnretainedValue().onChange?()
         }
