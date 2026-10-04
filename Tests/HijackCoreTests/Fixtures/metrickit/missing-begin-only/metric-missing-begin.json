@@ -1,0 +1,6 @@
+{
+  "timeStampEnd": "2026-10-07T00:00:00.000+0000",
+  "cpuMetrics": {
+    "cumulativeCPUTime": { "value": 10.0, "unit": "s" }
+  }
+}

@@ -1,7 +1,7 @@
 // MARK: dictation state machine — what a key press does, decided in one place (docs/state-machine.md).
 // Pure: no AppKit, no timers, no I/O, so the tests can drive every state with every event.
 
-enum SessionState: String, CaseIterable {
+public enum SessionState: String, CaseIterable {
     case idle
     case passthrough
     case starting
@@ -9,7 +9,7 @@ enum SessionState: String, CaseIterable {
     case waitingForText
 }
 
-enum SessionEvent: String, CaseIterable {
+public enum SessionEvent: String, CaseIterable {
     case press  // the shortcut went down
     case release  // the shortcut went up
     case otherKey  // another key, while a toggle session runs and "any key stops" is on
@@ -20,13 +20,13 @@ enum SessionEvent: String, CaseIterable {
 }
 
 /// What the current press is: fixed for the press, read by the engine before it hands the event over.
-struct SessionMode: Equatable {
-    var toggle: Bool = false  // tap to start, tap to stop
-    var switchesInput: Bool = true  // an input method (switch to it and back); false: an app with its own hotkey
-    var passthrough: Bool = false  // the shortcut is the tool's own key and the tool is already active
+public struct SessionMode: Equatable {
+    public var toggle: Bool = false  // tap to start, tap to stop
+    public var switchesInput: Bool = true  // an input method (switch to it and back); false: an app with its own hotkey
+    public var passthrough: Bool = false  // the shortcut is the tool's own key and the tool is already active
 }
 
-enum SessionEffect: Equatable {
+public enum SessionEffect: Equatable {
     case passKey  // let the key event through
     case swallowKey  // drop the key event
     case swallowKeyAndItsRelease  // drop it, and its key-up later (a key that stopped a toggle session)
@@ -40,19 +40,19 @@ enum SessionEffect: Equatable {
     case finish  // summary line; an input method also switches back
 }
 
-struct SessionMachine {
-    private(set) var state: SessionState = .idle
+public struct SessionMachine {
+    public private(set) var state: SessionState = .idle
 
-    var isActive: Bool { state == .passthrough || state == .starting || state == .listening }
+    public var isActive: Bool { state == .passthrough || state == .starting || state == .listening }
 
-    mutating func handle(_ event: SessionEvent, _ mode: SessionMode) -> [SessionEffect] {
+    public mutating func handle(_ event: SessionEvent, _ mode: SessionMode) -> [SessionEffect] {
         let (next, effects) = SessionMachine.transition(state, event, mode)
         state = next
         return effects
     }
 
     /// The whole behavior as one function of (state, event, mode). The tests enumerate it into the state diagram.
-    static func transition(_ s: SessionState, _ e: SessionEvent, _ mode: SessionMode) -> (SessionState, [SessionEffect]) {
+    public static func transition(_ s: SessionState, _ e: SessionEvent, _ mode: SessionMode) -> (SessionState, [SessionEffect]) {
         func start(_ prefix: [SessionEffect] = []) -> (SessionState, [SessionEffect]) {
             if mode.passthrough && !mode.toggle { return (.passthrough, prefix + [.passKey]) }
             return (.starting, prefix + [.swallowKey, .begin] + (mode.switchesInput ? [.switchToVoice] : []) + [.scheduleTalkKey])

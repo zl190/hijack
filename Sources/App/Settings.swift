@@ -1,3 +1,4 @@
+import HijackCore
 import AppKit
 import ApplicationServices
 import ServiceManagement
@@ -277,7 +278,7 @@ struct ChoiceRow: View {
     }
 }
 
-let accessibilityURL = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
+let accessibilityURL = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
 
 struct DictationTab: View {
     @ObservedObject var store: SettingsStore
@@ -328,7 +329,7 @@ struct DictationTab: View {
                         title: L("还没有辅助功能权限", "No Accessibility permission yet"),
                         hint: L("没有它，Hijack 收不到快捷键", "Without it Hijack can't see the shortcut")
                     ) {
-                        Button(L("去允许…", "Allow…")) { NSWorkspace.shared.open(accessibilityURL) }
+                        Button(L("去允许…", "Allow…")) { if let accessibilityURL { NSWorkspace.shared.open(accessibilityURL) } }
                     }
                 }
                 HStack(spacing: 12) {
@@ -405,6 +406,8 @@ struct SourcesTab: View {
                                 "The key \(s.name) uses for talking, set in its own settings; Hijack presses it for you")
                         ) {
                             VStack(alignment: .trailing, spacing: 4) {
+                                // "right_option" is a literal id in namedKeys; see KeysTests.testW5_QuickKeysAlwaysResolveToANamedKey.
+                                // swift-format-ignore: NeverForceUnwrap
                                 KeyRecorder(
                                     store: store, target: .voiceKey(s.id), key: s.userKey ?? s.detectedKey ?? KeySpec.named("right_option")!
                                 )
@@ -424,7 +427,7 @@ struct SourcesTab: View {
                         if s.style != "hold" || s.styleIsSet || showStyle {
                             Row(title: L("启动方式", "Starts With"), divider: false) {
                                 Picker("", selection: Binding(get: { s.style }, set: { v in store.edit { $0.voiceStyles[s.id] = v } })) {
-                                    ForEach(["hold", "tap", "doubleTap"], id: \.self) { Text(styleNames[$0]!).tag($0) }
+                                    ForEach(["hold", "tap", "doubleTap"], id: \.self) { Text(styleNames[$0] ?? $0).tag($0) }
                                 }.pickerStyle(.segmented).labelsHidden().frame(width: 230)
                             }
                         } else {
@@ -496,7 +499,7 @@ struct GeneralTab: View {
                     if store.trusted {
                         Label(L("已允许", "Allowed"), systemImage: "checkmark.circle.fill").foregroundStyle(.green)
                     } else {
-                        Button(L("去允许…", "Allow…")) { NSWorkspace.shared.open(accessibilityURL) }
+                        Button(L("去允许…", "Allow…")) { if let accessibilityURL { NSWorkspace.shared.open(accessibilityURL) } }
                     }
                 }
             }

@@ -19,7 +19,7 @@ runtime, and an installer that trusts the network.
 | W3 | MetricKit | Sources/Metrics.swift (new), Sources/Core/MetricsSummary.swift (new), Sources/CLI.swift (stats, doctor), docs/usage.md | builder | parallel with W1 |
 | W4 | install.sh verification | install.sh, Makefile (release-assets publishes Hijack.zip.sha256), docs/usage.md | builder | parallel with W1 |
 | W5 | Force unwraps | Sources/**, .swift-format (NeverForceUnwrap on) | builder | after W1 |
-| W6 | Hardened runtime | build.sh (`-o runtime`), docs/threat-model.md | lead, live test | after W1 |
+| W6 | Hardened runtime | build.sh (`-o runtime`), docs/threat-model.md | lead, live test | done: rejected, ADR 0021 |
 
 ## 3. What, per ticket
 
@@ -58,7 +58,7 @@ Turn `NeverForceUnwrap` on in `.swift-format`. For each of the 77 hits: on the k
 
 ### W6 Hardened runtime
 
-build.sh signs with `-o runtime` for the release identity and for ad-hoc. Live test on the owner's Mac: the tap installs, a dictation works, Sparkle's updater starts (library validation accepts the re-signed framework). If the Accessibility grant is lost by the flag change, record it in the release notes. Entitlements: none expected; if `com.apple.security.cs.disable-library-validation` is needed, do not ship, report instead.
+Result (2026-10-04): not shipped. The live test failed at launch: library validation rejects the embedded framework because a self-signed identity has no Team ID. See ADR 0021. The flag returns when the identity is a Developer ID.
 
 ## 4. Out of scope
 

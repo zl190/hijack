@@ -1,3 +1,4 @@
+import HijackCore
 import AppKit
 import ApplicationServices
 
@@ -85,7 +86,7 @@ let cliHelp = """
 
 // MARK: helpers
 
-private func fail(_ msg: String) -> Int32 { FileHandle.standardError.write((msg + "\n").data(using: .utf8)!); return 1 }
+private func fail(_ msg: String) -> Int32 { FileHandle.standardError.write((msg + "\n").data(using: .utf8) ?? Data()); return 1 }
 
 private func printJSON(_ obj: Any) {
     if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
@@ -93,6 +94,18 @@ private func printJSON(_ obj: Any) {
     {
         print(s)
     }
+}
+
+// MARK: MetricKit (Sources/Metrics.swift writes the files; Sources/Core/MetricsSummary.swift reads them)
+
+/// How many payload files are on disk — `hasPayloads` without reading and parsing all of them.
+private func metricsFileCount() -> Int {
+    ((try? FileManager.default.contentsOfDirectory(atPath: metricsFolderURL.path)) ?? []).filter { $0.hasSuffix(".json") }.count
+}
+
+/// The summary over every payload currently on disk; empty (not nil) when there are none yet.
+func currentMetricsSummary() -> MetricsSummary {
+    metricsFileCount() > 0 ? MetricsSummary.summarize(folder: metricsFolderURL) : MetricsSummary()
 }
 
 /// Any key the user can type on the command line: a name, "ctrl+option+f18", or a JSON object.
@@ -172,14 +185,16 @@ func cliDoctor() -> Int32 {
     let found = p.detected().key
     if m.userVoiceKey != nil {
         check(true, "talk key \(m.forwardKey.name) (set by you)")
-    } else if found == nil {
-        check(false, "talk key of \(p.name) detected", "`hijack set talk-key <key>` to match \(p.name)'s own setting")
-    } else if !p.readsSettings {
-        check(
-            nil, "talk key \(found!.name) is a default, not read from \(p.name)",
-            "make sure \(p.name) uses \(found!.name), or `hijack set talk-key <key>`")
+    } else if let found {
+        if !p.readsSettings {
+            check(
+                nil, "talk key \(found.name) is a default, not read from \(p.name)",
+                "make sure \(p.name) uses \(found.name), or `hijack set talk-key <key>`")
+        } else {
+            check(true, "talk key \(found.name) read from \(p.name)'s settings")
+        }
     } else {
-        check(true, "talk key \(found!.name) read from \(p.name)'s settings")
+        check(false, "talk key of \(p.name) detected", "`hijack set talk-key <key>` to match \(p.name)'s own setting")
     }
     let t = m.trigger
     check(
@@ -189,6 +204,14 @@ func cliDoctor() -> Int32 {
         check(
             p.isBusy() != nil ? true : nil, "can watch \(p.name)'s window to know when the text is in",
             "\(p.name) isn't running now; Hijack falls back to waiting \(c.fallbackDelay)s")
+    }
+    // MetricKit crash diagnostics only come in a few hours after the crash (review-5 #17's own kind of
+    // delay): a crash that post-dates the app's own last start is still worth a look now. Compared
+    // against `st.startedAt` (review 6, S2), not `st.updated` — `updated` moves on every dictation and
+    // menu open, so it can hide a crash that happened before the latest one of those but after this run
+    // actually started.
+    if let st, MetricsSummary.crashIsNewerThanStart(lastCrash: currentMetricsSummary().lastCrashDate, startedAt: st.startedAt) {
+        check(nil, "a crash report newer than the last start", "see `hijack stats` and ~/Library/Logs/Hijack-metrics")
     }
     print(failed ? "\nSomething needs fixing." : "\nAll good.")
     return failed ? 1 : 0
@@ -209,10 +232,14 @@ func cliSources(json: Bool) -> Int32 {
     }
     if json { printJSON(rows); return 0 }
     for r in rows {
-        print("\((r["current"] as! Bool) ? "*" : " ") \(r["name"]!)  [\(r["id"]!)]")
+        let current = (r["current"] as? Bool) ?? false, installed = (r["installed"] as? Bool) ?? false
+        let name = (r["name"] as? String) ?? "?", id = (r["id"] as? String) ?? "?"
+        let kind = (r["kind"] as? String) ?? "?", style = (r["style"] as? String) ?? "?"
+        let talkKeyOrigin = (r["talkKeyOrigin"] as? String) ?? "?"
+        print("\(current ? "*" : " ") \(name)  [\(id)]")
         print(
-            "    \(r["kind"]!) · talk key \((r["talkKey"] as? String) ?? "?") (\(r["talkKeyOrigin"]!)) · starts with \(r["style"]!)"
-                + ((r["installed"] as! Bool) ? "" : " · NOT INSTALLED"))
+            "    \(kind) · talk key \((r["talkKey"] as? String) ?? "?") (\(talkKeyOrigin)) · starts with \(style)"
+                + (installed ? "" : " · NOT INSTALLED"))
     }
     return 0
 }
@@ -225,7 +252,7 @@ func cliGet(_ name: String?, json: Bool) -> Int32 {
         return 0
     }
     if json { printJSON(d); return 0 }
-    for k in d.keys.sorted() { let v = d[k]!; print("\(k): " + (v is [String: Any] ? jsonString(v) : "\(v)")) }
+    for (k, v) in d.sorted(by: { $0.key < $1.key }) { print("\(k): " + (v is [String: Any] ? jsonString(v) : "\(v)")) }
     return 0
 }
 
@@ -260,7 +287,9 @@ func cliSet(_ args: [String]) -> Int32 {
         let match = all.first { $0.id == value } ?? all.first { $0.name.lowercased() == value.lowercased() }
         let id = match?.id ?? value
         let p = voiceProvider(for: id)
-        if !p.isInstalled { FileHandle.standardError.write("warning: \(p.name) [\(id)] isn't installed\n".data(using: .utf8)!) }
+        if !p.isInstalled {
+            FileHandle.standardError.write("warning: \(p.name) [\(id)] isn't installed\n".data(using: .utf8) ?? Data())
+        }
         c.voiceInput = id
     case "talk-key":
         if value == "auto" {
@@ -331,14 +360,21 @@ func cliStats(_ args: [String], json: Bool) -> Int32 {
     // display name on an older line). voiceProvider(for:) resolves a known id to its display name; an
     // unresolved key (an old line, or an id no longer installed) comes back unchanged.
     let toolNames = Dictionary(s.tools.map { (voiceProvider(for: $0.key).name, $0.value) }, uniquingKeysWith: +)
+    let hasPayloads = metricsFileCount() > 0
+    let metrics = currentMetricsSummary()
     if json {
         var d: [String: Any] = [
             "span": span, "dictations": s.dictations, "tooShort": s.tooShort,
             "outcomes": Dictionary(uniqueKeysWithValues: s.outcomes.map { ($0.key.rawValue, $0.value) }),
             "failureCauses": Dictionary(uniqueKeysWithValues: s.causes.map { ($0.key.rawValue, $0.value) }),
             "tools": toolNames, "keyTapPaused": s.tapPaused, "slowKeyEvents": s.slowKeys, "triggerCaughtUp": s.caughtUp,
+            "system": systemJSON(metrics, hasPayloads: hasPayloads),
         ]
         if let r = s.successRate { d["successRate"] = (r * 1000).rounded() / 1000 }
+        // W2 SLO: `target` is always carried (it's a fixed policy value); `met` is carried only when
+        // `successRate` could be computed — omitted, like successRate itself, when nothing was judged yet.
+        d["target"] = DictationStats.successTarget
+        if let met = s.met { d["met"] = met }
         for (k, v) in [
             ("talkKeyMsP50", s.sentP50), ("talkKeyMsP95", s.sentP95), ("textInMsP50", s.textInP50), ("textInMsP95", s.textInP95),
         ] {
@@ -347,31 +383,89 @@ func cliStats(_ args: [String], json: Bool) -> Int32 {
         printJSON(d); return 0
     }
     print("Hijack stats · \(span)" + (s.firstDay.map { " (\($0) → \(s.lastDay ?? $0))" } ?? ""))
-    guard s.dictations > 0 else { print("No dictations logged yet (the log has them since 1.1.2)."); return 0 }
-    func row(_ label: String, _ n: Int, _ note: String = "") {
-        let share = String(format: "%3.0f%%", Double(n) / Double(s.dictations) * 100)
-        print("  " + label.padding(toLength: 22, withPad: " ", startingAt: 0) + String(format: "%5d", n) + "  \(share)" + note)
-    }
-    print(
-        "Dictations".padding(toLength: 24, withPad: " ", startingAt: 0) + String(format: "%5d", s.dictations)
-            + (s.tooShort > 0 ? "  (+\(s.tooShort) too short to start)" : ""))
-    for o in DictationEntry.Outcome.allCases where o != .tooShort { if let n = s.outcomes[o] { row(o.rawValue, n) } }
-    for c in DictationEntry.Cause.allCases { if let n = s.causes[c] { print("      \(n) × \(c.rawValue)") } }
-    if let r = s.successRate {
+    if s.dictations == 0 {
+        print("No dictations logged yet (the log has them since 1.1.2).")
+    } else {
+        func row(_ label: String, _ n: Int, _ note: String = "") {
+            let share = String(format: "%3.0f%%", Double(n) / Double(s.dictations) * 100)
+            print("  " + label.padding(toLength: 22, withPad: " ", startingAt: 0) + String(format: "%5d", n) + "  \(share)" + note)
+        }
         print(
-            "Success rate".padding(toLength: 24, withPad: " ", startingAt: 0) + String(format: "%5.1f%%", r * 100)
-                + "  (text arrived ÷ text arrived + no window)")
-    }
-    func ms(_ v: Int?) -> String { v.map { $0 < 1000 ? "\($0) ms" : String(format: "%.2f s", Double($0) / 1000) } ?? "–" }
-    print("Talk key sent after".padding(toLength: 24, withPad: " ", startingAt: 0) + "p50 \(ms(s.sentP50))   p95 \(ms(s.sentP95))")
-    print("Text in after release".padding(toLength: 24, withPad: " ", startingAt: 0) + "p50 \(ms(s.textInP50))   p95 \(ms(s.textInP95))")
-    print(
-        "Incidents".padding(toLength: 24, withPad: " ", startingAt: 0)
-            + "key tap paused by macOS \(s.tapPaused) · slow key events \(s.slowKeys) · shortcut caught up \(s.caughtUp)")
-    if toolNames.count > 1 {
+            "Dictations".padding(toLength: 24, withPad: " ", startingAt: 0) + String(format: "%5d", s.dictations)
+                + (s.tooShort > 0 ? "  (+\(s.tooShort) too short to start)" : ""))
+        for o in DictationEntry.Outcome.allCases where o != .tooShort { if let n = s.outcomes[o] { row(o.rawValue, n) } }
+        for c in DictationEntry.Cause.allCases { if let n = s.causes[c] { print("      \(n) × \(c.rawValue)") } }
+        // The target line sits right under the rate it judges. No line at all when nothing was judged yet
+        // (same choice as --json, which then omits "met" rather than printing a meaningless comparison).
+        if let r = s.successRate, let met = s.met {
+            print(
+                "Success rate".padding(toLength: 24, withPad: " ", startingAt: 0) + String(format: "%5.1f%%", r * 100)
+                    + "  (text arrived ÷ text arrived + no window)")
+            print(
+                "target".padding(toLength: 24, withPad: " ", startingAt: 0)
+                    + "success >= \(String(format: "%.1f", DictationStats.successTarget * 100))%  this period \(String(format: "%.1f", r * 100))%  "
+                    + (met ? "met" : "not met"))
+        }
+        func ms(_ v: Int?) -> String { v.map { $0 < 1000 ? "\($0) ms" : String(format: "%.2f s", Double($0) / 1000) } ?? "–" }
+        print("Talk key sent after".padding(toLength: 24, withPad: " ", startingAt: 0) + "p50 \(ms(s.sentP50))   p95 \(ms(s.sentP95))")
         print(
-            "By voice tool".padding(toLength: 24, withPad: " ", startingAt: 0)
-                + toolNames.sorted { $0.value > $1.value }.map { "\($0.key) \($0.value)" }.joined(separator: " · "))
+            "Text in after release".padding(toLength: 24, withPad: " ", startingAt: 0) + "p50 \(ms(s.textInP50))   p95 \(ms(s.textInP95))")
+        print(
+            "Incidents".padding(toLength: 24, withPad: " ", startingAt: 0)
+                + "key tap paused by macOS \(s.tapPaused) · slow key events \(s.slowKeys) · shortcut caught up \(s.caughtUp)")
+        if toolNames.count > 1 {
+            print(
+                "By voice tool".padding(toLength: 24, withPad: " ", startingAt: 0)
+                    + toolNames.sorted { $0.value > $1.value }.map { "\($0.key) \($0.value)" }.joined(separator: " · "))
+        }
     }
+    printSystemBlock(metrics, hasPayloads: hasPayloads)
     return 0
+}
+
+/// `system` in `hijack stats --json`: MetricsSummary's fields, plus `hasPayloads` since an absent key
+/// elsewhere in `d` would otherwise be the only way to tell "no payloads yet" from "all zero".
+private func systemJSON(_ m: MetricsSummary, hasPayloads: Bool) -> [String: Any] {
+    guard hasPayloads else { return ["hasPayloads": false] }
+    var d: [String: Any] = [
+        "hasPayloads": true, "hangs": m.hangCount, "crashes": m.crashCount, "cpuSecondsByDay": m.cpuSecondsByDay,
+        // review 6 (S1c): a key that existed but did not parse must be counted here, not read as a silent 0/absent.
+        "parseWarnings": m.parseWarnings,
+    ]
+    if let v = m.longestHangSeconds { d["longestHangSeconds"] = v }
+    if let v = m.peakMemoryBytes { d["peakMemoryBytes"] = v }
+    if let v = m.lastCrashDate { d["lastCrashDate"] = ISO8601DateFormatter().string(from: v) }
+    return d
+}
+
+/// The "System (MetricKit)" block of `hijack stats` (text form): hang count and longest hang, crash
+/// count and last crash date, CPU time per day, peak memory — or one line when nothing has arrived yet.
+/// review 6 (S1c): a field whose key existed but never parsed prints "n/a (unrecognized format)" rather
+/// than being silently absent, which would read as "Hijack has no data" instead of "Hijack could not read it".
+private func printSystemBlock(_ m: MetricsSummary, hasPayloads: Bool) {
+    let unrecognized = "n/a (unrecognized format)"
+    func row(_ label: String, _ text: String) { print(label.padding(toLength: 24, withPad: " ", startingAt: 0) + text) }
+    guard hasPayloads else {
+        row("System (MetricKit)", "no payloads yet (macOS delivers them about once a day)")
+        return
+    }
+    func seconds(_ v: Double) -> String { String(format: "%.2fs", v) }
+    let day: DateFormatter = {
+        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"; return f
+    }()
+    print("System (MetricKit)")
+    let hangSuffix =
+        m.longestHangSeconds.map { "  (longest \(seconds($0)))" } ?? (m.longestHangUnparsed ? "  (longest \(unrecognized))" : "")
+    row("  Hangs", "\(m.hangCount)" + hangSuffix)
+    row("  Crashes", "\(m.crashCount)" + (m.lastCrashDate.map { "  (last \(day.string(from: $0)))" } ?? ""))
+    if m.cpuSecondsByDay.isEmpty, m.cpuTimeUnparsed {
+        row("  CPU time", unrecognized)
+    } else {
+        for (d, cpu) in m.cpuSecondsByDay.sorted(by: { $0.key < $1.key }) { row("  CPU time \(d)", seconds(cpu)) }
+    }
+    if let peak = m.peakMemoryBytes {
+        row("  Peak memory", String(format: "%.1f MB", peak / 1e6))
+    } else if m.peakMemoryUnparsed {
+        row("  Peak memory", unrecognized)
+    }
 }

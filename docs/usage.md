@@ -1,6 +1,7 @@
 # Using Hijack
 
-[Installation and quick start](../README.md#install)
+[Installation and quick start](../README.md#install). The install script checks the download's
+checksum and signature before it touches `/Applications`.
 
 ## Settings
 
@@ -32,9 +33,23 @@ hijack sources           # installed voice sources and their talk keys
 hijack get [setting]     # read settings
 hijack set mode toggle   # change a setting (validated)
 hijack log -f            # follow the log
+hijack stats             # how reliable dictation has been (default: last 7 days)
 ```
 
-`status`, `sources`, and `get` take `--json`.
+`status`, `sources`, `get`, and `stats` take `--json`.
+
+`hijack stats` prints a `target` line under the success rate: `success >= 99.0%` is the current
+reliability bar (`Sources/Core/Stats.swift`'s `successTarget`, provisional until 7 days of 1.2.x data),
+next to this period's own rate and `met` or `not met`. `--json` carries the same two values as `target`
+and `met`. Neither appears before any dictation has been judged (text arrived, or no voice window seen).
+
+## System health (MetricKit)
+
+macOS sends Hijack a report about once a day. The report holds CPU time, memory use, hangs and crashes. Hijack writes each report to `~/Library/Logs/Hijack-metrics`. It keeps the newest 30 files.
+
+Run `hijack stats` to see the "System (MetricKit)" block: hang count and longest hang, crash count and last crash date, CPU time per day, and peak memory. The block is empty on a new install. Wait about a day for the first report. `hijack doctor` warns when a crash report is newer than the app's last start.
+
+Hang count, crash count and the last crash date come straight from the report. The longest hang, CPU time and peak memory are read against the documented field names, but not yet checked against a real report (none has arrived on a development Mac yet). If Hijack cannot read one of those three, it prints `n/a (unrecognized format)` in its place, never a 0 it did not actually measure. `--json` counts every such case in `parseWarnings`.
 
 ## Updates
 

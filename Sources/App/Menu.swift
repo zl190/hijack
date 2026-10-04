@@ -1,6 +1,8 @@
+import HijackCore
 import AppKit
 import ApplicationServices
 import Carbon
+import MetricKit
 import ServiceManagement
 import Sparkle
 
@@ -34,6 +36,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     lazy var updater: SPUStandardUpdaterController? =
         AppDelegate.hasUpdateKey
         ? SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: updateRecorder, userDriverDelegate: nil) : nil
+    let metricsRecorder = MetricsRecorder()
 
     func applicationDidFinishLaunching(_ n: Notification) {
         logInApp = true
@@ -43,11 +46,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Settings apply when their files change (config, a voice tool's own settings): no polling.
         // The config folder must exist before the watch starts: the watch covers only folders that exist (FM-18).
         try? FileManager.default.createDirectory(at: configURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-        watch = SettingsWatch(paths: [configURL] + voiceSettingsFiles) { [weak self] in
+        let watch = SettingsWatch(paths: [configURL] + voiceSettingsFiles) { [weak self] in
             Config.shared.reload(); self?.applyAppearance(); self?.engine.refresh()
             NotificationCenter.default.post(name: .hijackSettingsChanged, object: nil)
         }
-        trace("watching settings in \(self.watch!.roots.joined(separator: ", "))")
+        self.watch = watch
+        trace("watching settings in \(watch.roots.joined(separator: ", "))")
         // Registered before start(): start() can post .hijackStateChanged before this function returns
         // (waiting for Accessibility, or the tap install itself), and the icon must see it (review-4 M1).
         NotificationCenter.default.addObserver(forName: .hijackStateChanged, object: nil, queue: .main) { [weak self] _ in
@@ -55,6 +59,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         engine.start()
         _ = updater  // created now, so the scheduled check starts at launch
+        MXMetricManager.shared.add(metricsRecorder)  // never on the tap path: Sources/Metrics.swift writes off the main thread
         // Sleep, wake and lock land in the log, to line them up with a session that stops working.
         let ws = NSWorkspace.shared.notificationCenter
         // After wake and after unlock the engine also reconciles: a session across sleep stops, the trigger is re-read (FM-25).
@@ -271,6 +276,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             on: m.customTrigger == nil, to: keys, value: "auto")
         keys.addItem(.separator())
         for id in quickKeys {
+            // Every id in quickKeys resolves; see KeysTests.testW5_QuickKeysAlwaysResolveToANamedKey.
+            // swift-format-ignore: NeverForceUnwrap
             let k = KeySpec.named(id)!; add(k.name, #selector(setTrigger(_:)), on: m.customTrigger == k, to: keys, value: id)
         }
         if let t = m.customTrigger, t.quickID.map(quickKeys.contains) != true { add(t.name, on: true, to: keys) }
@@ -296,6 +303,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }()
         add(autoTitle, #selector(setVoiceKey(_:)), on: m.userVoiceKey == nil, to: src, value: "auto")
         for id in quickKeys where KeySpec.named(id) != found {
+            // Every id in quickKeys resolves; see KeysTests.testW5_QuickKeysAlwaysResolveToANamedKey.
+            // swift-format-ignore: NeverForceUnwrap
             let k = KeySpec.named(id)!; add(k.name, #selector(setVoiceKey(_:)), on: m.userVoiceKey == k, to: src, value: id)
         }
         if let u = m.userVoiceKey, u.quickID.map(quickKeys.contains) != true { add(u.name, on: true, to: src) }
@@ -306,7 +315,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             header(L("\(name)的启动方式", "How \(name) Starts"), to: src)
             let names = ["hold": L("按住", "Hold"), "tap": L("单击", "Single Tap"), "doubleTap": L("双击", "Double Tap")]
             for code in ["hold", "tap", "doubleTap"] {
-                add(names[code]!, #selector(setVoiceStyle(_:)), on: m.voiceStyle == code, to: src, value: code)
+                add(names[code] ?? code, #selector(setVoiceStyle(_:)), on: m.voiceStyle == code, to: src, value: code)
             }
         }
         add(L("语音来源：\(name)", "Voice Source: \(name)")).submenu = src
@@ -371,7 +380,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         NSWorkspace.shared.open(configURL)
     }
     @objc func openAccessibility() {
-        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+        // accessibilityURL (Settings.swift) is the same literal, already optional.
+        if let accessibilityURL { NSWorkspace.shared.open(accessibilityURL) }
     }
 
     // FM-02: the key listener is off and the retry already failed (Engine.reenableTap). Quitting and

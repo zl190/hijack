@@ -1,7 +1,7 @@
 #!/bin/sh
 # Regenerate docs/diagrams from the code. Same commit in, same diagrams out.
 #   states  — the state machine's transition function, enumerated by the tests (states.mmd).
-#   classes — SwiftPlantUML reads Sources/ (config: .swiftplantuml.yml); PlantUML renders it.
+#   classes — SwiftPlantUML reads Sources/ once, App and Core (config: .swiftplantuml.yml); PlantUML renders it.
 #     · No --sdk: with it, SourceKit can't resolve types declared in other files and prints them as "_".
 #     · Member types come from the declarations, so stored properties spell out their type (`var x: Bool = false`).
 #     · SwiftPlantUML draws inheritance and conformance only ("associations" are on its roadmap), so the
@@ -12,7 +12,7 @@ cd "$(dirname "$0")/.."
 JAR="${PLANTUML_JAR:-$HOME/.local/share/plantuml/plantuml.jar}"
 OUT=docs/diagrams
 mkdir -p "$OUT"
-swiftplantuml classdiagram Sources Sources/Core --output consoleOnly > "$OUT/classes.puml"
+swiftplantuml classdiagram Sources --output consoleOnly > "$OUT/classes.puml"
 python3 - "$OUT/classes.puml" <<'PY'
 import re, sys
 path = sys.argv[1]

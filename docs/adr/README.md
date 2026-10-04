@@ -35,6 +35,8 @@ Each record has a `Topic:` line. This index groups the records by topic. Status:
 | [0008](0008-do-not-offer-app-intents.md) | Do not offer App Intents | Accepted | 2026-10-01 |
 | [0009](0009-reopen-the-app-after-an-installer-replaces-it.md) | Reopen the app after an installer replaces it | Accepted | 2026-10-01 |
 | [0017](0017-ship-a-layered-icon-composer-icon.md) | Ship a layered Icon Composer icon | Accepted | 2026-10-01 |
+| [0020](0020-build-the-app-with-swiftpm.md) | Build the app with SwiftPM | Accepted | 2026-10-04 |
+| [0021](0021-no-hardened-runtime-with-a-self-signed-identity.md) | No hardened runtime with a self-signed identity | Accepted | 2026-10-04 |
 
 ## Observability and docs
 

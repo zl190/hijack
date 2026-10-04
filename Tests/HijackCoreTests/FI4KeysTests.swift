@@ -88,4 +88,12 @@ final class FI4KeysTests: XCTestCase {
         XCTAssertEqual(r.keys.posted.map { [$0.key.code, $0.down ? 1 : 0] }, [[105, 0]])
         XCTAssertTrue(r.sink.has("cleared a stuck F13"))
     }
+
+    // W5: Keys.swift, Config.swift, Settings.swift and Menu.swift force-unwrap `KeySpec.named(id)` for
+    // every id in quickKeys (and "fn" directly). This proves none of those lookups can be nil.
+    func testW5_QuickKeysAlwaysResolveToANamedKey() {
+        for id in quickKeys {
+            XCTAssertNotNil(KeySpec.named(id), id)
+        }
+    }
 }

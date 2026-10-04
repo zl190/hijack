@@ -1,3 +1,4 @@
+import HijackCore
 import AppKit
 import ApplicationServices
 import Carbon
@@ -52,7 +53,16 @@ struct LiveKeyPoster: KeyPoster {
     }
 
     func postModifier(_ mod: Mod, down: Bool, held: Set<Mod>) {
-        let code: Int = [.ctrl: 59, .option: 58, .shift: 56, .command: 55, .fn: 63][mod]!
+        // An exhaustive switch, not a dictionary force-unwrap: a new Mod case fails to compile here
+        // instead of crashing at runtime (no sound fallback key code exists for an unknown modifier).
+        let code: Int
+        switch mod {
+        case .ctrl: code = 59
+        case .option: code = 58
+        case .shift: code = 56
+        case .command: code = 55
+        case .fn: code = 63
+        }
         guard let e = CGEvent(keyboardEventSource: nil, virtualKey: CGKeyCode(code), keyDown: down) else { return }
         e.type = .flagsChanged
         e.flags = held.reduce(into: CGEventFlags()) { $0.insert($1.flag) }
@@ -109,7 +119,13 @@ final class LiveTap: TapControl {
                     // Event timestamps are mach_absolute_time ticks. The key itself is never logged, only what kind it was.
                     let entered = mach_absolute_time()
                     let age = event.timestamp > 0 && entered > event.timestamp ? ticksToMs(entered - event.timestamp) : 0
-                    let live = Unmanaged<LiveTap>.fromOpaque(ctx!).takeUnretainedValue()
+                    // CGEvent.tapCreate always echoes back the userInfo we gave it (never nil in practice);
+                    // guard anyway, because a missing context must never swallow a key.
+                    guard let ctx else {
+                        log("key tap callback: nil context, passing the key through")
+                        return Unmanaged.passUnretained(event)
+                    }
+                    let live = Unmanaged<LiveTap>.fromOpaque(ctx).takeUnretainedValue()
                     guard let input = KeyInput(type, event) else { return Unmanaged.passUnretained(event) }
                     let tapSpan = signposter.beginInterval("key event", id: .exclusive)
                     let pass = live.onEvent?(input) ?? true

@@ -1,0 +1,10 @@
+{
+  "timeStampBegin": "2026-10-11T00:00:00.000+0000",
+  "timeStampEnd": "2026-10-12T00:00:00.000+0000",
+  "hangDiagnostics": [
+    {
+      "applicationVersion": "1.2.0",
+      "diagnosticMetaData": { "hangDuration": { "value": 3.5, "unit": "s" }, "appBuildVersion": "120" }
+    }
+  ]
+}
