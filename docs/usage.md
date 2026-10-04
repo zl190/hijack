@@ -43,6 +43,12 @@ reliability bar (`Sources/Core/Stats.swift`'s `successTarget`, provisional until
 next to this period's own rate and `met` or `not met`. `--json` carries the same two values as `target`
 and `met`. Neither appears before any dictation has been judged (text arrived, or no voice window seen).
 
+## System health (MetricKit)
+
+macOS sends Hijack a report about once a day. The report holds CPU time, memory use, hangs and crashes. Hijack writes each report to `~/Library/Logs/Hijack-metrics`. It keeps the newest 30 files.
+
+Run `hijack stats` to see the "System (MetricKit)" block: hang count and longest hang, crash count and last crash date, CPU time per day, and peak memory. The block is empty on a new install. Wait about a day for the first report. `hijack doctor` warns when a crash report is newer than the app's last start.
+
 ## Updates
 
 Hijack checks for a new version once a day and asks before it installs one. "Check for Updates…" in the menu runs a check now. Settings › General › Updates has two switches: automatic checks, and automatic download and install. `hijack version` prints the running version and the version the last check found. Homebrew users can keep using `brew upgrade`; both paths replace the same app.
