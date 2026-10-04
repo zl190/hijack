@@ -446,6 +446,6 @@ private func printSystemBlock(_ m: MetricsSummary, hasPayloads: Bool) {
     print("System (MetricKit)")
     row("  Hangs", "\(m.hangCount)" + (m.longestHangSeconds.map { "  (longest \(seconds($0)))" } ?? ""))
     row("  Crashes", "\(m.crashCount)" + (m.lastCrashDate.map { "  (last \(day.string(from: $0)))" } ?? ""))
-    for d in m.cpuSecondsByDay.keys.sorted() { row("  CPU time \(d)", seconds(m.cpuSecondsByDay[d]!)) }
+    for (d, cpu) in m.cpuSecondsByDay.sorted(by: { $0.key < $1.key }) { row("  CPU time \(d)", seconds(cpu)) }
     if let peak = m.peakMemoryBytes { row("  Peak memory", String(format: "%.1f MB", peak / 1e6)) }
 }

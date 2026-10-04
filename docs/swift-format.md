@@ -29,7 +29,7 @@ little as possible.
 | `DoNotUseSemicolons` | Off | Fights the code's single-line `if`/case bodies joined with `;`. |
 | `OneVariableDeclarationPerLine` | Off | Fights the code's `let a = x, b = y` grouping style. |
 | `AlwaysUseLowerCamelCase` | Off | Fights the test suite's `testID_Description` naming. |
-| `NeverForceUnwrap` | Off | 77 existing hits; too noisy to flip on without a dedicated pass (see below). |
+| `NeverForceUnwrap` | On | Since W5 (2026-10-04): 28 hits reviewed; 22 replaced, 6 kept with `swift-format-ignore` and a reason. |
 | `OrderedImports` | On | Catches accidental import reordering; only 6 hits today. |
 | `NoAssignmentInExpressions` | On | Catches an assignment used where a condition was meant; a real defect pattern. |
 | `UseEarlyExits` | Off | The code often checks and returns deep in a function body; this matches the default and the existing shape. |
@@ -74,7 +74,7 @@ Done on 2026-10-04:
 2. `make lint` reports zero findings on main.
 3. The CI step is blocking: a push with a formatting difference fails the `ci` check.
 
-Open: review the 77 `NeverForceUnwrap` hits by hand and decide whether to turn the rule on.
+Done 2026-10-04 (ticket W5): `NeverForceUnwrap` and `NeverUseImplicitlyUnwrappedOptionals` are on. The audit counted 77 `!` characters; the rule fires on 28 real force unwraps, none in Tests (the rule exempts test files).
 
 ## Disabled rules` section above the table for the full one-sentence
 reasoning kept as a code comment equivalent (JSON itself cannot hold comments).
@@ -108,7 +108,7 @@ These were formatting differences, not config errors. The full `make fmt` pass r
 2. After every in-flight branch has landed on `dist-makefile-ci`, run `make fmt` once as its
    own commit covering the whole tree.
 3. Review the NeverForceUnwrap hits by hand at that point and decide whether to turn the rule
-   on; 77 is too many to triage blind today.
+   on. Done in W5: 28 hits, rule on.
 4. Flip the CI step in `.github/workflows/ci.yml` to drop `continue-on-error: true`, making
    `make lint` blocking from then on.
 
@@ -125,6 +125,6 @@ purpose. JSON cannot hold comments, so this file carries the reasons.
 - **AlwaysUseLowerCamelCase**: Test methods use a `testID_Description` name, for example
   `testFM17_ChainedDictationRestoresTheOriginalSource`. This rule reads the part after the
   underscore as a new word and would ask for a rename.
-- **NeverForceUnwrap**: The code force-unwraps 77 times today, mostly on values it already
+- **NeverForceUnwrap** (now on, see Status): at the time of the first config the code force-unwrapped 28 times, mostly on values it already
   guarantees are present, such as a literal dictionary lookup or a static table entry. Turning
-  this rule on would flag all 77 at once instead of letting a maintainer review them by hand.
+  this rule on would have flagged all 28 at once instead of letting a maintainer review them by hand.

@@ -51,8 +51,8 @@ find the user's own talk key. It never writes either file.
 | 8 | Information disclosure | The per-dictation log line names the front app, a record of where the user dictated | GAP `log-ids-not-names`'s sibling finding, `doctor-report` (`docs/review-5/senior-audit.md` #10, `Sources/Core/Engine.swift:368`); not in this wave |
 | 9 | Denial of service | Another process holds Secure Event Input; the shortcut then does nothing, in every app, until it is released | Control: FM-03 (`docs/fmea.md:84`); detection is a summary-line note and a menu line only (§4 below), not a push alert |
 | 10 | Denial of service | The system disables the tap under load (a slow callback) | Control: `reenableTap` retries once on the next run-loop turn and logs either outcome (`Sources/Core/Engine.swift:438-459`) |
-| 11 | Elevation of privilege | `DYLD_INSERT_LIBRARIES` loads foreign code into a process that already holds Accessibility and the tap | GAP `hardened-runtime` (`docs/review-5/senior-audit.md` #5, `build.sh:93-94` sign with no `--options runtime`); ticket W6 |
-| 12 | Elevation of privilege | `install.sh` downloads and runs a release asset with no integrity check | GAP `verify-download-identity` (`docs/review-5/senior-audit.md` #15, `install.sh:6-11`); ticket W4 |
+| 11 | Elevation of privilege | `DYLD_INSERT_LIBRARIES` loads foreign code into a process that already holds Accessibility and the tap | ACCEPTED, not fixable with a self-signed identity: library validation compares Team IDs, and a self-signed certificate has none, so the app does not start with `--options runtime` (ADR 0021, live test 2026-10-04) |
+| 12 | Elevation of privilege | `install.sh` downloads and runs a release asset with no integrity check | CONTROL since W4: `install.sh` verifies the sha256 from the release and the signature authority before it touches /Applications (`install.sh`, `scripts/test-install.sh`) |
 
 ## 4. Secure Input
 
@@ -84,11 +84,10 @@ The self-signed signing key and the Sparkle EdDSA key live only in the owner's l
 D1 (`docs/distribution-spec.md:20`). Losing that keychain stops updates and the signing path, with no CI
 fallback. The owner accepts this: a GitHub secret cannot be rotated the way an Apple-issued certificate can.
 
-`build.sh` signs ad-hoc, with no hardened runtime, until ticket W6 lands (`build.sh:93-94`). The owner
+`build.sh` signs with no hardened runtime. W6 tried it and the app did not start (ADR 0021). The owner
 accepts this gap for the length of the current wave.
 
-`install.sh` fetches `Hijack.zip` over HTTPS and runs it with no checksum or signature check, until ticket
-W4 lands (`install.sh:6-11`). The owner accepts this gap for the length of the current wave.
+`install.sh` verifies the checksum and the signature since W4. Releases before 1.2.0 carry no checksum file, so the installer refuses them with a clear message.
 
 `state.json` and `config.json` carry the permissions of an ordinary per-user file
 (`Sources/AppState.swift:7-9`, `Sources/Config.swift:9`). Any process running as the same user can read or
