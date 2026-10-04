@@ -372,6 +372,18 @@ final class HCIFaultsTests: XCTestCase {
         XCTAssertNotEqual(r.engine.machine.state, .idle)
     }
 
+    // Review-6 S3: resumeFromKeyRecording had no test of its own effect — a mutation that flipped its
+    // `paused = false` to `paused = true` survived every test. A normal, finished recording (well before
+    // the 30s timeout) must leave dictation working: the trigger is swallowed and starts a session.
+    func testResumeFromKeyRecording_PressRunsAfterANormalFinish() {
+        let r = Rig()
+        r.engine.pauseForKeyRecording()
+        r.clock.advance(5)  // well short of the 30s timeout
+        r.engine.resumeFromKeyRecording()
+        XCTAssertFalse(r.press(), "resumed: the trigger is swallowed and starts a dictation")
+        XCTAssertNotEqual(r.engine.machine.state, .idle)
+    }
+
     // The timeout from a recording that already finished must not reach into a later one: starting a
     // second recording has to invalidate the first recording's scheduled clear.
     func testKeyRecordingPause_StaleTimeoutDoesNotCancelANewerRecording() {
