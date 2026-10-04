@@ -86,7 +86,7 @@ let cliHelp = """
 
 // MARK: helpers
 
-private func fail(_ msg: String) -> Int32 { FileHandle.standardError.write((msg + "\n").data(using: .utf8)!); return 1 }
+private func fail(_ msg: String) -> Int32 { FileHandle.standardError.write((msg + "\n").data(using: .utf8) ?? Data()); return 1 }
 
 private func printJSON(_ obj: Any) {
     if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
@@ -185,14 +185,16 @@ func cliDoctor() -> Int32 {
     let found = p.detected().key
     if m.userVoiceKey != nil {
         check(true, "talk key \(m.forwardKey.name) (set by you)")
-    } else if found == nil {
-        check(false, "talk key of \(p.name) detected", "`hijack set talk-key <key>` to match \(p.name)'s own setting")
-    } else if !p.readsSettings {
-        check(
-            nil, "talk key \(found!.name) is a default, not read from \(p.name)",
-            "make sure \(p.name) uses \(found!.name), or `hijack set talk-key <key>`")
+    } else if let found {
+        if !p.readsSettings {
+            check(
+                nil, "talk key \(found.name) is a default, not read from \(p.name)",
+                "make sure \(p.name) uses \(found.name), or `hijack set talk-key <key>`")
+        } else {
+            check(true, "talk key \(found.name) read from \(p.name)'s settings")
+        }
     } else {
-        check(true, "talk key \(found!.name) read from \(p.name)'s settings")
+        check(false, "talk key of \(p.name) detected", "`hijack set talk-key <key>` to match \(p.name)'s own setting")
     }
     let t = m.trigger
     check(
@@ -227,10 +229,14 @@ func cliSources(json: Bool) -> Int32 {
     }
     if json { printJSON(rows); return 0 }
     for r in rows {
-        print("\((r["current"] as! Bool) ? "*" : " ") \(r["name"]!)  [\(r["id"]!)]")
+        let current = (r["current"] as? Bool) ?? false, installed = (r["installed"] as? Bool) ?? false
+        let name = (r["name"] as? String) ?? "?", id = (r["id"] as? String) ?? "?"
+        let kind = (r["kind"] as? String) ?? "?", style = (r["style"] as? String) ?? "?"
+        let talkKeyOrigin = (r["talkKeyOrigin"] as? String) ?? "?"
+        print("\(current ? "*" : " ") \(name)  [\(id)]")
         print(
-            "    \(r["kind"]!) · talk key \((r["talkKey"] as? String) ?? "?") (\(r["talkKeyOrigin"]!)) · starts with \(r["style"]!)"
-                + ((r["installed"] as! Bool) ? "" : " · NOT INSTALLED"))
+            "    \(kind) · talk key \((r["talkKey"] as? String) ?? "?") (\(talkKeyOrigin)) · starts with \(style)"
+                + (installed ? "" : " · NOT INSTALLED"))
     }
     return 0
 }
@@ -243,7 +249,7 @@ func cliGet(_ name: String?, json: Bool) -> Int32 {
         return 0
     }
     if json { printJSON(d); return 0 }
-    for k in d.keys.sorted() { let v = d[k]!; print("\(k): " + (v is [String: Any] ? jsonString(v) : "\(v)")) }
+    for (k, v) in d.sorted(by: { $0.key < $1.key }) { print("\(k): " + (v is [String: Any] ? jsonString(v) : "\(v)")) }
     return 0
 }
 
@@ -278,7 +284,9 @@ func cliSet(_ args: [String]) -> Int32 {
         let match = all.first { $0.id == value } ?? all.first { $0.name.lowercased() == value.lowercased() }
         let id = match?.id ?? value
         let p = voiceProvider(for: id)
-        if !p.isInstalled { FileHandle.standardError.write("warning: \(p.name) [\(id)] isn't installed\n".data(using: .utf8)!) }
+        if !p.isInstalled {
+            FileHandle.standardError.write("warning: \(p.name) [\(id)] isn't installed\n".data(using: .utf8) ?? Data())
+        }
         c.voiceInput = id
     case "talk-key":
         if value == "auto" {
