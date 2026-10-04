@@ -49,17 +49,21 @@ case "$SPARKLE_PUBKEY" in REPLACE-*)
   SPARKLE_KEY_PLIST="" ;;
 esac
 # App icon: the layered Icon Composer icon (Liquid Glass, Default/Dark/Clear/Tinted) needs Xcode's actool,
-# which also writes a flat Hijack.icns for older macOS. Command Line Tools alone: flat icon from the PNG.
-if xcrun --find actool >/dev/null 2>&1; then
-  xcrun actool assets/Hijack.icon --compile "$APP/Contents/Resources" --app-icon Hijack --platform macosx \
-    --minimum-deployment-target 13.0 --target-device mac --output-partial-info-plist /dev/null >/dev/null
-else
+# which also writes a flat Hijack.icns for older macOS. When actool is absent or fails (a CI runner
+# whose actool cannot read the .icon format), the flat icon comes from the PNG instead.
+flat_icon() {
   ICONSET="$(mktemp -d)/Hijack.iconset"; mkdir -p "$ICONSET"
   for sz in 16 32 128 256 512; do
     sips -z $sz $sz assets/Hijack-1024.png --out "$ICONSET/icon_${sz}x${sz}.png" >/dev/null
     sips -z $((sz*2)) $((sz*2)) assets/Hijack-1024.png --out "$ICONSET/icon_${sz}x${sz}@2x.png" >/dev/null
   done
   iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/Hijack.icns"
+}
+if xcrun --find actool >/dev/null 2>&1 && xcrun actool assets/Hijack.icon --compile "$APP/Contents/Resources"     --app-icon Hijack --platform macosx --minimum-deployment-target 13.0 --target-device mac     --output-partial-info-plist /dev/null >/dev/null 2>&1 && [ -f "$APP/Contents/Resources/Hijack.icns" ]; then
+  :
+else
+  echo "actool unavailable or failed: using the flat icon from assets/Hijack-1024.png"
+  flat_icon
 fi
 mkdir -p "$APP/Contents/Library/LaunchAgents" && cp assets/com.zl190.hijack.relauncher.plist "$APP/Contents/Library/LaunchAgents/"
 cp assets/HijackMenuTemplate.png assets/HijackMenuTemplate@2x.png assets/HijackMenuTemplate-Off.png assets/HijackMenuTemplate-Off@2x.png "$APP/Contents/Resources/"
