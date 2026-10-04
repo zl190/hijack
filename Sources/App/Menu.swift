@@ -249,8 +249,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         // Status — derived from the same state the engine uses. At most one fault line replaces the normal
         // status line (docs/hci-review-faults.md §3.2): a dead key listener first, then a stuck session,
-        // then Secure Input. "No Accessibility" is checked first; it already has its own line and is the
-        // more fundamental cause when both are true.
+        // then a recording in progress (review-6 S2: ranked below the first two, since recording works
+        // whether or not the tap is active, and a stuck session traps the very next press), then Secure
+        // Input. "No Accessibility" is checked first; it already has its own line and is the more
+        // fundamental cause when both are true.
         let stillHolding = MenuFaults.stillHoldingTalkKey(
             toggle: engine.plan.toggle, isActive: engine.machine.isActive,
             keyIsPhysicallyDown: engine.tap.keyIsDown(engine.plan.trigger.code),

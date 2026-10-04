@@ -29,17 +29,19 @@ public enum MenuFault: Equatable {
 }
 
 public enum MenuFaults {
-    /// Review-5 #8: a recording in progress wins over everything else — it is a deliberate, user-started
-    /// state (Settings is open and waiting for a key) that already blocks every other dictation, so
-    /// nothing else is worth reporting underneath it. Then `tapActive` false (nothing works until it's
-    /// fixed), then a stuck session, which traps the user's next press, then Secure Input, which only
-    /// blocks the next dictation.
+    /// `tapActive` false wins first (nothing works until it's fixed, and it is the only one of these four
+    /// with an actual fix action — "Reopen Hijack"). Review-6 S2: `recordingPaused` ranked above it in
+    /// review-5 #8, which hid that fix behind "Recording a shortcut" even though the key recorder's local
+    /// NSEvent monitor (Settings.swift) works whether or not the tap is active — recording never actually
+    /// depends on `tapActive`, so there is nothing for it to win over there. Then a stuck session, which
+    /// traps the user's next press, then a recording in progress, then Secure Input, which only blocks the
+    /// next dictation.
     public static func firstLine(
         tapActive: Bool, stillHoldingTalkKey: String? = nil, secureInputApp: String? = nil, recordingPaused: Bool = false
     ) -> MenuFault? {
-        if recordingPaused { return .recordingPaused }
         if !tapActive { return .keyListenerOff }
         if let talkKey = stillHoldingTalkKey { return .stillHolding(talkKey: talkKey) }
+        if recordingPaused { return .recordingPaused }
         if let app = secureInputApp { return .secureInput(app: app) }
         return nil
     }

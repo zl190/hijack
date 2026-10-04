@@ -53,9 +53,11 @@ final class MenuStateTests: XCTestCase {
             MenuFaults.firstLine(tapActive: true, stillHoldingTalkKey: "Fn", secureInputApp: "Terminal"), .stillHolding(talkKey: "Fn"))
     }
 
-    // A dead key listener wins over both of the others at once.
+    // A dead key listener wins over every other fault at once, recordingPaused included (review-6 S2).
     func testKeyListenerOffWinsOverEverything() {
-        XCTAssertEqual(MenuFaults.firstLine(tapActive: false, stillHoldingTalkKey: "Fn", secureInputApp: "Terminal"), .keyListenerOff)
+        XCTAssertEqual(
+            MenuFaults.firstLine(
+                tapActive: false, stillHoldingTalkKey: "Fn", secureInputApp: "Terminal", recordingPaused: true), .keyListenerOff)
     }
 
     // Review-5 #8: a recording in progress shows on its own when nothing else is wrong.
@@ -63,11 +65,22 @@ final class MenuStateTests: XCTestCase {
         XCTAssertEqual(MenuFaults.firstLine(tapActive: true, recordingPaused: true), .recordingPaused)
     }
 
-    // And wins over every other fault at once, including the one that otherwise wins over everything.
-    func testRecordingPausedWinsOverEverything() {
+    // Review-6 S2: the key listener being off has the only fix action of the four ("Reopen Hijack"), and
+    // the key recorder's local NSEvent monitor works whether or not the tap is active, so recordingPaused
+    // must not hide it. (Folded into testKeyListenerOffWinsOverEverything above too.)
+    func testKeyListenerOffWinsOverRecordingPaused() {
+        XCTAssertEqual(MenuFaults.firstLine(tapActive: false, recordingPaused: true), .keyListenerOff)
+    }
+
+    // A stuck session also outranks a recording in progress: it traps the user's very next press.
+    func testStillHoldingWinsOverRecordingPaused() {
         XCTAssertEqual(
-            MenuFaults.firstLine(tapActive: false, stillHoldingTalkKey: "Fn", secureInputApp: "Terminal", recordingPaused: true),
-            .recordingPaused)
+            MenuFaults.firstLine(tapActive: true, stillHoldingTalkKey: "Fn", recordingPaused: true), .stillHolding(talkKey: "Fn"))
+    }
+
+    // recordingPaused still wins over Secure Input, which only blocks the next dictation.
+    func testRecordingPausedWinsOverSecureInput() {
+        XCTAssertEqual(MenuFaults.firstLine(tapActive: true, secureInputApp: "Terminal", recordingPaused: true), .recordingPaused)
     }
 
     // review-4 M3: the "still holding" condition, moved into Core so it's testable without AppKit.
