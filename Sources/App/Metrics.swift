@@ -1,3 +1,4 @@
+import HijackCore
 import Foundation
 import MetricKit
 
@@ -5,7 +6,7 @@ import MetricKit
 // MXDiagnosticPayload when the app hangs or crashes (https://developer.apple.com/documentation/metrickit).
 // This file only writes the payloads to disk; Sources/Core/MetricsSummary.swift reads them back.
 
-/// `~/Library/Logs/Hijack-metrics`, next to Hijack.log (Sources/Shared.swift).
+/// `~/Library/Logs/Hijack-metrics`, next to Hijack.log (Sources/App/Shared.swift).
 let metricsFolderURL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/\(appName)-metrics")
 let metricsKeepCount = 30
 private let metricsQueue = DispatchQueue(label: "com.zl190.hijack.metrics", qos: .utility)
@@ -14,9 +15,9 @@ private let metricsFileStamp: DateFormatter = {
 }()
 
 /// Subscribes to MetricKit; one instance, added to `MXMetricManager.shared` once in
-/// `applicationDidFinishLaunching` (Sources/Menu.swift). Every delivery writes each payload's
+/// `applicationDidFinishLaunching` (Sources/App/Menu.swift). Every delivery writes each payload's
 /// `jsonRepresentation()` to its own file, off the main thread: the main thread serves the key tap, and
-/// must never block on file I/O (the same rule `log()` follows in Sources/Shared.swift).
+/// must never block on file I/O (the same rule `log()` follows in Sources/App/Shared.swift).
 final class MetricsRecorder: NSObject, MXMetricManagerSubscriber {
     func didReceive(_ payloads: [MXMetricPayload]) { write(kind: "metric", jsons: payloads.map { $0.jsonRepresentation() }) }
     func didReceive(_ payloads: [MXDiagnosticPayload]) { write(kind: "diagnostic", jsons: payloads.map { $0.jsonRepresentation() }) }
