@@ -51,7 +51,7 @@ Compatibility reflects maintainer testing as of October 1, 2026. The first four 
 
 See the [user guide](docs/usage.md) for settings, command-line usage and troubleshooting. Download updates and read changes on the [releases page](https://github.com/zl190/hijack/releases).
 
-To build from a local checkout, run `make install` with Xcode Command Line Tools installed.
+To build from a local checkout, run `make install` with Xcode Command Line Tools installed. The app is a Swift package: `swift build` makes the binary and `build.sh` makes the bundle.
 
 ## License
 
