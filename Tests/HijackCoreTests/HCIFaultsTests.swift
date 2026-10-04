@@ -370,6 +370,31 @@ final class HCIFaultsTests: XCTestCase {
         r.clock.advance(20)  // now at t=30: the first (stale) timeout must not fire here
         XCTAssertTrue(r.engine.paused, "the stale timeout from the first recording must not clear the second")
     }
+
+    // Review-6 S1: the timeout must tell Settings to end the recording too (its button still read "Press
+    // a Key…" after only `paused` cleared), not just clear the engine's own flag.
+    func testKeyRecordingPause_TimeoutCallsOnKeyRecordingTimeout() {
+        let r = Rig()
+        var fired = false
+        r.engine.onKeyRecordingTimeout = { fired = true }
+        r.engine.pauseForKeyRecording()
+        r.clock.advance(30)
+        XCTAssertTrue(fired, "the timeout must notify Settings so it can end the recording on its side too")
+    }
+
+    // A stale timeout (superseded by a second recording) must not call back either, the same guard as
+    // testKeyRecordingPause_StaleTimeoutDoesNotCancelANewerRecording but for the new callback.
+    func testKeyRecordingPause_StaleTimeoutDoesNotCallOnKeyRecordingTimeout() {
+        let r = Rig()
+        var fireCount = 0
+        r.engine.onKeyRecordingTimeout = { fireCount += 1 }
+        r.engine.pauseForKeyRecording()  // token=1, scheduled to fire at t=30
+        r.clock.advance(10)
+        r.engine.resumeFromKeyRecording()  // token=2
+        r.engine.pauseForKeyRecording()  // token=3, scheduled to fire at t=40
+        r.clock.advance(20)  // now at t=30: the stale (token=1) closure must not call back
+        XCTAssertEqual(fireCount, 0, "a stale timeout must not call the callback either")
+    }
 }
 
 // review-5 #3: refresh() rebuilds the Plan, and a provider's detected() reads a settings file from disk

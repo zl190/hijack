@@ -109,7 +109,10 @@ final class SettingsStore: ObservableObject {
         recording = target
         // Otherwise pressing the current trigger would start a dictation. Review-5 #8: paused clears on
         // its own after Engine.recordingPauseTimeout (30s) if this recording is never finished or cancelled
-        // (switching apps, say), so dictation cannot stay dead with no signal why.
+        // (switching apps, say), so dictation cannot stay dead with no signal why. Review-6 S1: the
+        // timeout only cleared the engine's flag, leaving the button reading "Press a Key…" with the
+        // monitor still installed, so wire the engine's callback to end the recording here too.
+        engine?.onKeyRecordingTimeout = { [weak self] in self?.stopRecording() }
         engine?.pauseForKeyRecording()
         var downModifier: Int?, sawOtherKey = false
         monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged]) { [weak self] e in

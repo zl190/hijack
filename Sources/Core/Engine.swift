@@ -431,10 +431,17 @@ public final class Engine {
     /// for good, with no fault line to say why.
     public static let recordingPauseTimeout = 30.0
 
+    /// Review-6 S1: the timeout only cleared `paused`; Settings' own recording state (the "Press a Key…"
+    /// button, the local NSEvent monitor) was untouched, so a forgotten recording still looked live after
+    /// 30s even though the engine had already resumed. Settings sets this to `stopRecording` so the
+    /// timeout can end the recording on both sides at once.
+    public var onKeyRecordingTimeout: (() -> Void)?
+
     /// Settings' key recorder calls this to pause the engine (`paused = true`: every key passes through,
     /// nothing starts a dictation) while it waits for the next key press. `recordingToken` is bumped and
     /// captured so a stale timeout from an earlier, already-finished recording can never clear a later
-    /// one's pause (the same generation-guard shape as `scheduleTalkKey`/`waitForText`).
+    /// one's pause (the same generation-guard shape as `scheduleTalkKey`/`waitForText`), or call
+    /// `onKeyRecordingTimeout` for a recording that already ended.
     public func pauseForKeyRecording() {
         paused = true
         recordingToken += 1
@@ -443,6 +450,7 @@ public final class Engine {
             guard token == recordingToken else { return }
             paused = false
             log("key recording timed out after \(Int(Engine.recordingPauseTimeout))s; dictation resumed")
+            onKeyRecordingTimeout?()
         }
     }
 
