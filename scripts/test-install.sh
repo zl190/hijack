@@ -1,12 +1,13 @@
 #!/bin/sh
-# Mutation harness for install.sh (W4, docs/engineering-wave-spec.md §3; review-6 S4).
+# Mutation harness for install.sh (W4, docs/engineering-wave-spec.md §3; review-6 S4, S5).
 # Serves a locally built Hijack.zip and its checksum over python3 -m http.server, then runs install.sh
-# against four inputs: a good zip with a good checksum, a tampered zip, a release with no checksum file,
-# and a zip whose checksum is correct but whose signed contents are not. Never touches /Applications and
-# never touches the real running Hijack: HIJACK_INSTALL_DIR always points at a temp dir here, and
-# install.sh only pkills Hijack, opens the app, and writes the ~/.local/bin link when HIJACK_INSTALL_DIR
-# is exactly /Applications. A temp-dir install is asserted by the bundle landing there and passing
-# codesign, never by it running.
+# against five inputs: a good ad-hoc zip with a good checksum (authority check skipped, case a), a
+# tampered zip (b), a release with no checksum file (c), a zip whose checksum is correct but whose signed
+# contents are not (d), and a good zip built with the real "Hijack Signing" identity, checked with the
+# default expected authority and no skip flag (e). Never touches /Applications and never touches the real
+# running Hijack: HIJACK_INSTALL_DIR always points at a temp dir here, and install.sh only pkills Hijack,
+# opens the app, and writes the ~/.local/bin link when HIJACK_INSTALL_DIR is exactly /Applications. A
+# temp-dir install is asserted by the bundle landing there and passing codesign, never by it running.
 set -u
 cd "$(dirname "$0")/.."
 ROOT="$(pwd)"
@@ -142,6 +143,57 @@ if [ "$RC_D" -ne 0 ] && grep -q "Signature verification failed" "$WORK/d.log" &&
   ok "a correct checksum with a broken signature is refused, nothing installed"
 else
   fail "the broken-signature zip was not refused the right way (exit $RC_D)"
+fi
+
+echo
+echo "== case (e): good zip, real \"Hijack Signing\" build, authority check ON -> installs (review-6 S5) =="
+# No case above reaches the authority-match success path: (a) skips it (ad-hoc build), (b)/(c) stop
+# earlier, (d) skips it too. Build once with the real identity. The identity is already in the login
+# keychain; if codesign still blocks on a prompt, a background job plus a bounded wait lets us say so
+# and stop, instead of hanging or retrying.
+SIGNED_LOG="$WORK/build_signed.log"
+(HIJACK_SIGN_ID="Hijack Signing" "$ROOT/build.sh") >"$SIGNED_LOG" 2>&1 &
+BUILD_PID=$!
+SECS=0
+TIMED_OUT=0
+while kill -0 "$BUILD_PID" 2>/dev/null; do
+  if [ "$SECS" -ge 90 ]; then
+    kill -9 "$BUILD_PID" 2>/dev/null
+    TIMED_OUT=1
+    break
+  fi
+  sleep 1
+  SECS=$((SECS + 1))
+done
+wait "$BUILD_PID" 2>/dev/null
+BUILD_RC=$?
+if [ "$TIMED_OUT" -eq 1 ]; then
+  echo "the signed build did not finish in 90s; codesign may be blocked on a keychain prompt."
+  echo "Stopping rather than retrying. See $SIGNED_LOG."
+  cat "$SIGNED_LOG"
+  fail "case (e) setup: signed build did not finish"
+elif [ "$BUILD_RC" -ne 0 ]; then
+  cat "$SIGNED_LOG"
+  fail "case (e) setup: signed build failed (exit $BUILD_RC)"
+else
+  SIGNED="$WORK/serve_signed"
+  mkdir -p "$SIGNED"
+  ditto -c -k --keepParent "$ROOT/build/Hijack.app" "$SIGNED/Hijack.zip"
+  shasum -a 256 "$SIGNED/Hijack.zip" | awk '{print $1 "  Hijack.zip"}' > "$SIGNED/Hijack.zip.sha256"
+  PORT_E="$(serve "$SIGNED")"
+  INSTALL_E="$WORK/install_dir_e"
+  mkdir -p "$INSTALL_E"
+  # no HIJACK_SKIP_AUTHORITY_CHECK, no HIJACK_EXPECT_AUTHORITY: the default expected authority
+  # ("Hijack Signing") must match this build's real one.
+  HIJACK_INSTALL_DIR="$INSTALL_E" HIJACK_RELEASE_URL="http://127.0.0.1:$PORT_E/" \
+    sh "$ROOT/install.sh" >"$WORK/e.log" 2>&1
+  RC_E=$?
+  cat "$WORK/e.log"
+  if [ "$RC_E" -eq 0 ] && [ -d "$INSTALL_E/Hijack.app" ] && codesign --verify --strict "$INSTALL_E/Hijack.app" >/dev/null 2>&1; then
+    ok "a real Hijack Signing build passes the default authority check and installs"
+  else
+    fail "the real signed build did not pass the default authority check (exit $RC_E)"
+  fi
 fi
 
 echo

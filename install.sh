@@ -41,7 +41,10 @@ if ! VERIFY_ERR="$(codesign --verify --strict --deep "$APP" 2>&1)"; then
   exit 1
 fi
 
-ACTUAL_AUTHORITY="$(codesign -dv "$APP" 2>&1 | awk -F'=' '/^Authority=/{print $2; exit}')"
+# codesign -dv (one -v) prints no Authority= line on this macOS; -dvvv does. Verified empirically
+# (scripts/test-install.sh case e): a real "Hijack Signing" build showed no Authority= line at -dv and
+# had to raise verbosity to see it. Without this, the check below would refuse every genuinely signed build.
+ACTUAL_AUTHORITY="$(codesign -dvvv "$APP" 2>&1 | awk -F'=' '/^Authority=/{print $2; exit}')"
 if [ -n "${HIJACK_SKIP_AUTHORITY_CHECK:-}" ]; then
   echo "HIJACK_SKIP_AUTHORITY_CHECK is set: skipping the signing-authority check (codesign reports '${ACTUAL_AUTHORITY:-none}')."
 elif [ "$ACTUAL_AUTHORITY" != "$EXPECT_AUTHORITY" ]; then
