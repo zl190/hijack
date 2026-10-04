@@ -33,9 +33,15 @@ hijack sources           # installed voice sources and their talk keys
 hijack get [setting]     # read settings
 hijack set mode toggle   # change a setting (validated)
 hijack log -f            # follow the log
+hijack stats             # how reliable dictation has been (default: last 7 days)
 ```
 
-`status`, `sources`, and `get` take `--json`.
+`status`, `sources`, `get`, and `stats` take `--json`.
+
+`hijack stats` prints a `target` line under the success rate: `success >= 99.0%` is the current
+reliability bar (`Sources/Core/Stats.swift`'s `successTarget`, provisional until 7 days of 1.2.x data),
+next to this period's own rate and `met` or `not met`. `--json` carries the same two values as `target`
+and `met`. Neither appears before any dictation has been judged (text arrived, or no voice window seen).
 
 ## Updates
 

@@ -340,6 +340,10 @@ func cliStats(_ args: [String], json: Bool) -> Int32 {
             "tools": toolNames, "keyTapPaused": s.tapPaused, "slowKeyEvents": s.slowKeys, "triggerCaughtUp": s.caughtUp,
         ]
         if let r = s.successRate { d["successRate"] = (r * 1000).rounded() / 1000 }
+        // W2 SLO: `target` is always carried (it's a fixed policy value); `met` is carried only when
+        // `successRate` could be computed — omitted, like successRate itself, when nothing was judged yet.
+        d["target"] = DictationStats.successTarget
+        if let met = s.met { d["met"] = met }
         for (k, v) in [
             ("talkKeyMsP50", s.sentP50), ("talkKeyMsP95", s.sentP95), ("textInMsP50", s.textInP50), ("textInMsP95", s.textInP95),
         ] {
@@ -358,10 +362,16 @@ func cliStats(_ args: [String], json: Bool) -> Int32 {
             + (s.tooShort > 0 ? "  (+\(s.tooShort) too short to start)" : ""))
     for o in DictationEntry.Outcome.allCases where o != .tooShort { if let n = s.outcomes[o] { row(o.rawValue, n) } }
     for c in DictationEntry.Cause.allCases { if let n = s.causes[c] { print("      \(n) × \(c.rawValue)") } }
-    if let r = s.successRate {
+    // The target line sits right under the rate it judges. No line at all when nothing was judged yet
+    // (same choice as --json, which then omits "met" rather than printing a meaningless comparison).
+    if let r = s.successRate, let met = s.met {
         print(
             "Success rate".padding(toLength: 24, withPad: " ", startingAt: 0) + String(format: "%5.1f%%", r * 100)
                 + "  (text arrived ÷ text arrived + no window)")
+        print(
+            "target".padding(toLength: 24, withPad: " ", startingAt: 0)
+                + "success >= \(String(format: "%.1f", DictationStats.successTarget * 100))%  this period \(String(format: "%.1f", r * 100))%  "
+                + (met ? "met" : "not met"))
     }
     func ms(_ v: Int?) -> String { v.map { $0 < 1000 ? "\($0) ms" : String(format: "%.2f s", Double($0) / 1000) } ?? "–" }
     print("Talk key sent after".padding(toLength: 24, withPad: " ", startingAt: 0) + "p50 \(ms(s.sentP50))   p95 \(ms(s.sentP95))")

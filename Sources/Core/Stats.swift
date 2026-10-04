@@ -97,6 +97,13 @@ public struct DictationStats: Equatable {
         return judged == 0 ? nil : Double(ok) / Double(judged)
     }
 
+    /// The reliability bar `hijack stats` reports against. Provisional until 7 days of 1.2.x data are in;
+    /// review it then.
+    static let successTarget = 0.99
+
+    /// Whether this period's `successRate` met `successTarget`; nil when nothing was judged yet.
+    var met: Bool? { successRate.map { $0 >= DictationStats.successTarget } }
+
     /// `days`: keep the last N calendar days ending at `today` (yyyy-MM-dd); nil keeps everything.
     public static func compute(lines: [String], days: Int? = nil, today: String) -> DictationStats {
         let from: String? = days.map { d in

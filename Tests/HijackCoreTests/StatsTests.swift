@@ -88,4 +88,33 @@ final class StatsTests: XCTestCase {
         XCTAssertEqual(e?.cause, .sourceNotSwitched)
         XCTAssertNil(e?.sentMs)
     }
+
+    // MARK: W2 SLO — Stats.successTarget and the `met` computed property.
+
+    private func stats(textArrived: Int, noWindow: Int) -> DictationStats {
+        DictationStats(
+            dictations: textArrived + noWindow, outcomes: [.textArrived: textArrived, .noWindow: noWindow], causes: [:],
+            tooShort: 0, sentP50: nil, sentP95: nil, textInP50: nil, textInP95: nil, tapPaused: 0, slowKeys: 0, caughtUp: 0,
+            tools: [:], firstDay: nil, lastDay: nil)
+    }
+
+    // The boundary itself: 99.0% exactly is met (>=, not >).
+    func testMetAtExactly99Percent() {
+        let s = stats(textArrived: 99, noWindow: 1)
+        XCTAssertEqual(s.successRate!, 0.99, accuracy: 1e-9)
+        XCTAssertEqual(s.met, true)
+    }
+    // One step past the boundary, the other way.
+    func testNotMetAt98Point9Percent() {
+        let s = stats(textArrived: 989, noWindow: 11)
+        XCTAssertEqual(s.successRate!, 0.989, accuracy: 1e-9)
+        XCTAssertEqual(s.met, false)
+    }
+    // Nothing judged yet: no rate to compare, so no verdict either (documented choice: CLI.swift and
+    // --json both omit the target line/field rather than print a meaningless comparison).
+    func testMetIsNilWhenNothingWasJudgedYet() {
+        let s = stats(textArrived: 0, noWindow: 0)
+        XCTAssertNil(s.successRate)
+        XCTAssertNil(s.met)
+    }
 }
