@@ -262,7 +262,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let fault = MenuFaults.firstLine(
             tapActive: engine.tap.isEnabled, stillHoldingTalkKey: stillHolding, secureInputApp: secureApp, recordingPaused: engine.paused)
         if !AXIsProcessTrusted() {
-            add("⚠︎ " + accessibilityNotTrustedGuidance, #selector(openAccessibility))
+            // Review-6 S4: a menu item cannot wrap, so the full accessibilityNotTrustedGuidance sentence
+            // (M1) widened the whole menu. Name the step only here; the full text stays in Settings' Try
+            // It card and `hijack doctor`.
+            add(L("⚠︎ 辅助功能未生效，点这里看怎么修", "⚠︎ Accessibility not in effect — how to fix"), #selector(openAccessibility))
         } else if let fault {
             switch fault {
             case .recordingPaused:
