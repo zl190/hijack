@@ -74,12 +74,25 @@ final class MetricsSummaryTests: XCTestCase {
     func testMeasurementReadsABareNumberAsAlreadyBaseUnit() {
         XCTAssertEqual(MetricsSummary.measurement(42.0, units: MetricsSummary.durationSeconds), 42.0)
     }
-    func testMeasurementKeepsTheRawValueForAnUnknownUnit() {
-        XCTAssertEqual(MetricsSummary.measurement(["value": 5.0, "unit": "fortnight"], units: MetricsSummary.durationSeconds), 5.0)
+    // review 6 (S1): an unrecognized unit must not read as 1x the base unit (that reads "KB" as bytes,
+    // 1000x too small, and prints it as a fact). nil, not a silent guess.
+    func testMeasurementIsNilForAnUnknownUnit() {
+        XCTAssertNil(MetricsSummary.measurement(["value": 5.0, "unit": "fortnight"], units: MetricsSummary.durationSeconds))
     }
     func testMeasurementIsNilWithoutAValue() {
         XCTAssertNil(MetricsSummary.measurement(["unit": "s"], units: MetricsSummary.durationSeconds))
         XCTAssertNil(MetricsSummary.measurement(nil, units: MetricsSummary.durationSeconds))
+    }
+    // review 6 (S1): public jsonRepresentation() samples write a Measurement as a string
+    // ("100 sec", "200,000 kB") with grouping commas, not only {value,unit} or a bare number.
+    func testMeasurementReadsAStringWithAUnitSuffix() {
+        XCTAssertEqual(MetricsSummary.measurement("120.5 sec", units: MetricsSummary.durationSeconds), 120.5)
+    }
+    func testMeasurementReadsAStringWithGroupingCommas() {
+        XCTAssertEqual(MetricsSummary.measurement("200,000 kB", units: MetricsSummary.infoStorageBytes), 200_000 * 1e3)
+    }
+    func testMeasurementIsNilForAStringWithAnUnknownUnit() {
+        XCTAssertNil(MetricsSummary.measurement("5 fortnight", units: MetricsSummary.durationSeconds))
     }
 
     // MARK: branch boundaries — each crosses the edge of a condition in MetricsSummary.fold/summarize.
@@ -107,5 +120,83 @@ final class MetricsSummaryTests: XCTestCase {
     func testAMetricPayloadWithoutTimeStampBeginContributesNoCPUTime() {
         let s = MetricsSummary.summarize(folder: fixture("missing-begin-only"))
         XCTAssertTrue(s.cpuSecondsByDay.isEmpty)
+    }
+
+    // MARK: review 6 (S1) — settle the parser against alternatives the review raised, not just its own fixtures.
+
+    func testCPUTimeAndPeakMemoryParseFromAStringEncodedMeasurement() {
+        let s = MetricsSummary.summarize(folder: fixture("string-measurements-only"))
+        XCTAssertEqual(s.cpuSecondsByDay["2026-10-10"], 120.5)
+        XCTAssertEqual(s.peakMemoryBytes, 200_000 * 1e3)
+    }
+
+    func testHangDurationParsesFromAStringEncodedMeasurement() {
+        let s = MetricsSummary.summarize(folder: fixture("string-measurements-only"))
+        XCTAssertEqual(s.longestHangSeconds, 7.75)
+    }
+
+    func testHangDurationFallsBackToDiagnosticMetaData() {
+        let s = MetricsSummary.summarize(folder: fixture("hang-duration-under-diagnosticMetaData-only"))
+        XCTAssertEqual(s.hangCount, 1)
+        XCTAssertEqual(s.longestHangSeconds, 3.5)
+    }
+
+    func testHangDurationFallsBackToMetaData() {
+        let s = MetricsSummary.summarize(folder: fixture("hang-duration-under-metaData-only"))
+        XCTAssertEqual(s.hangCount, 1)
+        XCTAssertEqual(s.longestHangSeconds, 9.25)
+    }
+
+    func testTheSpaceSeparatedDateFormatParsesForDayBucketing() {
+        let s = MetricsSummary.summarize(folder: fixture("date-format-space-only"))
+        XCTAssertEqual(s.cpuSecondsByDay["2026-10-20"], 15.0)
+    }
+
+    func testAnUnparseableCPUTimeOrPeakMemoryIsFlaggedNotZero() {
+        let s = MetricsSummary.summarize(folder: fixture("unparseable-only"))
+        XCTAssertTrue(s.cpuSecondsByDay.isEmpty, "an unparsed value must not silently read as 0 seconds")
+        XCTAssertNil(s.peakMemoryBytes)
+        XCTAssertTrue(s.cpuTimeUnparsed)
+        XCTAssertTrue(s.peakMemoryUnparsed)
+    }
+
+    func testAnUnparseableHangDurationIsFlaggedNotZero() {
+        let s = MetricsSummary.summarize(folder: fixture("unparseable-only"))
+        XCTAssertEqual(s.hangCount, 1)
+        XCTAssertNil(s.longestHangSeconds)
+        XCTAssertTrue(s.longestHangUnparsed)
+    }
+
+    func testParseWarningsCountsEveryUnparsedButPresentValue() {
+        let s = MetricsSummary.summarize(folder: fixture("unparseable-only"))
+        // metric-unparseable.json: cumulativeCPUTime + peakMemoryUsage (2); diagnostic-unparseable.json: hangDuration (1).
+        XCTAssertEqual(s.parseWarnings, 3)
+    }
+
+    func testAWellParsedFolderHasNoParseWarnings() {
+        let s = MetricsSummary.summarize(folder: fixture("mixed"))
+        XCTAssertEqual(s.parseWarnings, 0)
+        XCTAssertFalse(s.cpuTimeUnparsed); XCTAssertFalse(s.peakMemoryUnparsed); XCTAssertFalse(s.longestHangUnparsed)
+    }
+
+    // MARK: review 6 (S2) — "newer than the last start" is a pure comparison; AppState owns the wiring.
+
+    func testACrashOneSecondAfterStartIsNewerThanStart() {
+        let start = Date()
+        XCTAssertTrue(MetricsSummary.crashIsNewerThanStart(lastCrash: start.addingTimeInterval(1), startedAt: start))
+    }
+
+    func testACrashOneSecondBeforeStartIsNotNewerThanStart() {
+        let start = Date()
+        XCTAssertFalse(MetricsSummary.crashIsNewerThanStart(lastCrash: start.addingTimeInterval(-1), startedAt: start))
+    }
+
+    func testACrashAtExactlyStartIsNotNewerThanStart() {
+        let start = Date()
+        XCTAssertFalse(MetricsSummary.crashIsNewerThanStart(lastCrash: start, startedAt: start))
+    }
+
+    func testNoCrashIsNeverNewerThanStart() {
+        XCTAssertFalse(MetricsSummary.crashIsNewerThanStart(lastCrash: nil, startedAt: Date()))
     }
 }

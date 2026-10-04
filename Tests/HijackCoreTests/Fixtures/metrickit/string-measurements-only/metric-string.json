@@ -1,0 +1,10 @@
+{
+  "timeStampBegin": "2026-10-10T00:00:00.000+0000",
+  "timeStampEnd": "2026-10-11T00:00:00.000+0000",
+  "cpuMetrics": {
+    "cumulativeCPUTime": "120.5 sec"
+  },
+  "memoryMetrics": {
+    "peakMemoryUsage": "200,000 kB"
+  }
+}

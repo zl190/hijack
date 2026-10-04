@@ -49,6 +49,8 @@ macOS sends Hijack a report about once a day. The report holds CPU time, memory 
 
 Run `hijack stats` to see the "System (MetricKit)" block: hang count and longest hang, crash count and last crash date, CPU time per day, and peak memory. The block is empty on a new install. Wait about a day for the first report. `hijack doctor` warns when a crash report is newer than the app's last start.
 
+Hang count, crash count and the last crash date come straight from the report. The longest hang, CPU time and peak memory are read against the documented field names, but not yet checked against a real report (none has arrived on a development Mac yet). If Hijack cannot read one of those three, it prints `n/a (unrecognized format)` in its place, never a 0 it did not actually measure. `--json` counts every such case in `parseWarnings`.
+
 ## Updates
 
 Hijack checks for a new version once a day and asks before it installs one. "Check for Updates…" in the menu runs a check now. Settings › General › Updates has two switches: automatic checks, and automatic download and install. `hijack version` prints the running version and the version the last check found. Homebrew users can keep using `brew upgrade`; both paths replace the same app.
