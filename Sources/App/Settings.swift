@@ -105,7 +105,10 @@ final class SettingsStore: ObservableObject {
     func startRecording(_ target: RecordTarget) {
         stopRecording()
         recording = target
-        engine?.paused = true  // otherwise pressing the current trigger would start a dictation
+        // Otherwise pressing the current trigger would start a dictation. Review-5 #8: paused clears on
+        // its own after Engine.recordingPauseTimeout (30s) if this recording is never finished or cancelled
+        // (switching apps, say), so dictation cannot stay dead with no signal why.
+        engine?.pauseForKeyRecording()
         var downModifier: Int?, sawOtherKey = false
         monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged]) { [weak self] e in
             guard let self, let target = self.recording else { return e }
@@ -147,7 +150,7 @@ final class SettingsStore: ObservableObject {
 
     func stopRecording() {
         if let monitor { NSEvent.removeMonitor(monitor) }
-        monitor = nil; recording = nil; engine?.paused = false
+        monitor = nil; recording = nil; engine?.resumeFromKeyRecording()
     }
 }
 

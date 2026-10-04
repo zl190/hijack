@@ -58,6 +58,18 @@ final class MenuStateTests: XCTestCase {
         XCTAssertEqual(MenuFaults.firstLine(tapActive: false, stillHoldingTalkKey: "Fn", secureInputApp: "Terminal"), .keyListenerOff)
     }
 
+    // Review-5 #8: a recording in progress shows on its own when nothing else is wrong.
+    func testRecordingPausedShowsAlone() {
+        XCTAssertEqual(MenuFaults.firstLine(tapActive: true, recordingPaused: true), .recordingPaused)
+    }
+
+    // And wins over every other fault at once, including the one that otherwise wins over everything.
+    func testRecordingPausedWinsOverEverything() {
+        XCTAssertEqual(
+            MenuFaults.firstLine(tapActive: false, stillHoldingTalkKey: "Fn", secureInputApp: "Terminal", recordingPaused: true),
+            .recordingPaused)
+    }
+
     // review-4 M3: the "still holding" condition, moved into Core so it's testable without AppKit.
     // Toggle mode has the shortcut up for the whole, normal dictation — that is not the fault this line
     // reports, so toggle never shows it, active or not.
@@ -328,6 +340,46 @@ final class HCIFaultsTests: XCTestCase {
         r.clock.advance(2.8)
         let done = r.sink.reports.last { $0.phase == "done" }
         XCTAssertEqual(done?.detail, "Didn't switch back; the input source is still WeType")
+    }
+
+    // Review-5 #8: Settings' key recorder pauses the engine with no timeout. 30s after it starts, the
+    // pause must clear on its own so a forgotten recording (switched apps, etc.) does not kill dictation
+    // for good.
+    func testKeyRecordingPause_ClearsAt30Seconds() {
+        let r = Rig()
+        r.engine.pauseForKeyRecording()
+        r.clock.advance(30)
+        XCTAssertFalse(r.engine.paused)
+    }
+
+    // Boundary, just under: still paused, so the trigger is ignored (passed through, nothing starts).
+    func testKeyRecordingPause_PressAt29_9SecondsIsStillIgnored() {
+        let r = Rig()
+        r.engine.pauseForKeyRecording()
+        r.clock.advance(29.9)
+        XCTAssertTrue(r.press(), "still paused: passed through, no dictation started")
+        XCTAssertEqual(r.engine.machine.state, .idle)
+    }
+
+    // Boundary, just over: the timeout has cleared the pause, so the same press now runs.
+    func testKeyRecordingPause_PressAt30_1SecondsRuns() {
+        let r = Rig()
+        r.engine.pauseForKeyRecording()
+        r.clock.advance(30.1)
+        XCTAssertFalse(r.press(), "timeout cleared the pause: the trigger is swallowed and starts a dictation")
+        XCTAssertNotEqual(r.engine.machine.state, .idle)
+    }
+
+    // The timeout from a recording that already finished must not reach into a later one: starting a
+    // second recording has to invalidate the first recording's scheduled clear.
+    func testKeyRecordingPause_StaleTimeoutDoesNotCancelANewerRecording() {
+        let r = Rig()
+        r.engine.pauseForKeyRecording()  // schedules a clear at t=30
+        r.clock.advance(10)
+        r.engine.resumeFromKeyRecording()  // the user finished recording a key at t=10
+        r.engine.pauseForKeyRecording()  // a second recording starts right away; schedules a clear at t=40
+        r.clock.advance(20)  // now at t=30: the first (stale) timeout must not fire here
+        XCTAssertTrue(r.engine.paused, "the stale timeout from the first recording must not clear the second")
     }
 }
 

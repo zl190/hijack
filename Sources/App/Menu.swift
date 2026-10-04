@@ -223,11 +223,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             talkKeyName: engine.plan.forwardKey.name)
         let secureApp =
             engine.tap.secureInputOn ? (NSWorkspace.shared.frontmostApplication?.localizedName ?? L("另一个 app", "Another app")) : nil
-        let fault = MenuFaults.firstLine(tapActive: engine.tap.isEnabled, stillHoldingTalkKey: stillHolding, secureInputApp: secureApp)
+        let fault = MenuFaults.firstLine(
+            tapActive: engine.tap.isEnabled, stillHoldingTalkKey: stillHolding, secureInputApp: secureApp, recordingPaused: engine.paused)
         if MenuFaults.showsStaleAccessibilityGuidance(trusted: AXIsProcessTrusted()) {
             add("⚠︎ " + staleAccessibilityGuidance, #selector(openAccessibility))
         } else if let fault {
             switch fault {
+            case .recordingPaused:
+                add(L("正在录制快捷键，听写暂停", "Recording a shortcut; dictation paused"))
             case .keyListenerOff:
                 add(
                     L("⚠︎ 系统关掉了按键监听，快捷键无效，点这里重新打开 Hijack", "⚠︎ macOS turned off the key listener; the shortcut does nothing — Reopen Hijack"),

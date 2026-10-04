@@ -79,6 +79,7 @@ public final class Engine {
     public var swallowUp: Int?  // key that stopped a toggle session: also eat its key-up
     public var quitting: Bool = false  // inside stopForQuit(): endVoice() must post the stop tap synchronously (M1)
     public var paused: Bool = false  // the settings window is recording a key: let every key through
+    public var recordingToken: Int = 0  // review-5 #8: invalidates a stale pauseForKeyRecording() timeout
     public var forwardKeyEdgeSeen: Bool = false  // an edge of the talk key came through the tap since start (S2)
     public var waitingReported: Bool = false
     public var micOffSince: Date?  // when the held-mic sample first read "off"; reset each dictation (FM-09)
@@ -423,6 +424,32 @@ public final class Engine {
         guard down else { return }
         post(key, down: false)
         log("cleared a stuck \(key.name)")
+    }
+
+    /// Review-5 #8: how long Settings' key recorder may hold the engine paused before the pause clears on
+    /// its own. Switching apps (or anything else that strands the recorder open) used to kill dictation
+    /// for good, with no fault line to say why.
+    public static let recordingPauseTimeout = 30.0
+
+    /// Settings' key recorder calls this to pause the engine (`paused = true`: every key passes through,
+    /// nothing starts a dictation) while it waits for the next key press. `recordingToken` is bumped and
+    /// captured so a stale timeout from an earlier, already-finished recording can never clear a later
+    /// one's pause (the same generation-guard shape as `scheduleTalkKey`/`waitForText`).
+    public func pauseForKeyRecording() {
+        paused = true
+        recordingToken += 1
+        let token = recordingToken
+        clock.after(Engine.recordingPauseTimeout) { [self] in
+            guard token == recordingToken else { return }
+            paused = false
+            log("key recording timed out after \(Int(Engine.recordingPauseTimeout))s; dictation resumed")
+        }
+    }
+
+    /// Settings calls this when the recording ends normally (a key was recorded, or Esc cancelled it).
+    public func resumeFromKeyRecording() {
+        paused = false
+        recordingToken += 1  // invalidate any pending timeout from this recording
     }
 
     /// Stop a session the menu finds still active with the physical key already up (FM-01, FM-04, FM-25):

@@ -22,15 +22,22 @@ public enum IconState: Equatable {
 /// One fault the menu can show as its first line, in place of the normal status line. Only one shows at a
 /// time.
 public enum MenuFault: Equatable {
+    case recordingPaused  // Settings is recording a key: Engine.paused is true (review-5 #8)
     case keyListenerOff
     case stillHolding(talkKey: String)  // a session the engine thinks is active, with the physical key already up
     case secureInput(app: String)
 }
 
 public enum MenuFaults {
-    /// `tapActive` false wins first (nothing works until it's fixed). Then a stuck session, which traps the
-    /// user's next press. Then Secure Input, which only blocks the next dictation.
-    public static func firstLine(tapActive: Bool, stillHoldingTalkKey: String? = nil, secureInputApp: String? = nil) -> MenuFault? {
+    /// Review-5 #8: a recording in progress wins over everything else — it is a deliberate, user-started
+    /// state (Settings is open and waiting for a key) that already blocks every other dictation, so
+    /// nothing else is worth reporting underneath it. Then `tapActive` false (nothing works until it's
+    /// fixed), then a stuck session, which traps the user's next press, then Secure Input, which only
+    /// blocks the next dictation.
+    public static func firstLine(
+        tapActive: Bool, stillHoldingTalkKey: String? = nil, secureInputApp: String? = nil, recordingPaused: Bool = false
+    ) -> MenuFault? {
+        if recordingPaused { return .recordingPaused }
         if !tapActive { return .keyListenerOff }
         if let talkKey = stillHoldingTalkKey { return .stillHolding(talkKey: talkKey) }
         if let app = secureInputApp { return .secureInput(app: app) }
