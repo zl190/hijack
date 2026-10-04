@@ -75,6 +75,15 @@ protocol Sink {
     func sourceName(_ id: String) -> String
 }
 
+/// A watch on a set of folders, notifying once when something inside one of them changes. The live
+/// implementation (Sources/Core/Watch.swift) wraps FSEvents; the tests drive a fake by hand, with no
+/// real latency. One seam, not part of `Deps`: `SettingsWatch` is used from Menu.swift, outside Engine.
+protocol FolderEvents: AnyObject {
+    /// Start watching `roots` (already filtered to the ones that exist). Returns whether it is now
+    /// watching: false when `roots` is empty, or the live stream could not be created.
+    @discardableResult func start(roots: [String], latency: Double, onChange: @escaping () -> Void) -> Bool
+}
+
 struct Deps {
     var keys: KeyPoster
     var sources: InputSources

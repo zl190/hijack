@@ -1,0 +1,35 @@
+# Test and build Hijack on every push and pull request to main.
+# The build is ad-hoc. The uploaded app is evidence of a working build, not a release asset.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      # Becomes blocking after the first full format (see docs/swift-format.md).
+      - name: Check formatting
+        run: make lint
+        continue-on-error: true
+
+      - name: Run the unit tests
+        run: make test
+
+      - name: Build the app (ad-hoc)
+        run: make build
+
+      - name: Zip the app
+        run: ditto -c -k --keepParent build/Hijack.app build/Hijack.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Hijack.zip
+          path: build/Hijack.zip
+          retention-days: 7

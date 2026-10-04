@@ -36,6 +36,10 @@ hijack log -f            # follow the log
 
 `status`, `sources`, and `get` take `--json`.
 
+## Updates
+
+Hijack checks for a new version once a day and asks before it installs one. "Check for Updates…" in the menu runs a check now. Settings › General › Updates has two switches: automatic checks, and automatic download and install. `hijack version` prints the running version and the version the last check found. Homebrew users can keep using `brew upgrade`; both paths replace the same app.
+
 ## Troubleshooting
 
 If the trigger does nothing, confirm that Hijack has Accessibility permission and that your selected voice tool works on its own. Run `hijack doctor` to check permissions, configuration and voice-source availability.

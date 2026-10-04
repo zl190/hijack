@@ -58,9 +58,15 @@ final class Config {
         stopOnAnyKey = d["stopOnAnyKey"] as? Bool ?? true
         voiceStyles = (d["voiceStyles"] as? [String: String] ?? [:]).filter { ["hold", "tap", "doubleTap"].contains($0.value) }
         language = d["language"] as? String ?? "system"
-        holdDelay = d["holdDelay"] as? Double ?? 0.2
-        restoreTimeout = d["restoreTimeout"] as? Double ?? 5.0
-        fallbackDelay = d["fallbackDelay"] as? Double ?? 2.5
+        // review-5 #14: a hand edit bypasses `hijack set`'s own range check, so loading clamps too.
+        func timing(_ key: String, default def: Double, range: ClosedRange<Double>, name: String) -> Double {
+            let (v, logLine) = clampedTiming(d[key] as? Double ?? def, to: range, name: name)
+            if let logLine { log(logLine) }
+            return v
+        }
+        holdDelay = timing("holdDelay", default: 0.2, range: holdDelayRange, name: "holdDelay")
+        restoreTimeout = timing("restoreTimeout", default: 5.0, range: restoreTimeoutRange, name: "restoreTimeout")
+        fallbackDelay = timing("fallbackDelay", default: 2.5, range: fallbackDelayRange, name: "fallbackDelay")
         if !force { log("config: reloaded (trigger \(trigger?.name ?? "follow"), voiceInput \(voiceInput), voiceKeys \(voiceKeys.mapValues(\.name)))") }
         if d["trigger"] != nil, (d["trigger"] as? String) != "follow", trigger == nil { log("config: unknown trigger \(d["trigger"]!), following the voice key") }
     }
@@ -72,20 +78,15 @@ final class Config {
             NSSound.beep()
             return
         }
-        func j(_ v: Any) -> String {
-            if let s = v as? String { return "\"\(s)\"" }
-            if let b = v as? Bool { return b ? "true" : "false" }
-            if let x = v as? Double { return String(format: "%g", x) }
-            let d = (try? JSONSerialization.data(withJSONObject: v, options: [.sortedKeys, .fragmentsAllowed])) ?? Data()
-            return String(data: d, encoding: .utf8) ?? "null"
-        }
+        // review-5 #14: jsonLiteral (Sources/Core/ConfigValues.swift) escapes through JSONSerialization,
+        // so a value with a quote in it (hijack set source 'a"b') no longer writes invalid JSON.
         let pairs: [(String, Any)] = [
             ("trigger", trigger?.json ?? "follow"), ("voiceInput", voiceInput), ("voiceKeys", voiceKeys.mapValues(\.json)),
             ("triggerMode", triggerMode), ("stopOnAnyKey", stopOnAnyKey), ("voiceStyles", voiceStyles),
             ("showMenuBarIcon", showMenuBarIcon), ("showDockIcon", showDockIcon), ("language", language),
             ("holdDelay", holdDelay), ("restoreTimeout", restoreTimeout), ("fallbackDelay", fallbackDelay),
         ]
-        let text = "{\n" + pairs.map { "  \"\($0.0)\": \(j($0.1))" }.joined(separator: ",\n") + "\n}\n"
+        let text = "{\n" + pairs.map { "  \"\($0.0)\": \(jsonLiteral($0.1))" }.joined(separator: ",\n") + "\n}\n"
         try? FileManager.default.createDirectory(at: configURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         try? text.write(to: configURL, atomically: true, encoding: .utf8)
         loadedAt = (try? FileManager.default.attributesOfItem(atPath: configURL.path)[.modificationDate]) as? Date

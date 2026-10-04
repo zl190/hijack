@@ -34,6 +34,18 @@ final class StatsTests: XCTestCase {
         XCTAssertNil(DictationEntry.parse("10-03 16:26:59.776 check: echo seen, mic off"))   // the older format
         XCTAssertNil(DictationEntry.parse(""))
     }
+
+    // review-5 #17: Engine.summary now writes the provider id and the key's logID (stable, not localized).
+    // The parser makes no assumption about which form `tool` is in: an id line (new) and a display-name
+    // line (old, ok1 above) parse the same way, each keeping whatever string was actually on the line.
+    func testParsesTheNewIdBasedFormatTheSameAsTheOldNameBasedOne() {
+        let idLine = "2026-10-03 22:00:00.000 dictation com.tencent.inputmethod.wetype.pinyin (hold): held 3.0s, fn sent after 238ms, window closed 1627ms after release, back after 1.82s | echo after 245ms, mic tool on device on, window while held: 1 window | front=com.anthropic.claudefordesktop"
+        let e = DictationEntry.parse(idLine)!
+        XCTAssertEqual(e.tool, "com.tencent.inputmethod.wetype.pinyin")
+        XCTAssertEqual(e.outcome, .textArrived)
+        XCTAssertEqual(e.sentMs, 238)
+        XCTAssertEqual(DictationEntry.parse(ok1)!.tool, "WeType", "the old line keeps its own (display-name) tool string")
+    }
     func testStats() {
         let lines = [ok1, ok2, tap, micOff, noEcho, unseen, cut, app,
                      "2026-10-03 21:05:00.000 event tap was disabled by the system (timeout), re-enabled",

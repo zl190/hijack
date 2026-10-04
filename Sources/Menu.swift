@@ -2,8 +2,22 @@ import AppKit
 import ApplicationServices
 import Carbon
 import ServiceManagement
+import Sparkle
 
 // MARK: menu (the whole UI)
+
+/// Shown where an update control would be, in a build that has no update key.
+var noUpdateKeyText: String { L("这个版本没有更新密钥，不能检查更新", "This build has no update key") }
+
+/// Records what the last check found, so `hijack version` can print it. Sparkle keeps no such record itself.
+final class UpdateRecorder: NSObject, SPUUpdaterDelegate {
+    func updater(_ updater: SPUUpdater, didFindValidUpdate item: SUAppcastItem) {
+        UserDefaults.standard.set(UpdateFound(display: item.displayVersionString, build: item.versionString).asDefaults, forKey: UpdateFound.defaultsKey)
+    }
+    func updaterDidNotFindUpdate(_ updater: SPUUpdater) {
+        UserDefaults.standard.removeObject(forKey: UpdateFound.defaultsKey)
+    }
+}
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let engine: Engine = Engine.live()
@@ -11,6 +25,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let menu: NSMenu = NSMenu()
     var item: NSStatusItem?
     var watch: SettingsWatch?
+    /// In-app updates (Sparkle). One controller for the app's life; it owns the scheduled check.
+    /// A build without SUPublicEDKey (the key file still the placeholder) has no updater: Sparkle would
+    /// refuse to start and show an alert on every launch.
+    static let hasUpdateKey = Bundle.main.object(forInfoDictionaryKey: "SUPublicEDKey") != nil
+    let updateRecorder = UpdateRecorder()
+    lazy var updater: SPUStandardUpdaterController? = AppDelegate.hasUpdateKey
+        ? SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: updateRecorder, userDriverDelegate: nil) : nil
 
     func applicationDidFinishLaunching(_ n: Notification) {
         logInApp = true
@@ -29,6 +50,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // (waiting for Accessibility, or the tap install itself), and the icon must see it (review-4 M1).
         NotificationCenter.default.addObserver(forName: .hijackStateChanged, object: nil, queue: .main) { [weak self] _ in self?.updateIcon() }
         engine.start()
+        _ = updater   // created now, so the scheduled check starts at launch
         // Sleep, wake and lock land in the log, to line them up with a session that stops working.
         let ws = NSWorkspace.shared.notificationCenter
         // After wake and after unlock the engine also reconciles: a session across sleep stops, the trigger is re-read (FM-25).
@@ -79,6 +101,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return false
     }
 
+    // FM-10 at the source: a clean quit (menu Quit, ⌘Q, SIGTERM via main.swift) must release a held talk
+    // key before the process exits, not rely on the next launch's clearStuckModifier() to find it stuck.
+    func applicationWillTerminate(_ n: Notification) {
+        engine.stopForQuit()
+    }
+
     // Menu bar icon + Dock icon follow the config.
     func applyAppearance() {
         updateIcon()
@@ -94,6 +122,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let main = NSMenu(), appItem = NSMenuItem()
         main.addItem(appItem)
         let appMenu = NSMenu()
+        appMenu.addItem(checkForUpdatesItem())
         let settings = NSMenuItem(title: L("设置…", "Settings…"), action: #selector(openSettings), keyEquivalent: ",")
         settings.target = self
         appMenu.addItem(settings)
@@ -109,6 +138,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc func openSettings() { SettingsWindowController.show() }
+    /// Sparkle enables and disables this item itself (it is off while a check runs).
+    func checkForUpdatesItem() -> NSMenuItem {
+        let i = NSMenuItem(title: L("检查更新…", "Check for Updates…"), action: #selector(SPUStandardUpdaterController.checkForUpdates(_:)), keyEquivalent: "")
+        if let updater { i.target = updater } else { i.isEnabled = false; i.toolTip = noUpdateKeyText }
+        return i
+    }
     @objc func recordShortcut() { SettingsWindowController.show(tab: 0); SettingsStore.shared.startRecording(.trigger) }
     @objc func recordTalkKey() { SettingsWindowController.show(tab: 1); SettingsStore.shared.startRecording(.voiceKey(m.voiceID)) }
 
@@ -247,6 +282,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(.separator())
 
         // Everything set once (login item, icons, language, config file, timings) lives in Settings.
+        menu.addItem(checkForUpdatesItem())
         let settings = add(L("设置…", "Settings…"), #selector(openSettings))
         settings.keyEquivalent = ","; settings.keyEquivalentModifierMask = .command
         if #available(macOS 27.0, *) { settings.preferredImageVisibility = .hidden }   // no auto icon: keep titles aligned

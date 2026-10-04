@@ -149,6 +149,101 @@ final class HCIFaultsTests: XCTestCase {
         XCTAssertEqual(r.keys.posted.count, 0)
     }
 
+    // FM-10 at the source: quitting while a session is active must release the talk key before the process
+    // exits, synchronously (no waitingForText poll — there is no time left for one). AppDelegate.applicationWillTerminate
+    // calls engine.stopForQuit(), the same Engine path used by stopStuckSession and reconcileAfterWake.
+    func testStopForQuit_ListeningReleasesTheTalkKeyOnce() {
+        let r = Rig()
+        r.pressUntilListening()
+        r.engine.stopForQuit()
+        XCTAssertEqual(r.keys.count(Rig.fn, down: false), 1, "exactly one release")
+        XCTAssertEqual(r.engine.machine.state, .idle)
+    }
+
+    // M1 (docs/review-4/hardening-review.md): a tap/doubleTap tool's stop key normally goes out through
+    // tapKey(), scheduled with clock.after — DispatchQueue.main.asyncAfter on the live Scheduler. But
+    // terminate() calls exit() right after applicationWillTerminate returns, so a scheduled post never
+    // runs. Quit must post the stop tap synchronously, with no clock advance.
+    func testStopForQuit_TapStyleIsPostedSynchronouslyWithNoClockAdvance() {
+        let r = Rig(start: false)
+        r.plan.style = "tap"
+        r.engine.start()
+        r.pressUntilListening(echo: false)
+        let before = r.keys.posted.count
+        r.engine.stopForQuit()
+        XCTAssertEqual(r.keys.posted[before...].map(\.down), [true, false], "the stop tap's down and up")
+        XCTAssertEqual(r.engine.machine.state, .idle)
+    }
+
+    func testStopForQuit_DoubleTapStyleIsPostedSynchronouslyWithNoClockAdvance() {
+        let r = Rig(start: false)
+        r.plan.style = "doubleTap"
+        r.engine.start()
+        r.pressUntilListening(echo: false)
+        let before = r.keys.posted.count
+        r.engine.stopForQuit()
+        XCTAssertEqual(r.keys.posted[before...].map(\.down), [true, false, true, false], "two full taps")
+        XCTAssertEqual(r.engine.machine.state, .idle)
+    }
+
+    // Out-of-range: nothing active (idle) when the app quits, so nothing is posted.
+    func testStopForQuit_IdleDoesNothing() {
+        let r = Rig()
+        let tracesBefore = r.sink.traces.count
+        r.engine.stopForQuit()
+        XCTAssertEqual(r.sink.traces.count, tracesBefore, "run() must not be called when nothing is active")
+        XCTAssertEqual(r.engine.machine.state, .idle)
+        XCTAssertEqual(r.keys.posted.count, 0)
+    }
+
+    // S1 (docs/review-4/hardening-review.md): waitingForText is not isActive, so stopForQuit()'s own guard
+    // already covers it — same shape as the idle case above, at the Engine level this time.
+    func testStopForQuit_WaitingForTextDoesNothing() {
+        let r = Rig()
+        r.pressUntilListening(); r.release()
+        XCTAssertEqual(r.engine.machine.state, .waitingForText, "setup")
+        let postedBefore = r.keys.posted.count, tracesBefore = r.sink.traces.count
+        r.engine.stopForQuit()
+        XCTAssertEqual(r.sink.traces.count, tracesBefore, "run() must not be called: waitingForText is not isActive")
+        XCTAssertEqual(r.keys.posted.count, postedBefore, "nothing new posted")
+        XCTAssertEqual(r.engine.machine.state, .waitingForText, "unchanged")
+    }
+
+    // S1: passthrough IS isActive, so stopForQuit() does call run(.quit) here — the machine's own
+    // catch-all (SessionMachine.swift) must leave it alone, with nothing posted.
+    func testStopForQuit_PassthroughDoesNothing() {
+        let r = Rig(current: Rig.voice)   // already on the voice input source: the press passes through
+        r.press()
+        XCTAssertEqual(r.engine.machine.state, .passthrough, "setup")
+        let postedBefore = r.keys.posted.count
+        r.engine.stopForQuit()
+        XCTAssertEqual(r.keys.posted.count, postedBefore, "nothing posted")
+        XCTAssertEqual(r.engine.machine.state, .passthrough, "unchanged")
+    }
+
+    // S2 (docs/review-4/hardening-review.md): a quit must leave one log line saying whether it released a
+    // key — a field log otherwise cannot show that a quit cleaned something up.
+    func testStopForQuit_LogsWhatItReleased() {
+        let r = Rig()
+        r.pressUntilListening()
+        r.engine.stopForQuit()
+        XCTAssertTrue(r.sink.has("quit: released \(Rig.fn.logID)"), r.sink.lines.last ?? "nil")
+    }
+    func testStopForQuit_LogsNothingHeldWhenIdle() {
+        let r = Rig()
+        r.engine.stopForQuit()
+        XCTAssertTrue(r.sink.has("quit: nothing held"), r.sink.lines.last ?? "nil")
+    }
+    // Out-of-range: isActive (starting) but the talk key was never sent yet — still "nothing held", not
+    // "released", since endVoice()/releaseTalkKey never ran.
+    func testStopForQuit_LogsNothingHeldWhenStartingBeforeTheKeyWasSent() {
+        let r = Rig()
+        r.press()
+        XCTAssertEqual(r.engine.machine.state, .starting, "setup")
+        r.engine.stopForQuit()
+        XCTAssertTrue(r.sink.has("quit: nothing held"), r.sink.lines.last ?? "nil")
+    }
+
     // FM-09: the probe reads the tool's mic "off" for >= 1s while the key is held; "Try it" must say so.
     // (The first sample fires 0.3s after the talk key goes out, itself ~0.2s (holdDelay) after the press.)
     func testFM09_MicOffForASecondReportsNotListening() {
@@ -220,5 +315,55 @@ final class HCIFaultsTests: XCTestCase {
         r.clock.advance(2.8)
         let done = r.sink.reports.last { $0.phase == "done" }
         XCTAssertEqual(done?.detail, "Didn't switch back; the input source is still WeType")
+    }
+}
+
+// review-5 #3: refresh() rebuilds the Plan, and a provider's detected() reads a settings file from disk
+// (WeType's MMKV, Handy's JSON). An app tool (switchesInput == false) reaches idle inside the tap's own
+// key event on every release, so that read used to happen synchronously inside the tap callback.
+extension HCIFaultsTests {
+    func testRefreshPlan_IsDeferredOffTheReleaseInAppMode() {
+        let r = Rig(switchesInput: false, trigger: KeySpec.named("right_option")!)
+        r.pressUntilListening()
+        let before = r.planReads
+        r.release()
+        XCTAssertEqual(r.planReads, before, "no plan (file) read synchronously inside the key event")
+        r.clock.advance(0)
+        XCTAssertEqual(r.planReads, before + 1, "exactly one refresh after the tick")
+    }
+
+    // Out-of-range: a release that does not reach idle (toggle mode, still listening) must not schedule
+    // a refresh at all.
+    func testRefreshPlan_ToggleReleaseStayingActiveSchedulesNothing() {
+        let r = Rig(toggle: true, switchesInput: false, trigger: KeySpec.named("right_option")!)
+        r.pressUntilListening()
+        let before = r.planReads
+        r.release()   // toggle: releasing the trigger alone keeps the session running
+        XCTAssertEqual(r.engine.machine.state, .listening, "setup: toggle keeps going")
+        r.clock.advance(0)
+        XCTAssertEqual(r.planReads, before, "still active: nothing to refresh")
+    }
+}
+
+// review-5 #17: the summary line must carry stable identifiers, not display names that change with the
+// language, or hijack stats splits one tool into two after a language switch (Stats.swift groups by this
+// line's leading field).
+extension HCIFaultsTests {
+    func testSummaryLine_CarriesStableIdsNotLocalizedNames() {
+        let r = Rig()
+        r.pressUntilListening(); r.release(); r.clock.advance(2.6)
+        let line = r.sink.summaries.last ?? ""
+        XCTAssertTrue(line.hasPrefix("dictation \(Rig.voice) ("), line)
+        XCTAssertTrue(line.contains("\(Rig.fn.logID) sent after"), line)
+        XCTAssertFalse(line.contains("WeType"), "the localized display name must not be on the line: \(line)")
+    }
+
+    // Out-of-range: released before the talk key went out still names the key by its stable id, not "Fn".
+    // App mode (switchesInput: false) finishes synchronously on this release, no clock advance needed.
+    func testSummaryLine_TooShortAlsoUsesTheStableKeyId() {
+        let r = Rig(switchesInput: false, trigger: KeySpec.named("right_option")!)
+        r.press(); r.release()
+        let line = r.sink.summaries.last ?? ""
+        XCTAssertTrue(line.contains("released before \(Rig.fn.logID) was sent"), line)
     }
 }

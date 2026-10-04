@@ -63,6 +63,7 @@ final class Engine {
     var span: (id: OSSignpostID, dictation: OSSignpostIntervalState, phase: (name: StaticString, state: OSSignpostIntervalState))?
 
     var swallowUp: Int?               // key that stopped a toggle session: also eat its key-up
+    var quitting: Bool = false        // inside stopForQuit(): endVoice() must post the stop tap synchronously (M1)
     var paused: Bool = false                // the settings window is recording a key: let every key through
     var forwardKeyEdgeSeen: Bool = false    // an edge of the talk key came through the tap since start (S2)
     var waitingReported: Bool = false
@@ -103,7 +104,22 @@ final class Engine {
         }
     }
     func endVoice() {
-        if plan.style == "hold" { post(plan.forwardKey, down: false) } else { tapKey() }   // "press any key to finish"
+        if plan.style == "hold" { post(plan.forwardKey, down: false) }
+        else if quitting { synchronousTapForQuit() }   // M1: a scheduled tapKey() would never run before exit()
+        else { tapKey() }   // "press any key to finish"
+    }
+
+    /// The stop tap, inline (M1, docs/review-4/hardening-review.md): used only from stopForQuit(), where
+    /// terminate() calls exit() right after applicationWillTerminate returns, so a post scheduled through
+    /// clock.after (DispatchQueue.main.asyncAfter on the live Scheduler) would never run. Timing matches
+    /// tapKey()'s own (30ms down-to-up; 120ms from the first tap's down to the second's, for doubleTap).
+    func synchronousTapForQuit() {
+        let key = plan.forwardKey
+        post(key, down: true); usleep(30_000); post(key, down: false)
+        if plan.style == "doubleTap" {
+            usleep(90_000)
+            post(key, down: true); usleep(30_000); post(key, down: false)
+        }
     }
 
     func post(_ key: KeySpec, down: Bool) {
@@ -172,7 +188,10 @@ final class Engine {
         if (before == .starting || before == .listening) && (machine.state == .waitingForText || machine.state == .idle) {
             record.releasedAt = clock.now; enterPhase("waiting for text")
         }
-        defer { if machine.state == .idle { refresh() } }   // settings changed mid-dictation apply now
+        // Settings changed mid-dictation apply now. refresh() rebuilds the Plan, which can read a voice
+        // provider's own settings file (review-5 #3): off the tap, not inline, so a key event never does
+        // file I/O. refresh()'s own guard (idle, !physicalDown) still covers a press that comes first.
+        defer { if machine.state == .idle { clock.after(0) { [self] in refresh() } } }
         var pass = false
         for effect in effects {
             switch effect {
@@ -304,10 +323,12 @@ final class Engine {
     func summary(end: String) {
         let p = plan, r = record
         let held = (r.releasedAt ?? clock.now).timeIntervalSince(r.pressedAt)
-        var line = "dictation \(p.voiceName) (\(p.toggle ? "toggle" : "hold")): held \(String(format: "%.2f", held))s"
+        // review-5 #17: the tool and the key are logged by their stable id, not `.name`/`.voiceName` (both
+        // run through `localize`), so a language change does not split one tool into two in `hijack stats`.
+        var line = "dictation \(p.providerID) (\(p.toggle ? "toggle" : "hold")): held \(String(format: "%.2f", held))s"
         if let sent = r.keySentMs {
             func onOff(_ b: Bool?) -> String { b.map { $0 ? "on" : "off" } ?? "?" }
-            line += ", \(p.forwardKey.name) sent after \(sent)ms"
+            line += ", \(p.forwardKey.logID) sent after \(sent)ms"
             if p.switchesInput { line += r.windowGoneMs.map { ", window closed \($0)ms after release" } ?? ", window never closed after release" }
             line += ", \(end)"
             line += " | echo \(r.echoMs.map { "after \($0)ms" } ?? "missing"), mic tool \(onOff(r.heldMic?.tool)) device \(onOff(r.heldMic?.device))"
@@ -315,7 +336,7 @@ final class Engine {
         } else if r.switchFailed {
             line += ", \(end)"
         } else {
-            line += ", released before \(p.forwardKey.name) was sent"
+            line += ", released before \(p.forwardKey.logID) was sent"
         }
         if tapInstalled, !tap.isEnabled { line += ", key tap disabled" }
         if tap.secureInputOn { line += ", secure input on" }
@@ -372,6 +393,20 @@ final class Engine {
         run(plan.toggle ? .press : .release)
         physicalDown = tap.keyIsDown(plan.trigger.code)   // resync, as reconcileAfterWake does (review-4 M3):
         // without this the next real press reads as a repeat of a press that never happened, and is swallowed.
+    }
+
+    /// The app is quitting (AppDelegate.applicationWillTerminate, or SIGTERM routed through it): a held
+    /// talk key must not outlive the process (FM-10, at the source). No restore-input-source wait — the
+    /// process exits right after this call, so `.quit` goes straight to idle instead of `waitingForText`.
+    func stopForQuit() {
+        // S2: one log line either way, so a field log can show whether a quit released a key.
+        guard machine.isActive else { log("quit: nothing held"); return }
+        let releasing = machine.state == .listening   // the only state where a talk key was actually sent
+        let key = plan.forwardKey.logID
+        quitting = true
+        run(.quit)
+        quitting = false
+        log(releasing ? "quit: released \(key)" : "quit: nothing held")
     }
 
     /// Re-enable the tap and check that it took (FM-02). One retry on the next run-loop turn; state.json tells the menu.

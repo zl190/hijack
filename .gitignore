@@ -2,8 +2,11 @@ build/
 .DS_Store
 node_modules/
 dist/
+.sparkle/
 .wrangler/
 .build/
 briefs/
 handoff.yaml
 RESUME.md
+.sparkle/
+dist-test/

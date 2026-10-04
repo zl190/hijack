@@ -21,7 +21,7 @@ func runCLI(_ args: [String]) -> Int32? {
     case "set": return cliSet(rest)
     case "log": return cliLog(rest)
     case "stats": return cliStats(rest, json: json)
-    case "version": print(appVersion); return 0
+    case "version": return cliVersion()
     default: print(cliHelp); return 0
     }
 }
@@ -36,6 +36,21 @@ let appBundle: Bundle = {
     return Bundle(url: exe.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()) ?? Bundle.main
 }()
 let appVersion = appBundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
+// HijackCommit (not CFBundleVersion — review-4 M2) carries the build identity build.sh writes: the sha,
+// +dirty when built from an unclean tree. CFBundleVersion stays plain VERSION, so Sparkle's comparator
+// orders builds by VERSION only (see build.sh for the full rationale).
+let appCommit = appBundle.object(forInfoDictionaryKey: "HijackCommit") as? String ?? "unknown"
+
+/// The running version, and the update the app recorded at its last check (no network call).
+/// The app writes HijackUpdateFound from its Sparkle delegate; Sparkle stores only the skipped build.
+func cliVersion() -> Int32 {
+    print("Hijack \(appVersion) (commit \(appCommit))")
+    // The CLI is often a symlink outside the bundle, so it reads the app's defaults domain by name.
+    let d = UserDefaults.standard.persistentDomain(forName: "com.zl190.hijack") ?? [:]
+    let found = UpdateFound(defaults: d[UpdateFound.defaultsKey] as? [String: Any])
+    if let line = UpdateNotice.line(running: appVersion, found: found, skippedBuild: d["SUSkippedVersion"] as? String) { print(line) }
+    return 0
+}
 
 let cliHelp = """
 hijack — hold a key to dictate with another tool's voice input, from any input source
@@ -49,7 +64,7 @@ Usage:
   hijack log [-f] [-n N]          show the log: one line per dictation, plus errors (-f follows it)
   hijack log --live               watch every step of each dictation as it happens (Ctrl-C to stop)
   hijack stats [--days N|--all] [--json]   how reliable dictation has been (default: last 7 days)
-  hijack version
+  hijack version                  running version, and the update Sparkle found last
 
 Settings:
   mode             hold | toggle
@@ -116,7 +131,7 @@ func cliStatus(json: Bool) -> Int32 {
         ])
         return 0
     }
-    print("Hijack \(appVersion) — " + (st.map { "running (pid \($0.pid))" } ?? "not running"))
+    print("Hijack \(appVersion) (commit \(appCommit)) — " + (st.map { "running (pid \($0.pid))" } ?? "not running"))
     if let st {
         print("  accessibility   " + (st.trusted ? "allowed" : "MISSING — System Settings › Privacy & Security › Accessibility"))
         print("  key listener    " + (st.tapActive ? "active" : st.trusted ? "OFF — macOS turned it off; quit and reopen Hijack" : "off — waiting for Accessibility"))
@@ -234,11 +249,13 @@ func cliSet(_ args: [String]) -> Int32 {
     case "language":
         guard ["system", "en", "zh"].contains(value) else { return fail("language: system | en | zh") }; c.language = value
     case "hold-delay":
-        guard let s = seconds(0.05...1) else { return fail("hold-delay: 0.05–1 seconds") }; c.holdDelay = s
+        // Ranges shared with Config's own load-time clamp (Sources/Core/ConfigValues.swift, review-5 #14):
+        // a hand edit of config.json bypasses this validation, so loading enforces the same bounds again.
+        guard let s = seconds(holdDelayRange) else { return fail("hold-delay: 0.05–1 seconds") }; c.holdDelay = s
     case "restore-timeout":
-        guard let s = seconds(1...15) else { return fail("restore-timeout: 1–15 seconds") }; c.restoreTimeout = s
+        guard let s = seconds(restoreTimeoutRange) else { return fail("restore-timeout: 1–15 seconds") }; c.restoreTimeout = s
     case "fallback-delay":
-        guard let s = seconds(0.5...10) else { return fail("fallback-delay: 0.5–10 seconds") }; c.fallbackDelay = s
+        guard let s = seconds(fallbackDelayRange) else { return fail("fallback-delay: 0.5–10 seconds") }; c.fallbackDelay = s
     default:
         return fail("unknown setting '\(name)' — see `hijack help`")
     }
@@ -281,11 +298,15 @@ func cliStats(_ args: [String], json: Bool) -> Int32 {
     let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"
     let s = DictationStats.compute(lines: lines, days: days, today: f.string(from: Date()))
     let span = days.map { "last \($0) days" } ?? "all of the log"
+    // review-5 #17: s.tools is keyed by whatever Engine.summary wrote (a provider id since this change, a
+    // display name on an older line). voiceProvider(for:) resolves a known id to its display name; an
+    // unresolved key (an old line, or an id no longer installed) comes back unchanged.
+    let toolNames = Dictionary(s.tools.map { (voiceProvider(for: $0.key).name, $0.value) }, uniquingKeysWith: +)
     if json {
         var d: [String: Any] = ["span": span, "dictations": s.dictations, "tooShort": s.tooShort,
             "outcomes": Dictionary(uniqueKeysWithValues: s.outcomes.map { ($0.key.rawValue, $0.value) }),
             "failureCauses": Dictionary(uniqueKeysWithValues: s.causes.map { ($0.key.rawValue, $0.value) }),
-            "tools": s.tools, "keyTapPaused": s.tapPaused, "slowKeyEvents": s.slowKeys, "triggerCaughtUp": s.caughtUp]
+            "tools": toolNames, "keyTapPaused": s.tapPaused, "slowKeyEvents": s.slowKeys, "triggerCaughtUp": s.caughtUp]
         if let r = s.successRate { d["successRate"] = (r * 1000).rounded() / 1000 }
         for (k, v) in [("talkKeyMsP50", s.sentP50), ("talkKeyMsP95", s.sentP95), ("textInMsP50", s.textInP50), ("textInMsP95", s.textInP95)] {
             if let v { d[k] = v }
@@ -307,6 +328,6 @@ func cliStats(_ args: [String], json: Bool) -> Int32 {
     print("Talk key sent after".padding(toLength: 24, withPad: " ", startingAt: 0) + "p50 \(ms(s.sentP50))   p95 \(ms(s.sentP95))")
     print("Text in after release".padding(toLength: 24, withPad: " ", startingAt: 0) + "p50 \(ms(s.textInP50))   p95 \(ms(s.textInP95))")
     print("Incidents".padding(toLength: 24, withPad: " ", startingAt: 0) + "key tap paused by macOS \(s.tapPaused) · slow key events \(s.slowKeys) · shortcut caught up \(s.caughtUp)")
-    if s.tools.count > 1 { print("By voice tool".padding(toLength: 24, withPad: " ", startingAt: 0) + s.tools.sorted { $0.value > $1.value }.map { "\($0.key) \($0.value)" }.joined(separator: " · ")) }
+    if toolNames.count > 1 { print("By voice tool".padding(toLength: 24, withPad: " ", startingAt: 0) + toolNames.sorted { $0.value > $1.value }.map { "\($0.key) \($0.value)" }.joined(separator: " · ")) }
     return 0
 }

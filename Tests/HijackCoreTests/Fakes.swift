@@ -107,6 +107,22 @@ final class FakeSink: Sink {
     func has(_ text: String) -> Bool { lines.contains { $0.contains(text) } }
 }
 
+/// FolderEvents, driven by hand: no FSEvents, no latency, no sleep (Sources/Core/Watch.swift, WatchTests.swift).
+final class FakeFolderEvents: FolderEvents {
+    private(set) var startCalls = 0
+    private(set) var startedRoots: [String] = []
+    private(set) var onChange: (() -> Void)?
+    @discardableResult func start(roots: [String], latency: Double, onChange: @escaping () -> Void) -> Bool {
+        startCalls += 1
+        startedRoots = roots
+        guard !roots.isEmpty else { return false }
+        self.onChange = onChange
+        return true
+    }
+    /// Simulate a change: what FSEvents would have reported, right now, with no latency.
+    func fire() { onChange?() }
+}
+
 /// One Engine with all six fakes. The default plan is WeType-like: Fn is the trigger and the talk key, hold mode.
 final class Rig {
     static let fn = KeySpec.named("fn")!
@@ -114,6 +130,7 @@ final class Rig {
     static let voice = "com.tencent.inputmethod.wetype.pinyin"
 
     var plan: Plan
+    var planReads = 0   // how many times Engine called the plan closure (review-5 #3: this stands in for a provider's file read)
     let clock = FakeClock()
     let keys = FakeKeys()
     let sources: FakeSources
@@ -127,7 +144,7 @@ final class Rig {
                     forwardKey: Rig.fn, style: "hold", toggle: toggle, stopOnAnyKey: true,
                     holdDelay: 0.2, restoreTimeout: 5.0, fallbackDelay: 2.5)
         sources = FakeSources(current)
-        engine = Engine(plan: { [unowned self] in self.plan },
+        engine = Engine(plan: { [unowned self] in self.planReads += 1; return self.plan },
                         deps: Deps(keys: keys, sources: sources, tap: tap, probes: probes, clock: clock, sink: sink))
         if start { engine.start() }
     }

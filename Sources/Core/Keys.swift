@@ -50,6 +50,12 @@ struct KeySpec: Equatable {
         let base = named.map { localize($0.zh, $0.en) } ?? "keyCode \(code)"
         return Mod.allCases.filter { mods.contains($0) }.map(\.symbol).joined() + base
     }
+    /// A stable identifier for logs and stats (review-5 #17): never runs through `localize`, unlike `name`.
+    /// Same shape `hijack set` and `KeySpec(binding:)` parse: a named key's id, or "mod+mod+base".
+    var logID: String {
+        let base = named?.id ?? "keyCode\(code)"
+        return (Mod.allCases.filter { mods.contains($0) }.map(\.rawValue) + [base]).joined(separator: "+")
+    }
     var flags: CGEventFlags { mods.reduce(into: CGEventFlags()) { $0.insert($1.flag) } }
     static func named(_ id: String) -> KeySpec? { namedKeys.first { $0.id == id }.map { KeySpec(code: $0.code) } }
 

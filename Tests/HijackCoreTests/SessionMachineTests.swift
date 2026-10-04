@@ -113,6 +113,22 @@ final class SessionMachineTests: XCTestCase {
             XCTAssertEqual(t(s, .switchFailed, hold).1, [], "\(s)")
         }
     }
+    // 12
+    func testQuitStopsImmediatelyWithoutWaitingForText() {
+        XCTAssertEqual(t(.listening, .quit, hold).0, .idle)
+        XCTAssertEqual(t(.listening, .quit, hold).1, [.releaseTalkKey], "release the sent key, no waitForText")
+        XCTAssertEqual(t(.starting, .quit, hold).0, .idle)
+        XCTAssertEqual(t(.starting, .quit, hold).1, [], "never sent, so nothing to release")
+        // S1 (docs/review-4/hardening-review.md): acceptance line 12's "elsewhere quit changes nothing" had
+        // a behavior test for idle only. Loop the rest, as test 11 does for switchFailed — idle,
+        // waitingForText and passthrough, across every mode: quit's catch-all ignores mode entirely.
+        for s in SessionState.allCases where s != .starting && s != .listening {
+            for m in [hold, holdApp, toggle, toggleApp, own] {
+                XCTAssertEqual(t(s, .quit, m).0, s, "\(s) \(m)")
+                XCTAssertEqual(t(s, .quit, m).1, [], "\(s) \(m)")
+            }
+        }
+    }
 
     func testStateDiagramIsCurrent() throws {
         // Configurations. "Same key": the shortcut is the talk key, so a press passes through whenever the voice

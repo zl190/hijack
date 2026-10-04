@@ -7,25 +7,36 @@ import CoreServices
 // Only folders that exist are watched; the watch never climbs to a parent, which would be a busy folder
 // such as ~/Library/Application Support (review-4 S4). The app creates the config folder before this starts
 // (FM-18). A voice tool's folder that is missing means the tool is not installed: skipped.
-// This is the one live system service inside Core: the test drives it with a temporary folder.
+// The stream itself is the one live system service inside Core, behind the FolderEvents seam
+// (Sources/Core/Seams.swift): most tests drive a fake by hand, one keeps a real FSEvents stream.
 
 final class SettingsWatch {
-    private var stream: FSEventStreamRef?
-    private let onChange: () -> Void
+    private let events: FolderEvents
     /// The folders FSEvents watches: each file's folder, when it exists.
     let roots: [String]
-    var isWatching: Bool { stream != nil }
+    let isWatching: Bool
 
-    init(paths: [URL], latency: Double = 0.3, onChange: @escaping () -> Void) {
-        self.onChange = onChange
+    init(paths: [URL], latency: Double = 0.3, events: FolderEvents = LiveFolderEvents(), onChange: @escaping () -> Void) {
+        self.events = events
         // Watch each file's folder (a file replaced on save gets a new identity; the folder stays).
         roots = Array(Set(paths.map { $0.deletingLastPathComponent().path }))
             .filter { FileManager.default.fileExists(atPath: $0) }.sorted()
-        guard !roots.isEmpty else { return }
+        isWatching = events.start(roots: roots, latency: latency, onChange: onChange)
+    }
+}
+
+/// FSEvents, for real: the live `FolderEvents`.
+final class LiveFolderEvents: FolderEvents {
+    private var stream: FSEventStreamRef?
+    private var onChange: (() -> Void)?
+
+    @discardableResult func start(roots: [String], latency: Double, onChange: @escaping () -> Void) -> Bool {
+        guard !roots.isEmpty else { return false }
+        self.onChange = onChange
         var context = FSEventStreamContext(version: 0, info: Unmanaged.passUnretained(self).toOpaque(),
                                            retain: nil, release: nil, copyDescription: nil)
         let callback: FSEventStreamCallback = { _, info, _, _, _, _ in
-            Unmanaged<SettingsWatch>.fromOpaque(info!).takeUnretainedValue().onChange()
+            Unmanaged<LiveFolderEvents>.fromOpaque(info!).takeUnretainedValue().onChange?()
         }
         // NoDefer: FSEvents sends the first change after a quiet period immediately (FSEvents.h).
         // Measured on 2026-10-03, 8 config writes for each setting, 1.2 s apart:
@@ -36,9 +47,10 @@ final class SettingsWatch {
         stream = FSEventStreamCreate(nil, callback, &context, roots as CFArray,
                                      FSEventStreamEventId(kFSEventStreamEventIdSinceNow), latency,
                                      FSEventStreamCreateFlags(kFSEventStreamCreateFlagFileEvents | kFSEventStreamCreateFlagNoDefer))
-        guard let stream else { return }
+        guard let stream else { return false }
         FSEventStreamSetDispatchQueue(stream, .main)
         FSEventStreamStart(stream)
+        return true
     }
 
     deinit {

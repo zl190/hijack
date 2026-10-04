@@ -2,6 +2,7 @@ import AppKit
 import ApplicationServices
 import ServiceManagement
 import SwiftUI
+import Sparkle
 
 // MARK: settings window — a view of ~/.config/hijack/config.json (the file stays the source of truth).
 // Every change is written to the file at once; hand edits show up within a second.
@@ -390,6 +391,40 @@ struct SourcesTab: View {
     }
 }
 
+/// In-app updates: two Sparkle settings and a manual check. Sparkle stores both values itself.
+struct UpdatesCard: View {
+    private var updater: SPUUpdater? { (NSApp.delegate as? AppDelegate)?.updater?.updater }
+    @State private var checksAutomatically = true
+    @State private var downloadsAutomatically = false
+    var body: some View {
+        Card(title: L("更新", "Updates")) {
+            if updater == nil {
+                Row(title: L("当前版本", "Version"), hint: appVersion, divider: false) {
+                    Text(noUpdateKeyText).font(.footnote).foregroundStyle(.secondary)
+                }
+            } else {
+            Row(title: L("自动检查更新", "Check for Updates Automatically"), hint: L("每天一次，发现新版本会先问你", "Once a day. Sparkle asks before it installs")) {
+                Toggle("", isOn: Binding(get: { checksAutomatically }, set: { v in
+                    updater?.automaticallyChecksForUpdates = v; checksAutomatically = v
+                })).toggleStyle(.switch).labelsHidden()
+            }
+            Row(title: L("自动下载并安装", "Download and Install Automatically")) {
+                Toggle("", isOn: Binding(get: { downloadsAutomatically }, set: { v in
+                    updater?.automaticallyDownloadsUpdates = v; downloadsAutomatically = v
+                })).toggleStyle(.switch).labelsHidden()
+            }
+            Row(title: L("当前版本", "Version"), hint: appVersion, divider: false) {
+                Button(L("现在检查", "Check Now")) { updater?.checkForUpdates() }
+            }
+            }
+        }
+        .onAppear {
+            checksAutomatically = updater?.automaticallyChecksForUpdates ?? true
+            downloadsAutomatically = updater?.automaticallyDownloadsUpdates ?? false
+        }
+    }
+}
+
 struct GeneralTab: View {
     @ObservedObject var store: SettingsStore
     var body: some View {
@@ -420,6 +455,7 @@ struct GeneralTab: View {
                     }.labelsHidden().frame(width: 130)
                 }
             }
+            UpdatesCard()
             Card {
                 Row(title: L("配置文件", "Config File"), hint: "~/.config/hijack/config.json", divider: false) {
                     Button(L("在编辑器中打开", "Open in Editor")) { (NSApp.delegate as? AppDelegate)?.openConfig() }
@@ -439,15 +475,17 @@ struct AdvancedTab: View {
     var body: some View {
         Page(store: store) {
             Card {
+                // Ranges shared with Config's load-time clamp and CLI.swift's `hijack set` (review-4 S5,
+                // Sources/Core/ConfigValues.swift): one source of truth for all three entry points.
                 Row(title: L("按住多久才开始", "Hold before starting"), hint: L("太短容易误触发", "Shorter means more accidental starts")) {
-                    stepper(store.holdDelay, range: 0.05...1, step: 0.05) { $0.holdDelay = $1 }
+                    stepper(store.holdDelay, range: holdDelayRange, step: 0.05) { $0.holdDelay = $1 }
                 }
                 Row(title: L("最多等文字上屏", "Longest wait for the text"), hint: L("说长段话时可以调大", "Raise it for long dictations")) {
-                    stepper(store.restoreTimeout, range: 1...15, step: 0.5) { $0.restoreTimeout = $1 }
+                    stepper(store.restoreTimeout, range: restoreTimeoutRange, step: 0.5) { $0.restoreTimeout = $1 }
                 }
                 Row(title: L("语音工具没有窗口时等待", "Wait when the voice tool shows no window"),
                     hint: L("看不到它何时上屏完，就固定等这么久", "Hijack can't tell when it's done, so it waits this long"), divider: false) {
-                    stepper(store.fallbackDelay, range: 0.5...10, step: 0.5) { $0.fallbackDelay = $1 }
+                    stepper(store.fallbackDelay, range: fallbackDelayRange, step: 0.5) { $0.fallbackDelay = $1 }
                 }
             }
             Card {
