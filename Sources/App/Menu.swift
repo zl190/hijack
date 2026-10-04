@@ -92,16 +92,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         // Reopens Hijack after an installer replaces it (brew can't: its install sandbox denies launching apps).
         // The system keeps the plist from registration time, so re-register when the bundled one changes.
-        // Review-5 #16: read the status first and register only from .notRegistered — the old code compared
-        // against `!= .enabled`, so a pending .requiresApproval re-ran unregister+register on every launch
-        // with nothing for it to fix, and every error from either call was swallowed (try?).
+        // Review-5 #16, review-6 M2: read the status first and register from .notRegistered (never
+        // registered) or .notFound (the reviewer found a never-registered agent on macOS 27.0 reports
+        // .notFound, not .notRegistered) — the old code compared against `!= .enabled`, so a pending
+        // .requiresApproval re-ran unregister+register on every launch with nothing for it to fix, and
+        // every error from either call was swallowed (try?).
         let plist = "com.zl190.hijack.relauncher.plist"
         let relauncher = SMAppService.agent(plistName: plist)
         let current = (try? Data(contentsOf: Bundle.main.bundleURL.appendingPathComponent("Contents/Library/LaunchAgents/" + plist)))?
             .base64EncodedString()
         let plistChanged = UserDefaults.standard.string(forKey: "relauncherPlist") != current
         switch relauncher.status {
-        case .notRegistered:
+        case .notRegistered, .notFound:
             do {
                 try relauncher.register()
                 UserDefaults.standard.set(current, forKey: "relauncherPlist")
@@ -112,10 +114,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 try relauncher.register()
                 UserDefaults.standard.set(current, forKey: "relauncherPlist")
             } catch { log("relauncher agent re-register failed: \(error)") }
+        case .enabled:
+            break
         case .requiresApproval:
             log("relauncher agent needs approval in System Settings › General › Login Items")
-        default:
+        @unknown default:
+            log("relauncher agent status unknown")
+        }
+        // Review-6 M2 ("same for the login item"): Open at Login (Settings.swift) only ever registers or
+        // unregisters on an explicit toggle — unlike the relauncher, there is no launch-time auto-register
+        // to fix here, since the user, not Hijack, decides whether this one is on. Still log the same two
+        // cases the relauncher does, so a pending approval or a future status shows up in the field log
+        // even when Settings is never opened.
+        switch SMAppService.mainApp.status {
+        case .requiresApproval:
+            log("login item needs approval in System Settings › General › Login Items")
+        case .notRegistered, .notFound, .enabled:
             break
+        @unknown default:
+            log("login item status unknown")
         }
         if !AXIsProcessTrusted() {  // first run: the window explains what's missing; the system prompt adds us to the list
             SettingsWindowController.show()
