@@ -24,6 +24,14 @@ SPARKLE_DIR="$(scripts/fetch-sparkle.sh --print-dir)"
 # The binary comes from SwiftPM (Package.swift: targets HijackCore and Hijack). build.sh assembles the bundle.
 swift build -c release --product Hijack
 cp "$(swift build -c release --show-bin-path)/Hijack" "$APP/Contents/MacOS/Hijack"
+# SwiftPM adds rpaths for the toolchain and @loader_path. A library planted there would load with the
+# app's Accessibility grant (review 6, M1). Keep the system Swift runtime and our Frameworks folder only.
+BIN="$APP/Contents/MacOS/Hijack"
+for rp in $(otool -l "$BIN" | awk '/LC_RPATH/{f=1} f&&/path /{print $2; f=0}'); do
+  case "$rp" in /usr/lib/swift|@executable_path/../Frameworks) ;; *) install_name_tool -delete_rpath "$rp" "$BIN" ;; esac
+done
+left="$(otool -l "$BIN" | awk '/LC_RPATH/{f=1} f&&/path /{print $2; f=0}' | sort | tr '\n' ' ')"
+[ "$left" = "/usr/lib/swift @executable_path/../Frameworks " ] || { echo "unexpected rpaths: $left"; exit 1; }
 mkdir -p "$APP/Contents/Frameworks"
 ditto "$SPARKLE_DIR/Sparkle.framework" "$APP/Contents/Frameworks/Sparkle.framework"
 rm -rf "$APP/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices"
