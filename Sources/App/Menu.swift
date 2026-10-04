@@ -224,8 +224,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let secureApp =
             engine.tap.secureInputOn ? (NSWorkspace.shared.frontmostApplication?.localizedName ?? L("另一个 app", "Another app")) : nil
         let fault = MenuFaults.firstLine(tapActive: engine.tap.isEnabled, stillHoldingTalkKey: stillHolding, secureInputApp: secureApp)
-        if !AXIsProcessTrusted() {
-            add(L("⚠︎ 需要辅助功能权限，点这里去允许…", "⚠︎ Needs Accessibility permission — Allow…"), #selector(openAccessibility))
+        if MenuFaults.showsStaleAccessibilityGuidance(trusted: AXIsProcessTrusted()) {
+            add("⚠︎ " + staleAccessibilityGuidance, #selector(openAccessibility))
         } else if let fault {
             switch fault {
             case .keyListenerOff:

@@ -20,6 +20,19 @@ func zh() -> Bool {
 }
 func L(_ zhText: String, _ en: String) -> String { zh() ? spaced(zhText) : en }
 
+// Review-5 #7 (stale-grant-guidance): the one wording for "Accessibility is not trusted" shared by the
+// menu first line, Settings' Try It card and `hijack doctor`. AXIsProcessTrusted() can't tell a first-time
+// grant from a signed build replacing an ad-hoc one (or the reverse), which leaves System Settings showing
+// the switch already on, so the same wording covers both. The decision to show it lives in
+// MenuFaults.showsStaleAccessibilityGuidance (Sources/Core/MenuState.swift) so it is unit-testable.
+// `hijack doctor` and the other CLI output stay English-only (keyOrigin, etc. do too), so it gets the
+// plain English constant instead of the L()-wrapped one the menu and Settings use.
+let staleAccessibilityGuidanceEnglish =
+    "Accessibility shows Hijack as allowed but the grant belongs to an older build. Turn it off and on again in System Settings, or remove Hijack from the list and add it again."
+var staleAccessibilityGuidance: String {
+    L("辅助功能里显示 Hijack 已允许，但这个授权来自旧版本。请在系统设置里把开关关掉再打开，或者先从列表里移除 Hijack 再重新添加。", staleAccessibilityGuidanceEnglish)
+}
+
 // Chinese typesetting: one space between CJK and Latin letters/digits, so "按住右 Option用Handy听写"
 // reads "按住右 Option 用 Handy 听写". Applied to every Chinese string, so copy never spaces by hand.
 func spaced(_ s: String) -> String {

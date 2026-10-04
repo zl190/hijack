@@ -324,12 +324,11 @@ struct DictationTab: View {
                 }
             }
             Card(title: L("试一下", "Try It")) {
-                if !store.trusted {
-                    Row(
-                        title: L("还没有辅助功能权限", "No Accessibility permission yet"),
-                        hint: L("没有它，Hijack 收不到快捷键", "Without it Hijack can't see the shortcut")
-                    ) {
-                        Button(L("去允许…", "Allow…")) { if let accessibilityURL { NSWorkspace.shared.open(accessibilityURL) } }
+                if MenuFaults.showsStaleAccessibilityGuidance(trusted: store.trusted) {
+                    Row(title: L("辅助功能未生效", "Accessibility isn't working"), hint: staleAccessibilityGuidance) {
+                        Button(L("去系统设置…", "Open System Settings…")) {
+                            if let accessibilityURL { NSWorkspace.shared.open(accessibilityURL) }
+                        }
                     }
                 }
                 HStack(spacing: 12) {
