@@ -25,6 +25,8 @@ Or install the latest release with:
 curl -fsSL https://raw.githubusercontent.com/zl190/hijack/main/install.sh | sh
 ```
 
+The install script checks the download's checksum and signature before it touches `/Applications`.
+
 ## Get started
 
 1. Open Hijack and allow it in **System Settings → Privacy & Security → Accessibility**.

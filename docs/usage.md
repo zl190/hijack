@@ -1,6 +1,7 @@
 # Using Hijack
 
-[Installation and quick start](../README.md#install)
+[Installation and quick start](../README.md#install). The install script checks the download's
+checksum and signature before it touches `/Applications`.
 
 ## Settings
 
