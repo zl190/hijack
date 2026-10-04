@@ -30,7 +30,8 @@ BIN="$APP/Contents/MacOS/Hijack"
 for rp in $(otool -l "$BIN" | awk '/LC_RPATH/{f=1} f&&/path /{print $2; f=0}'); do
   case "$rp" in /usr/lib/swift|@executable_path/../Frameworks) ;; *) install_name_tool -delete_rpath "$rp" "$BIN" ;; esac
 done
-left="$(otool -l "$BIN" | awk '/LC_RPATH/{f=1} f&&/path /{print $2; f=0}' | sort | tr '\n' ' ')"
+# LC_ALL=C: the sort order must not depend on the machine's locale (the ci runner sorted "@" first).
+left="$(otool -l "$BIN" | awk '/LC_RPATH/{f=1} f&&/path /{print $2; f=0}' | LC_ALL=C sort | tr '\n' ' ')"
 [ "$left" = "/usr/lib/swift @executable_path/../Frameworks " ] || { echo "unexpected rpaths: $left"; exit 1; }
 mkdir -p "$APP/Contents/Frameworks"
 ditto "$SPARKLE_DIR/Sparkle.framework" "$APP/Contents/Frameworks/Sparkle.framework"
