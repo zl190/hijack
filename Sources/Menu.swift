@@ -316,7 +316,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(checkForUpdatesItem())
         let settings = add(L("设置…", "Settings…"), #selector(openSettings))
         settings.keyEquivalent = ","; settings.keyEquivalentModifierMask = .command
-        if #available(macOS 27.0, *) { settings.preferredImageVisibility = .hidden }  // no auto icon: keep titles aligned
+        // No auto icon, so the titles stay aligned. The API is in the macOS 27 SDK (Xcode 27, Swift 6.4);
+        // older toolchains skip it at compile time, and older systems skip it at run time.
+        #if compiler(>=6.4)
+            if #available(macOS 27.0, *) { settings.preferredImageVisibility = .hidden }
+        #endif
         menu.addItem(.separator())
         menu.addItem(
             NSMenuItem(title: L("退出 \(appName)", "Quit \(appName)"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
