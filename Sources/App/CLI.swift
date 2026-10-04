@@ -424,7 +424,11 @@ func cliStats(_ args: [String], json: Bool) -> Int32 {
 /// elsewhere in `d` would otherwise be the only way to tell "no payloads yet" from "all zero".
 private func systemJSON(_ m: MetricsSummary, hasPayloads: Bool) -> [String: Any] {
     guard hasPayloads else { return ["hasPayloads": false] }
-    var d: [String: Any] = ["hasPayloads": true, "hangs": m.hangCount, "crashes": m.crashCount, "cpuSecondsByDay": m.cpuSecondsByDay]
+    var d: [String: Any] = [
+        "hasPayloads": true, "hangs": m.hangCount, "crashes": m.crashCount, "cpuSecondsByDay": m.cpuSecondsByDay,
+        // review 6 (S1c): a key that existed but did not parse must be counted here, not read as a silent 0/absent.
+        "parseWarnings": m.parseWarnings,
+    ]
     if let v = m.longestHangSeconds { d["longestHangSeconds"] = v }
     if let v = m.peakMemoryBytes { d["peakMemoryBytes"] = v }
     if let v = m.lastCrashDate { d["lastCrashDate"] = ISO8601DateFormatter().string(from: v) }
@@ -433,7 +437,10 @@ private func systemJSON(_ m: MetricsSummary, hasPayloads: Bool) -> [String: Any]
 
 /// The "System (MetricKit)" block of `hijack stats` (text form): hang count and longest hang, crash
 /// count and last crash date, CPU time per day, peak memory — or one line when nothing has arrived yet.
+/// review 6 (S1c): a field whose key existed but never parsed prints "n/a (unrecognized format)" rather
+/// than being silently absent, which would read as "Hijack has no data" instead of "Hijack could not read it".
 private func printSystemBlock(_ m: MetricsSummary, hasPayloads: Bool) {
+    let unrecognized = "n/a (unrecognized format)"
     func row(_ label: String, _ text: String) { print(label.padding(toLength: 24, withPad: " ", startingAt: 0) + text) }
     guard hasPayloads else {
         row("System (MetricKit)", "no payloads yet (macOS delivers them about once a day)")
@@ -444,8 +451,18 @@ private func printSystemBlock(_ m: MetricsSummary, hasPayloads: Bool) {
         let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"; return f
     }()
     print("System (MetricKit)")
-    row("  Hangs", "\(m.hangCount)" + (m.longestHangSeconds.map { "  (longest \(seconds($0)))" } ?? ""))
+    let hangSuffix =
+        m.longestHangSeconds.map { "  (longest \(seconds($0)))" } ?? (m.longestHangUnparsed ? "  (longest \(unrecognized))" : "")
+    row("  Hangs", "\(m.hangCount)" + hangSuffix)
     row("  Crashes", "\(m.crashCount)" + (m.lastCrashDate.map { "  (last \(day.string(from: $0)))" } ?? ""))
-    for (d, cpu) in m.cpuSecondsByDay.sorted(by: { $0.key < $1.key }) { row("  CPU time \(d)", seconds(cpu)) }
-    if let peak = m.peakMemoryBytes { row("  Peak memory", String(format: "%.1f MB", peak / 1e6)) }
+    if m.cpuSecondsByDay.isEmpty, m.cpuTimeUnparsed {
+        row("  CPU time", unrecognized)
+    } else {
+        for (d, cpu) in m.cpuSecondsByDay.sorted(by: { $0.key < $1.key }) { row("  CPU time \(d)", seconds(cpu)) }
+    }
+    if let peak = m.peakMemoryBytes {
+        row("  Peak memory", String(format: "%.1f MB", peak / 1e6))
+    } else if m.peakMemoryUnparsed {
+        row("  Peak memory", unrecognized)
+    }
 }

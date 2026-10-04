@@ -1,0 +1,7 @@
+{
+  "timeStampBegin": "2026-10-15T00:00:00.000+0000",
+  "timeStampEnd": "2026-10-16T00:00:00.000+0000",
+  "hangDiagnostics": [
+    { "hangDuration": "not a duration", "applicationVersion": "1.2.0" }
+  ]
+}
