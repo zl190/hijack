@@ -617,6 +617,11 @@ struct AdvancedTab: View {
 final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     static var shared: SettingsWindowController?
 
+    // Review-5 #18: the tab titles and symbols, as (symbol, title-provider) pairs in the same order the
+    // tabs were added — kept so relocalizeChrome() can rebuild each tab's label and the window's title
+    // from L() again after a language change, instead of only at launch.
+    private var tabSymbols: [(symbol: String, title: () -> String)] = []
+
     static func show(tab: Int? = nil) {
         let c = shared ?? SettingsWindowController()
         shared = c
@@ -650,7 +655,30 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         self.init(window: window)
         window.delegate = self
         window.center()
+        tabSymbols = [
+            ("mic", { L("听写", "Dictation") }), ("waveform", { L("语音来源", "Voice Source") }),
+            ("gearshape", { L("通用", "General") }), ("slider.horizontal.3", { L("高级", "Advanced") }),
+        ]
+        // AppDelegate posts this (object: nil) on every settings change, including a language switch.
+        NotificationCenter.default.addObserver(forName: .hijackSettingsChanged, object: nil, queue: .main) { [weak self] _ in
+            self?.relocalizeChrome()
+        }
+    }
+
+    // Review-5 #18: the window title and tab labels were only ever set once, at the language the app
+    // launched with. Rebuild them from L() on every settings change (a language switch posts the same
+    // notification as everything else), so they follow the picker with no relaunch.
+    func relocalizeChrome() {
+        guard let tabs = window?.contentViewController as? NSTabViewController else { return }
+        for (item, (_, title)) in zip(tabs.tabViewItems, tabSymbols) {
+            let t = title()
+            item.label = t
+            item.image?.accessibilityDescription = t
+        }
+        window?.title = L("\(appName) 设置", "\(appName) Settings")
     }
 
     func windowWillClose(_ n: Notification) { SettingsStore.shared.stopRecording(); SettingsStore.shared.stopLive() }
+
+    deinit { NotificationCenter.default.removeObserver(self) }
 }
