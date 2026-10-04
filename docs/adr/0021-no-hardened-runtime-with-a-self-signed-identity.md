@@ -31,12 +31,17 @@ not certificates. Two binaries with the same self-signed certificate still fail 
 
 ## Decision
 
-Do not sign with the hardened runtime while the identity is self-signed.
+Do not sign with the hardened runtime for 1.2.0. Option 1 below stays open.
 
 The two ways out, and why neither is taken now:
 
-1. The entitlement `com.apple.security.cs.disable-library-validation`. It turns the check off, so the
-   runtime no longer protects against the main threat. The flag would then exist for appearance only.
+1. The entitlement `com.apple.security.cs.disable-library-validation`. It turns off library validation
+   only. The hardened runtime still blocks `DYLD_INSERT_LIBRARIES` and other `DYLD_*` variables, and it
+   still blocks a debugger without the debugging entitlement. What it no longer blocks is a library
+   loaded from a path the app searches; review 6 (M1) closed that path in `build.sh` by keeping two
+   rpaths only. This option is worth a second live test: Sparkle's `Autoupdate` and `Updater.app` run as
+   separate processes, so they are not subject to the app's library validation, but the updater's
+   behavior under the hardened runtime is not verified. Revisit for 1.2.1 with that test.
 2. A Developer ID certificate. It carries a Team ID, so library validation accepts the re-signed framework.
    This costs an Apple Developer account. It also changes the designated requirement, so every user grants
    Accessibility again once. Revisit when the user count makes the account worth it.
