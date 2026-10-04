@@ -1,6 +1,7 @@
-import Foundation
 import CoreGraphics
+import Foundation
 import XCTest
+
 @testable import HijackCore
 
 // Fakes for the six seams (Sources/Core/Seams.swift). Each one records what Engine asked for and can fail on demand.
@@ -35,7 +36,7 @@ final class FakeClock: Scheduler {
 
 final class FakeKeys: KeyPoster {
     var posted: [(key: KeySpec, down: Bool)] = []
-    var failNext = 0                       // the next N posts return false (FM-08)
+    var failNext = 0  // the next N posts return false (FM-08)
     @discardableResult func post(_ key: KeySpec, down: Bool) -> Bool {
         if failNext > 0 { failNext -= 1; return false }
         posted.append((key, down)); return true
@@ -45,8 +46,8 @@ final class FakeKeys: KeyPoster {
 
 final class FakeSources: InputSources {
     var currentID: String?
-    var applies = true                     // select changes currentID
-    var refuse: Set<String> = []           // select returns false for these (FM-16)
+    var applies = true  // select changes currentID
+    var refuse: Set<String> = []  // select returns false for these (FM-16)
     var selected: [String] = []
     var reads = 0
     init(_ current: String?) { currentID = current }
@@ -64,7 +65,7 @@ final class FakeTap: TapControl {
     var installResult = true
     var installed = false
     var enabled = false
-    var enableFails = 0                    // the next N enables do nothing (FM-02)
+    var enableFails = 0  // the next N enables do nothing (FM-02)
     var keysDown: Set<Int> = []
     var flagsDown: CGEventFlags = []
     var secureInputOn = false
@@ -95,7 +96,7 @@ final class FakeProbes: Probes {
 final class FakeSink: Sink {
     var lines: [String] = []
     var traces: [String] = []
-    var keepTraces = true                  // false: nobody streams the debug log, the string must not be built
+    var keepTraces = true  // false: nobody streams the debug log, the string must not be built
     var reports: [(phase: String, detail: String)] = []
     var states: [(trusted: Bool, tapActive: Bool)] = []
     func log(_ line: String) { lines.append(line) }
@@ -130,7 +131,7 @@ final class Rig {
     static let voice = "com.tencent.inputmethod.wetype.pinyin"
 
     var plan: Plan
-    var planReads = 0   // how many times Engine called the plan closure (review-5 #3: this stands in for a provider's file read)
+    var planReads = 0  // how many times Engine called the plan closure (review-5 #3: this stands in for a provider's file read)
     let clock = FakeClock()
     let keys = FakeKeys()
     let sources: FakeSources
@@ -140,12 +141,16 @@ final class Rig {
     private(set) var engine: Engine!
 
     init(toggle: Bool = false, switchesInput: Bool = true, trigger: KeySpec = Rig.fn, current: String? = Rig.english, start: Bool = true) {
-        plan = Plan(trigger: trigger, providerID: Rig.voice, switchesInput: switchesInput, voiceID: Rig.voice, voiceName: "WeType",
-                    forwardKey: Rig.fn, style: "hold", toggle: toggle, stopOnAnyKey: true,
-                    holdDelay: 0.2, restoreTimeout: 5.0, fallbackDelay: 2.5)
+        plan = Plan(
+            trigger: trigger, providerID: Rig.voice, switchesInput: switchesInput, voiceID: Rig.voice, voiceName: "WeType",
+            forwardKey: Rig.fn, style: "hold", toggle: toggle, stopOnAnyKey: true,
+            holdDelay: 0.2, restoreTimeout: 5.0, fallbackDelay: 2.5)
         sources = FakeSources(current)
-        engine = Engine(plan: { [unowned self] in self.planReads += 1; return self.plan },
-                        deps: Deps(keys: keys, sources: sources, tap: tap, probes: probes, clock: clock, sink: sink))
+        engine = Engine(
+            plan: { [unowned self] in
+                self.planReads += 1; return self.plan
+            },
+            deps: Deps(keys: keys, sources: sources, tap: tap, probes: probes, clock: clock, sink: sink))
         if start { engine.start() }
     }
 

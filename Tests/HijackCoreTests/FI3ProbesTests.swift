@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import HijackCore
 
 // FI-3: the voice tool's window and microphone are not where we expect (docs/fmea.md FM-12, 13, 14, 15).

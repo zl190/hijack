@@ -1,8 +1,8 @@
 import AppKit
 import ApplicationServices
 import ServiceManagement
-import SwiftUI
 import Sparkle
+import SwiftUI
 
 // MARK: settings window — a view of ~/.config/hijack/config.json (the file stays the source of truth).
 // Every change is written to the file at once; hand edits show up within a second.
@@ -36,18 +36,22 @@ final class SettingsStore: ObservableObject {
     @Published var trusted: Bool = false
     @Published var configError: String?
     @Published var recording: RecordTarget?
-    @Published var live: String = ""          // what the engine is doing right now
-    @Published var last: String = ""          // how the last dictation went
+    @Published var live: String = ""  // what the engine is doing right now
+    @Published var last: String = ""  // how the last dictation went
 
     private var timer: Timer?
     /// While the window is open: Accessibility permission and the running state have no file to watch.
-    func startLive() { timer?.invalidate(); timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.refresh() } }
+    func startLive() {
+        timer?.invalidate(); timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.refresh() }
+    }
     func stopLive() { timer?.invalidate(); timer = nil }
     private var monitor: Any?
 
     init() {
         refresh()
-        NotificationCenter.default.addObserver(forName: .hijackSettingsChanged, object: nil, queue: .main) { [weak self] _ in self?.refresh() }
+        NotificationCenter.default.addObserver(forName: .hijackSettingsChanged, object: nil, queue: .main) { [weak self] _ in
+            self?.refresh()
+        }
         NotificationCenter.default.addObserver(forName: .hijackActivity, object: nil, queue: .main) { [weak self] n in
             let phase = n.userInfo?["phase"] as? String ?? "", detail = n.userInfo?["detail"] as? String ?? ""
             switch phase {
@@ -78,8 +82,9 @@ final class SettingsStore: ObservableObject {
         if !rows.contains(where: { $0.id == c.voiceInput }) { rows.append(voiceProvider(for: c.voiceInput)) }
         sources = rows.map { p in
             let d = p.detected()
-            return SourceRow(id: p.id, name: p.name, detectedKey: d.key, userKey: c.voiceKeys[p.id], readsSettings: p.readsSettings,
-                             style: c.voiceStyles[p.id] ?? d.style ?? "hold", styleIsSet: c.voiceStyles[p.id] != nil)
+            return SourceRow(
+                id: p.id, name: p.name, detectedKey: d.key, userKey: c.voiceKeys[p.id], readsSettings: p.readsSettings,
+                style: c.voiceStyles[p.id] ?? d.style ?? "hold", styleIsSet: c.voiceStyles[p.id] != nil)
         }
     }
 
@@ -99,13 +104,14 @@ final class SettingsStore: ObservableObject {
     func startRecording(_ target: RecordTarget) {
         stopRecording()
         recording = target
-        engine?.paused = true            // otherwise pressing the current trigger would start a dictation
+        engine?.paused = true  // otherwise pressing the current trigger would start a dictation
         var downModifier: Int?, sawOtherKey = false
         monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged]) { [weak self] e in
             guard let self, let target = self.recording else { return e }
             if e.type == .keyDown {
                 sawOtherKey = true
-                if e.keyCode == 53 && e.modifierFlags.intersection(.deviceIndependentFlagsMask).isEmpty { self.stopRecording(); return nil }  // Esc
+                // Esc with no modifier cancels the recording.
+                if e.keyCode == 53 && e.modifierFlags.intersection(.deviceIndependentFlagsMask).isEmpty { self.stopRecording(); return nil }
                 let flags = e.modifierFlags
                 var mods = Set<Mod>()
                 if flags.contains(.control) { mods.insert(.ctrl) }
@@ -120,8 +126,11 @@ final class SettingsStore: ObservableObject {
             let code = Int(e.keyCode)
             guard let n = KeySpec(code: code).named, n.flag != nil else { return nil }
             let isDown = n.device == 0 ? e.modifierFlags.contains(.function) : (UInt64(e.modifierFlags.rawValue) & n.device) != 0
-            if isDown { downModifier = code; sawOtherKey = false }
-            else if downModifier == code && !sawOtherKey { self.finish(target, KeySpec(code: code)) }
+            if isDown {
+                downModifier = code; sawOtherKey = false
+            } else if downModifier == code && !sawOtherKey {
+                self.finish(target, KeySpec(code: code))
+            }
             return nil
         }
     }
@@ -149,7 +158,9 @@ struct KeyRecorder: View {
     let key: KeySpec
     var body: some View {
         let on = store.recording == target
-        Button { on ? store.stopRecording() : store.startRecording(target) } label: {
+        Button {
+            on ? store.stopRecording() : store.startRecording(target)
+        } label: {
             Text(on ? L("按下想用的键…（Esc 取消）", "Press a Key… (Esc Cancels)") : key.name)
                 .font(.system(size: 12, weight: .medium))
                 .frame(minWidth: 96).padding(.horizontal, 8).frame(height: 22)
@@ -190,7 +201,7 @@ struct Card<Content: View>: View {
         VStack(alignment: .leading, spacing: 6) {
             if let title { Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(.secondary).padding(.leading, 6) }
             VStack(alignment: .leading, spacing: 0) { content }
-                .frame(maxWidth: .infinity, alignment: .leading)   // every card spans the page, whatever its content
+                .frame(maxWidth: .infinity, alignment: .leading)  // every card spans the page, whatever its content
                 .padding(.horizontal, 14).padding(.vertical, 4)
                 .modifier(GlassCard())
         }
@@ -273,46 +284,68 @@ struct DictationTab: View {
     var body: some View {
         Page(store: store) {
             Card(title: L("听写方式", "How You Dictate")) {
-                ChoiceRow(icon: "hand.raised", title: L("按住说话", "Hold to Talk"), detail: L("按住说，松开停", "Hold the key while you speak"),
-                          selected: store.triggerMode == "hold") { store.edit { $0.triggerMode = "hold" } }
-                ChoiceRow(icon: "hand.tap", title: L("点按开始，再点停止（免按）", "Tap to Start, Tap to Stop"), detail: L("点一下开始，再点一下停止", "Tap once to start, again to stop"),
-                          selected: store.triggerMode == "toggle", divider: store.triggerMode == "toggle") { store.edit { $0.triggerMode = "toggle" } }
+                ChoiceRow(
+                    icon: "hand.raised", title: L("按住说话", "Hold to Talk"), detail: L("按住说，松开停", "Hold the key while you speak"),
+                    selected: store.triggerMode == "hold"
+                ) { store.edit { $0.triggerMode = "hold" } }
+                ChoiceRow(
+                    icon: "hand.tap", title: L("点按开始，再点停止（免按）", "Tap to Start, Tap to Stop"),
+                    detail: L("点一下开始，再点一下停止", "Tap once to start, again to stop"),
+                    selected: store.triggerMode == "toggle", divider: store.triggerMode == "toggle"
+                ) { store.edit { $0.triggerMode = "toggle" } }
                 if store.triggerMode == "toggle" {
                     Row(title: L("按任意键也可停止", "Any Key Also Stops"), divider: false) {
-                        Toggle("", isOn: Binding(get: { store.stopOnAnyKey }, set: { v in store.edit { $0.stopOnAnyKey = v } })).toggleStyle(.switch).labelsHidden()
+                        Toggle("", isOn: Binding(get: { store.stopOnAnyKey }, set: { v in store.edit { $0.stopOnAnyKey = v } }))
+                            .toggleStyle(.switch).labelsHidden()
                     }
                 }
             }
             Card(title: L("快捷键", "Shortcut")) {
-                Row(title: L("按这个键听写", "Key you press"),
+                Row(
+                    title: L("按这个键听写", "Key you press"),
                     hint: store.trigger == nil ? L("同\(store.currentName)里的说话键", "Same as \(store.currentName)'s talk key") : nil,
-                    divider: store.trigger != nil) {
+                    divider: store.trigger != nil
+                ) {
                     KeyRecorder(store: store, target: .trigger, key: store.effectiveTrigger)
                 }
                 if store.trigger != nil {
-                    Row(title: L("改回同说话键（\(store.model.forwardKey.name)）", "Use Talk Key (\(store.model.forwardKey.name))"), divider: false) {
+                    Row(title: L("改回同说话键（\(store.model.forwardKey.name)）", "Use Talk Key (\(store.model.forwardKey.name))"), divider: false)
+                    {
                         Button(L("改回", "Reset")) { store.edit { $0.trigger = nil } }
                     }
                 }
                 if let t = store.trigger, !t.modifierOnly, t.mods.isEmpty, t.code < 96 {
-                    Label(L("单独一个普通键当快捷键，平时打字按到它也会触发", "A plain key alone also triggers while you type"), systemImage: "exclamationmark.triangle")
-                        .font(.callout).foregroundStyle(.orange).padding(.vertical, 8)
+                    Label(
+                        L("单独一个普通键当快捷键，平时打字按到它也会触发", "A plain key alone also triggers while you type"),
+                        systemImage: "exclamationmark.triangle"
+                    )
+                    .font(.callout).foregroundStyle(.orange).padding(.vertical, 8)
                 }
             }
             Card(title: L("试一下", "Try It")) {
                 if !store.trusted {
-                    Row(title: L("还没有辅助功能权限", "No Accessibility permission yet"), hint: L("没有它，Hijack 收不到快捷键", "Without it Hijack can't see the shortcut")) {
+                    Row(
+                        title: L("还没有辅助功能权限", "No Accessibility permission yet"),
+                        hint: L("没有它，Hijack 收不到快捷键", "Without it Hijack can't see the shortcut")
+                    ) {
                         Button(L("去允许…", "Allow…")) { NSWorkspace.shared.open(accessibilityURL) }
                     }
                 }
                 HStack(spacing: 12) {
-                    if store.live.isEmpty { Image(systemName: "mic").font(.title3).foregroundStyle(.secondary).frame(width: 28) }
-                    else { Bars(live: store.live == L("正在听…", "Listening…")).frame(width: 28) }
+                    if store.live.isEmpty {
+                        Image(systemName: "mic").font(.title3).foregroundStyle(.secondary).frame(width: 28)
+                    } else {
+                        Bars(live: store.live == L("正在听…", "Listening…")).frame(width: 28)
+                    }
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(store.live.isEmpty
-                             ? (store.triggerMode == "toggle" ? L("点按\(store.effectiveTrigger.name)，说一句，再点一下", "Tap \(store.effectiveTrigger.name), say something, tap again")
-                                                             : L("按住\(store.effectiveTrigger.name)说一句", "Hold \(store.effectiveTrigger.name) and say something"))
-                             : store.live)
+                        Text(
+                            store.live.isEmpty
+                                ? (store.triggerMode == "toggle"
+                                    ? L(
+                                        "点按\(store.effectiveTrigger.name)，说一句，再点一下",
+                                        "Tap \(store.effectiveTrigger.name), say something, tap again")
+                                    : L("按住\(store.effectiveTrigger.name)说一句", "Hold \(store.effectiveTrigger.name) and say something"))
+                                : store.live)
                         if !store.last.isEmpty { Text(store.last).font(.footnote).foregroundStyle(.secondary) }
                     }
                     Spacer()
@@ -344,31 +377,47 @@ struct SourcesTab: View {
         Page(store: store) {
             if store.sources.isEmpty {
                 Card {
-                    Text(L("没有找到已安装的语音工具。支持：微信输入法、豆包输入法、搜狗输入法、Handy。",
-                           "No supported voice tool is installed. Supported: WeType, Doubao, Sogou, Handy."))
-                        .foregroundStyle(.secondary).padding(.vertical, 12)
+                    Text(
+                        L(
+                            "没有找到已安装的语音工具。支持：微信输入法、豆包输入法、搜狗输入法、Handy。",
+                            "No supported voice tool is installed. Supported: WeType, Doubao, Sogou, Handy.")
+                    )
+                    .foregroundStyle(.secondary).padding(.vertical, 12)
                 }
             } else {
                 Card(title: L("语音来源", "Voice Source")) {
                     ForEach(Array(store.sources.enumerated()), id: \.element.id) { i, src in
-                        ChoiceRow(icon: src.id.hasPrefix("app:") ? "app" : "keyboard", title: src.name,
-                                  detail: src.id.hasPrefix("app:") ? L("听写 app，Hijack 替你按它的快捷键", "Dictation app; Hijack presses its hotkey")
-                                                                   : L("输入法，Hijack 切过去用完再切回", "Input method; Hijack switches to it and back"),
-                                  selected: src.id == store.voiceInput, divider: i < store.sources.count - 1) { store.edit { $0.voiceInput = src.id } }
+                        ChoiceRow(
+                            icon: src.id.hasPrefix("app:") ? "app" : "keyboard", title: src.name,
+                            detail: src.id.hasPrefix("app:")
+                                ? L("听写 app，Hijack 替你按它的快捷键", "Dictation app; Hijack presses its hotkey")
+                                : L("输入法，Hijack 切过去用完再切回", "Input method; Hijack switches to it and back"),
+                            selected: src.id == store.voiceInput, divider: i < store.sources.count - 1
+                        ) { store.edit { $0.voiceInput = src.id } }
                     }
                 }
                 if let s = store.sources.first(where: { $0.id == store.voiceInput }) {
                     Card(title: L("\(s.name)的设置", s.name)) {
-                        Row(title: L("说话键", "Talk Key"),
-                            hint: L("\(s.name)在它自己的设置里用来说话的键，Hijack 会替你按它", "The key \(s.name) uses for talking, set in its own settings; Hijack presses it for you")) {
+                        Row(
+                            title: L("说话键", "Talk Key"),
+                            hint: L(
+                                "\(s.name)在它自己的设置里用来说话的键，Hijack 会替你按它",
+                                "The key \(s.name) uses for talking, set in its own settings; Hijack presses it for you")
+                        ) {
                             VStack(alignment: .trailing, spacing: 4) {
-                                KeyRecorder(store: store, target: .voiceKey(s.id), key: s.userKey ?? s.detectedKey ?? KeySpec.named("right_option")!)
+                                KeyRecorder(
+                                    store: store, target: .voiceKey(s.id), key: s.userKey ?? s.detectedKey ?? KeySpec.named("right_option")!
+                                )
                                 if s.userKey != nil {
-                                    Button(L("恢复自动检测", "Use Auto-Detect")) { store.edit { $0.voiceKeys[s.id] = nil } }.buttonStyle(.link).font(.footnote)
+                                    Button(L("恢复自动检测", "Use Auto-Detect")) { store.edit { $0.voiceKeys[s.id] = nil } }.buttonStyle(.link)
+                                        .font(.footnote)
                                 } else {
-                                    Text(s.detectedKey == nil ? L("⚠︎ 没读到，请录制", "⚠︎ Not found — record it")
-                                         : s.readsSettings ? L("自动检测", "Auto-Detected") : L("默认值，未验证", "Default, Unverified"))
-                                        .font(.footnote).foregroundStyle(s.detectedKey == nil || !s.readsSettings ? Color.orange : .secondary)
+                                    Text(
+                                        s.detectedKey == nil
+                                            ? L("⚠︎ 没读到，请录制", "⚠︎ Not found — record it")
+                                            : s.readsSettings ? L("自动检测", "Auto-Detected") : L("默认值，未验证", "Default, Unverified")
+                                    )
+                                    .font(.footnote).foregroundStyle(s.detectedKey == nil || !s.readsSettings ? Color.orange : .secondary)
                                 }
                             }
                         }
@@ -403,19 +452,32 @@ struct UpdatesCard: View {
                     Text(noUpdateKeyText).font(.footnote).foregroundStyle(.secondary)
                 }
             } else {
-            Row(title: L("自动检查更新", "Check for Updates Automatically"), hint: L("每天一次，发现新版本会先问你", "Once a day. Sparkle asks before it installs")) {
-                Toggle("", isOn: Binding(get: { checksAutomatically }, set: { v in
-                    updater?.automaticallyChecksForUpdates = v; checksAutomatically = v
-                })).toggleStyle(.switch).labelsHidden()
-            }
-            Row(title: L("自动下载并安装", "Download and Install Automatically")) {
-                Toggle("", isOn: Binding(get: { downloadsAutomatically }, set: { v in
-                    updater?.automaticallyDownloadsUpdates = v; downloadsAutomatically = v
-                })).toggleStyle(.switch).labelsHidden()
-            }
-            Row(title: L("当前版本", "Version"), hint: appVersion, divider: false) {
-                Button(L("现在检查", "Check Now")) { updater?.checkForUpdates() }
-            }
+                Row(
+                    title: L("自动检查更新", "Check for Updates Automatically"),
+                    hint: L("每天一次，发现新版本会先问你", "Once a day. Sparkle asks before it installs")
+                ) {
+                    Toggle(
+                        "",
+                        isOn: Binding(
+                            get: { checksAutomatically },
+                            set: { v in
+                                updater?.automaticallyChecksForUpdates = v; checksAutomatically = v
+                            })
+                    ).toggleStyle(.switch).labelsHidden()
+                }
+                Row(title: L("自动下载并安装", "Download and Install Automatically")) {
+                    Toggle(
+                        "",
+                        isOn: Binding(
+                            get: { downloadsAutomatically },
+                            set: { v in
+                                updater?.automaticallyDownloadsUpdates = v; downloadsAutomatically = v
+                            })
+                    ).toggleStyle(.switch).labelsHidden()
+                }
+                Row(title: L("当前版本", "Version"), hint: appVersion, divider: false) {
+                    Button(L("现在检查", "Check Now")) { updater?.checkForUpdates() }
+                }
             }
         }
         .onAppear {
@@ -431,23 +493,37 @@ struct GeneralTab: View {
         Page(store: store) {
             Card {
                 Row(title: L("辅助功能权限", "Accessibility"), divider: false) {
-                    if store.trusted { Label(L("已允许", "Allowed"), systemImage: "checkmark.circle.fill").foregroundStyle(.green) }
-                    else { Button(L("去允许…", "Allow…")) { NSWorkspace.shared.open(accessibilityURL) } }
+                    if store.trusted {
+                        Label(L("已允许", "Allowed"), systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                    } else {
+                        Button(L("去允许…", "Allow…")) { NSWorkspace.shared.open(accessibilityURL) }
+                    }
                 }
             }
             Card {
                 Row(title: L("开机启动", "Open at Login")) {
-                    Toggle("", isOn: Binding(get: { store.launchAtLogin }, set: { on in
-                        if on { try? SMAppService.mainApp.register() } else { try? SMAppService.mainApp.unregister() }
-                        store.refresh()
-                    })).toggleStyle(.switch).labelsHidden()
+                    Toggle(
+                        "",
+                        isOn: Binding(
+                            get: { store.launchAtLogin },
+                            set: { on in
+                                if on { try? SMAppService.mainApp.register() } else { try? SMAppService.mainApp.unregister() }
+                                store.refresh()
+                            })
+                    ).toggleStyle(.switch).labelsHidden()
                 }
                 Row(title: L("在菜单栏显示图标", "Show in Menu Bar")) {
-                    Toggle("", isOn: Binding(get: { store.showMenuBarIcon }, set: { v in store.edit { $0.showMenuBarIcon = v } })).toggleStyle(.switch).labelsHidden()
+                    Toggle("", isOn: Binding(get: { store.showMenuBarIcon }, set: { v in store.edit { $0.showMenuBarIcon = v } }))
+                        .toggleStyle(.switch).labelsHidden()
                 }
-                Row(title: L("在 Dock 显示图标", "Show in Dock"),
-                    hint: !store.showMenuBarIcon && !store.showDockIcon ? L("两个图标都关了：再次打开 Hijack 就能回到这里", "Both icons off: open Hijack again to come back here") : nil) {
-                    Toggle("", isOn: Binding(get: { store.showDockIcon }, set: { v in store.edit { $0.showDockIcon = v } })).toggleStyle(.switch).labelsHidden()
+                Row(
+                    title: L("在 Dock 显示图标", "Show in Dock"),
+                    hint: !store.showMenuBarIcon && !store.showDockIcon
+                        ? L("两个图标都关了：再次打开 Hijack 就能回到这里", "Both icons off: open Hijack again to come back here") : nil
+                ) {
+                    Toggle("", isOn: Binding(get: { store.showDockIcon }, set: { v in store.edit { $0.showDockIcon = v } })).toggleStyle(
+                        .switch
+                    ).labelsHidden()
                 }
                 Row(title: L("语言", "Language"), divider: false) {
                     Picker("", selection: Binding(get: { store.language }, set: { v in store.edit { $0.language = v } })) {
@@ -483,8 +559,10 @@ struct AdvancedTab: View {
                 Row(title: L("最多等文字上屏", "Longest wait for the text"), hint: L("说长段话时可以调大", "Raise it for long dictations")) {
                     stepper(store.restoreTimeout, range: restoreTimeoutRange, step: 0.5) { $0.restoreTimeout = $1 }
                 }
-                Row(title: L("语音工具没有窗口时等待", "Wait when the voice tool shows no window"),
-                    hint: L("看不到它何时上屏完，就固定等这么久", "Hijack can't tell when it's done, so it waits this long"), divider: false) {
+                Row(
+                    title: L("语音工具没有窗口时等待", "Wait when the voice tool shows no window"),
+                    hint: L("看不到它何时上屏完，就固定等这么久", "Hijack can't tell when it's done, so it waits this long"), divider: false
+                ) {
                     stepper(store.fallbackDelay, range: fallbackDelayRange, step: 0.5) { $0.fallbackDelay = $1 }
                 }
             }
@@ -505,7 +583,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         shared = c
         if let tab, let tabs = c.window?.contentViewController as? NSTabViewController { tabs.selectedTabViewItemIndex = tab }
         SettingsStore.shared.refresh(); SettingsStore.shared.startLive()
-        NSApp.activate(ignoringOtherApps: true)      // accessory apps otherwise open it behind other windows
+        NSApp.activate(ignoringOtherApps: true)  // accessory apps otherwise open it behind other windows
         c.window?.makeKeyAndOrderFront(nil)
     }
 
@@ -527,7 +605,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         tabs.addTabViewItem(tab(L("高级", "Advanced"), "slider.horizontal.3", AdvancedTab(store: store)))
         let window = NSWindow(contentViewController: tabs)
         window.styleMask = [.titled, .closable]
-        tabs.canPropagateSelectedChildViewControllerTitle = false   // keep one title; the toolbar shows the tab
+        tabs.canPropagateSelectedChildViewControllerTitle = false  // keep one title; the toolbar shows the tab
         window.title = L("\(appName) 设置", "\(appName) Settings")
         window.isReleasedWhenClosed = false
         self.init(window: window)

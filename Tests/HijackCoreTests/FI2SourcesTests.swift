@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import HijackCore
 
 // FI-2: the input source switch fails, is slow, or is not needed (docs/fmea.md FM-05, 06, 07, 16).
@@ -29,7 +30,7 @@ final class FI2SourcesTests: XCTestCase {
         r.sources.applies = false
         r.press()
         r.clock.advance(0.05)
-        r.sources.applies = true                               // the retry at 0.1 s will take
+        r.sources.applies = true  // the retry at 0.1 s will take
         r.clock.advance(0.3)
         XCTAssertTrue(r.sink.has("switch to \(Rig.voice) didn't stick, retry ok=true"))
         XCTAssertEqual(r.keys.count(Rig.fn, down: true), 1)
@@ -43,7 +44,7 @@ final class FI2SourcesTests: XCTestCase {
         r.press()
         r.clock.advance(0.5)
         XCTAssertEqual(r.keys.posted.count, 0)
-        r.sources.currentID = Rig.voice                         // the system caught up
+        r.sources.currentID = Rig.voice  // the system caught up
         r.clock.advance(0.1)
         XCTAssertEqual(r.keys.count(Rig.fn, down: true), 1)
         let sent = r.engine.record.keySentMs ?? -1
@@ -65,10 +66,10 @@ final class FI2SourcesTests: XCTestCase {
     // FM-07: a previous dictation's source must not leak into the next one.
     func testFM07_PreviousResetsPerDictation() {
         let r = Rig(trigger: KeySpec.named("right_option")!)
-        r.pressUntilListening(); r.release(); r.clock.advance(2.8)   // past the restore and its 0.1 s confirm
+        r.pressUntilListening(); r.release(); r.clock.advance(2.8)  // past the restore and its 0.1 s confirm
         XCTAssertEqual(r.sources.selected, [Rig.voice, Rig.english], "the first dictation switches there and back")
         XCTAssertEqual(r.sources.currentID, Rig.english)
-        r.sources.currentID = Rig.voice                         // the user picked WeType by hand
+        r.sources.currentID = Rig.voice  // the user picked WeType by hand
         r.pressUntilListening(); r.release(); r.clock.advance(2.8)
         XCTAssertEqual(r.sources.selected, [Rig.voice, Rig.english], "the second dictation selects nothing")
         XCTAssertEqual(r.sources.currentID, Rig.voice, "the user's choice stands")
@@ -99,7 +100,7 @@ extension FI2SourcesTests {
     func testFM17_ChainedDictationRestoresTheOriginalSource() {
         let r = Rig(trigger: KeySpec.named("right_option")!)
         r.pressUntilListening(); r.release()
-        r.clock.advance(0.5)                                    // still waiting for the text
+        r.clock.advance(0.5)  // still waiting for the text
         XCTAssertEqual(r.engine.machine.state, .waitingForText)
         r.pressUntilListening(); r.release()
         r.clock.advance(2.8)
@@ -119,7 +120,7 @@ extension FI2SourcesTests {
         r.press(); r.clock.advance(1.1)
         XCTAssertEqual(r.engine.machine.state, .idle)
         r.sources.applies = true
-        r.sources.currentID = Rig.voice                         // TIS caught up at 1.2 s
+        r.sources.currentID = Rig.voice  // TIS caught up at 1.2 s
         r.clock.advance(0.5)
         XCTAssertEqual(r.sources.currentID, Rig.english, "restored to where the user was")
         XCTAssertTrue(r.sink.has("restore after failed switch"))

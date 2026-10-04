@@ -16,7 +16,8 @@ func weTypeVoice() -> (key: KeySpec, style: String)? {
     guard let data = try? Data(contentsOf: url), data.count > 4 else { return nil }
     let live = Int(data.prefix(4).withUnsafeBytes { $0.loadUnaligned(as: UInt32.self).littleEndian })
     guard live > 0, 4 + live <= data.count,
-          let s = String(data: data.subdata(in: 4..<(4 + live)), encoding: .isoLatin1) else { return nil }
+        let s = String(data: data.subdata(in: 4..<(4 + live)), encoding: .isoLatin1)
+    else { return nil }
     func varint(_ name: String) -> Int? {
         guard let r = s.range(of: name, options: .backwards) else { return nil }
         var value = 0, shift = 0
@@ -45,14 +46,14 @@ func weTypeVoice() -> (key: KeySpec, style: String)? {
 /// A voice tool Hijack can drive: an input method (switch to it, press its voice key, switch back)
 /// or an app with its own global hotkey (just press that hotkey).
 protocol VoiceProvider {
-    var id: String { get }                  // value of "voiceInput" in the config
+    var id: String { get }  // value of "voiceInput" in the config
     var name: String { get }
     var isInstalled: Bool { get }
     var switchesInputSource: Bool { get }
-    var readsSettings: Bool { get }         // detected() comes from its own settings, not a built-in guess
+    var readsSettings: Bool { get }  // detected() comes from its own settings, not a built-in guess
     func detected() -> (key: KeySpec?, style: String?)
-    func processIDs() -> [pid_t]            // its running processes (for its windows and its microphone use)
-    func windowState() -> WindowState       // is its voice UI on screen
+    func processIDs() -> [pid_t]  // its running processes (for its windows and its microphone use)
+    func windowState() -> WindowState  // is its voice UI on screen
 }
 
 /// On-screen windows owned by these processes. Thread-safe (no input-source calls), for sampling off the main thread.
@@ -68,9 +69,9 @@ extension VoiceProvider {
 
 struct InputMethodProvider: VoiceProvider {
     let sourceID: String
-    var label: (zh: String, en: String)? = nil   // our own names; the system often only registers a Chinese one
-    var defaultKey: String? = nil           // when its settings can't be read
-    var helpers: [String] = []              // apps that own its voice UI (Sogou: a separate voice assistant)
+    var label: (zh: String, en: String)? = nil  // our own names; the system often only registers a Chinese one
+    var defaultKey: String? = nil  // when its settings can't be read
+    var helpers: [String] = []  // apps that own its voice UI (Sogou: a separate voice assistant)
     var reader: (() -> (key: KeySpec, style: String)?)? = nil
 
     var id: String { sourceID }
@@ -119,7 +120,8 @@ let handySettingsURL = FileManager.default.homeDirectoryForCurrentUser
 func handyVoiceKey() -> KeySpec? {
     let url = handySettingsURL
     guard let data = try? Data(contentsOf: url),
-          let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    else { return nil }
     let settings = root["settings"] as? [String: Any] ?? root
     guard let binding = ((settings["bindings"] as? [String: Any])?["transcribe"] as? [String: Any])?["current_binding"] as? String
     else { return nil }
@@ -129,7 +131,9 @@ func handyVoiceKey() -> KeySpec? {
 // The voice tools Hijack knows. Order = menu order. Adding one is adding a line here.
 let builtInProviders: [VoiceProvider] = [
     InputMethodProvider(sourceID: weTypeID, label: ("微信输入法", "WeType"), reader: weTypeVoice),
-    InputMethodProvider(sourceID: "com.sogou.inputmethod.sogou.pinyin", label: ("搜狗输入法", "Sogou"), defaultKey: "left_option", helpers: ["com.sogou.voiceassistant"]),
+    InputMethodProvider(
+        sourceID: "com.sogou.inputmethod.sogou.pinyin", label: ("搜狗输入法", "Sogou"), defaultKey: "left_option",
+        helpers: ["com.sogou.voiceassistant"]),
     InputMethodProvider(sourceID: "com.bytedance.inputmethod.doubaoime.pinyin", label: ("豆包输入法", "Doubao"), defaultKey: "fn"),
     AppProvider(bundle: "com.pais.handy", appName: "Handy", reader: handyVoiceKey),
 ]

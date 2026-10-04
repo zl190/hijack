@@ -53,35 +53,35 @@ func cliVersion() -> Int32 {
 }
 
 let cliHelp = """
-hijack — hold a key to dictate with another tool's voice input, from any input source
+    hijack — hold a key to dictate with another tool's voice input, from any input source
 
-Usage:
-  hijack status [--json]          what Hijack is doing and whether it can
-  hijack doctor                   check everything; exits 1 if something is broken
-  hijack sources [--json]         installed voice sources and their talk keys
-  hijack get [setting] [--json]   read settings
-  hijack set <setting> <value>    change a setting (validated)
-  hijack log [-f] [-n N]          show the log: one line per dictation, plus errors (-f follows it)
-  hijack log --live               watch every step of each dictation as it happens (Ctrl-C to stop)
-  hijack stats [--days N|--all] [--json]   how reliable dictation has been (default: last 7 days)
-  hijack version                  running version, and the update Sparkle found last
+    Usage:
+      hijack status [--json]          what Hijack is doing and whether it can
+      hijack doctor                   check everything; exits 1 if something is broken
+      hijack sources [--json]         installed voice sources and their talk keys
+      hijack get [setting] [--json]   read settings
+      hijack set <setting> <value>    change a setting (validated)
+      hijack log [-f] [-n N]          show the log: one line per dictation, plus errors (-f follows it)
+      hijack log --live               watch every step of each dictation as it happens (Ctrl-C to stop)
+      hijack stats [--days N|--all] [--json]   how reliable dictation has been (default: last 7 days)
+      hijack version                  running version, and the update Sparkle found last
 
-Settings:
-  mode             hold | toggle
-  shortcut         follow | a key (right_option, fn, f18, ctrl+option+f18, …)
-  any-key-stops    true | false              (toggle mode)
-  source           a voice source id or name (see `hijack sources`)
-  talk-key         auto | a key              (for the current source)
-  style            auto | hold | tap | doubleTap   (how the current source starts)
-  menu-bar-icon    true | false
-  dock-icon        true | false
-  language         system | en | zh
-  hold-delay       seconds before the voice tool gets its key
-  restore-timeout  longest wait for the text, in seconds
-  fallback-delay   wait when the voice tool shows no window, in seconds
+    Settings:
+      mode             hold | toggle
+      shortcut         follow | a key (right_option, fn, f18, ctrl+option+f18, …)
+      any-key-stops    true | false              (toggle mode)
+      source           a voice source id or name (see `hijack sources`)
+      talk-key         auto | a key              (for the current source)
+      style            auto | hold | tap | doubleTap   (how the current source starts)
+      menu-bar-icon    true | false
+      dock-icon        true | false
+      language         system | en | zh
+      hold-delay       seconds before the voice tool gets its key
+      restore-timeout  longest wait for the text, in seconds
+      fallback-delay   wait when the voice tool shows no window, in seconds
 
-Config file: ~/.config/hijack/config.json
-"""
+    Config file: ~/.config/hijack/config.json
+    """
 
 // MARK: helpers
 
@@ -89,7 +89,10 @@ private func fail(_ msg: String) -> Int32 { FileHandle.standardError.write((msg 
 
 private func printJSON(_ obj: Any) {
     if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
-       let s = String(data: d, encoding: .utf8) { print(s) }
+        let s = String(data: d, encoding: .utf8)
+    {
+        print(s)
+    }
 }
 
 /// Any key the user can type on the command line: a name, "ctrl+option+f18", or a JSON object.
@@ -134,7 +137,10 @@ func cliStatus(json: Bool) -> Int32 {
     print("Hijack \(appVersion) (commit \(appCommit)) — " + (st.map { "running (pid \($0.pid))" } ?? "not running"))
     if let st {
         print("  accessibility   " + (st.trusted ? "allowed" : "MISSING — System Settings › Privacy & Security › Accessibility"))
-        print("  key listener    " + (st.tapActive ? "active" : st.trusted ? "OFF — macOS turned it off; quit and reopen Hijack" : "off — waiting for Accessibility"))
+        print(
+            "  key listener    "
+                + (st.tapActive
+                    ? "active" : st.trusted ? "OFF — macOS turned it off; quit and reopen Hijack" : "off — waiting for Accessibility"))
         if st.secureInput { print("  secure input    on" + (st.secureInputApp.map { " (\($0))" } ?? "")) }
     }
     print("  mode            " + (m.toggleMode ? "toggle (tap to start, tap to stop)" : "hold (hold to talk)"))
@@ -158,20 +164,31 @@ func cliDoctor() -> Int32 {
     check(st != nil, "Hijack is running", "open /Applications/Hijack.app")
     if let st {
         check(st.trusted, "Accessibility permission granted", "System Settings › Privacy & Security › Accessibility › turn on Hijack")
-        check(st.tapActive, "key listener installed", st.trusted ? "macOS turned it off; quit and reopen Hijack" : "grant Accessibility first")
+        check(
+            st.tapActive, "key listener installed", st.trusted ? "macOS turned it off; quit and reopen Hijack" : "grant Accessibility first"
+        )
     }
     check(p.isInstalled, "voice source \(p.name) is installed", "install it, or `hijack set source <id>` (see `hijack sources`)")
     let found = p.detected().key
-    if m.userVoiceKey != nil { check(true, "talk key \(m.forwardKey.name) (set by you)") }
-    else if found == nil { check(false, "talk key of \(p.name) detected", "`hijack set talk-key <key>` to match \(p.name)'s own setting") }
-    else if !p.readsSettings { check(nil, "talk key \(found!.name) is a default, not read from \(p.name)", "make sure \(p.name) uses \(found!.name), or `hijack set talk-key <key>`") }
-    else { check(true, "talk key \(found!.name) read from \(p.name)'s settings") }
+    if m.userVoiceKey != nil {
+        check(true, "talk key \(m.forwardKey.name) (set by you)")
+    } else if found == nil {
+        check(false, "talk key of \(p.name) detected", "`hijack set talk-key <key>` to match \(p.name)'s own setting")
+    } else if !p.readsSettings {
+        check(
+            nil, "talk key \(found!.name) is a default, not read from \(p.name)",
+            "make sure \(p.name) uses \(found!.name), or `hijack set talk-key <key>`")
+    } else {
+        check(true, "talk key \(found!.name) read from \(p.name)'s settings")
+    }
     let t = m.trigger
-    check(t.modifierOnly || !t.mods.isEmpty || t.code >= 96 ? true : nil, "shortcut \(t.name) won't fire while typing",
-          "a plain key also triggers while you type — prefer a modifier (right_option) or a combo")
+    check(
+        t.modifierOnly || !t.mods.isEmpty || t.code >= 96 ? true : nil, "shortcut \(t.name) won't fire while typing",
+        "a plain key also triggers while you type — prefer a modifier (right_option) or a combo")
     if p.switchesInputSource {
-        check(p.isBusy() != nil ? true : nil, "can watch \(p.name)'s window to know when the text is in",
-              "\(p.name) isn't running now; Hijack falls back to waiting \(c.fallbackDelay)s")
+        check(
+            p.isBusy() != nil ? true : nil, "can watch \(p.name)'s window to know when the text is in",
+            "\(p.name) isn't running now; Hijack falls back to waiting \(c.fallbackDelay)s")
     }
     print(failed ? "\nSomething needs fixing." : "\nAll good.")
     return failed ? 1 : 0
@@ -183,16 +200,19 @@ func cliSources(json: Bool) -> Int32 {
     if !list.contains(where: { $0.id == c.voiceInput }) { list.append(voiceProvider(for: c.voiceInput)) }
     let rows: [[String: Any]] = list.map { p in
         let user = c.voiceKeys[p.id], key = user ?? p.detected().key
-        return ["id": p.id, "name": p.name, "kind": p.switchesInputSource ? "input method" : "app",
-                "current": p.id == c.voiceInput, "installed": p.isInstalled,
-                "talkKey": key?.name as Any, "talkKeyOrigin": keyOrigin(p, user: user),
-                "style": c.voiceStyles[p.id] ?? p.detected().style ?? "hold"]
+        return [
+            "id": p.id, "name": p.name, "kind": p.switchesInputSource ? "input method" : "app",
+            "current": p.id == c.voiceInput, "installed": p.isInstalled,
+            "talkKey": key?.name as Any, "talkKeyOrigin": keyOrigin(p, user: user),
+            "style": c.voiceStyles[p.id] ?? p.detected().style ?? "hold",
+        ]
     }
     if json { printJSON(rows); return 0 }
     for r in rows {
         print("\((r["current"] as! Bool) ? "*" : " ") \(r["name"]!)  [\(r["id"]!)]")
-        print("    \(r["kind"]!) · talk key \((r["talkKey"] as? String) ?? "?") (\(r["talkKeyOrigin"]!)) · starts with \(r["style"]!)"
-              + ((r["installed"] as! Bool) ? "" : " · NOT INSTALLED"))
+        print(
+            "    \(r["kind"]!) · talk key \((r["talkKey"] as? String) ?? "?") (\(r["talkKeyOrigin"]!)) · starts with \(r["style"]!)"
+                + ((r["installed"] as! Bool) ? "" : " · NOT INSTALLED"))
     }
     return 0
 }
@@ -218,15 +238,21 @@ func cliSet(_ args: [String]) -> Int32 {
     let name = args[0], value = args[1...].joined(separator: " ")
     let c = Config.shared; c.reload(force: true)
     if c.lastError != nil { return fail("the config file has an error; fix or revert it first (~/.config/hijack/config.json)") }
-    func bool() -> Bool? { ["true": true, "on": true, "yes": true, "1": true, "false": false, "off": false, "no": false, "0": false][value.lowercased()] }
+    func bool() -> Bool? {
+        ["true": true, "on": true, "yes": true, "1": true, "false": false, "off": false, "no": false, "0": false][value.lowercased()]
+    }
     func seconds(_ r: ClosedRange<Double>) -> Double? { Double(value).flatMap { r.contains($0) ? $0 : nil } }
     switch name {
     case "mode":
         guard ["hold", "toggle"].contains(value) else { return fail("mode: hold | toggle") }
         c.triggerMode = value
     case "shortcut":
-        if value == "follow" { c.trigger = nil }
-        else { guard let k = parseKey(value) else { return fail("shortcut: follow, or a key like right_option, fn, f18, ctrl+option+f18") }; c.trigger = k }
+        if value == "follow" {
+            c.trigger = nil
+        } else {
+            guard let k = parseKey(value) else { return fail("shortcut: follow, or a key like right_option, fn, f18, ctrl+option+f18") };
+            c.trigger = k
+        }
     case "any-key-stops":
         guard let b = bool() else { return fail("any-key-stops: true | false") }; c.stopOnAnyKey = b
     case "source":
@@ -237,8 +263,12 @@ func cliSet(_ args: [String]) -> Int32 {
         if !p.isInstalled { FileHandle.standardError.write("warning: \(p.name) [\(id)] isn't installed\n".data(using: .utf8)!) }
         c.voiceInput = id
     case "talk-key":
-        if value == "auto" { c.voiceKeys[c.voiceInput] = nil }
-        else { guard let k = parseKey(value) else { return fail("talk-key: auto, or a key like fn, right_option, option+space") }; c.voiceKeys[c.voiceInput] = k }
+        if value == "auto" {
+            c.voiceKeys[c.voiceInput] = nil
+        } else {
+            guard let k = parseKey(value) else { return fail("talk-key: auto, or a key like fn, right_option, option+space") };
+            c.voiceKeys[c.voiceInput] = k
+        }
     case "style":
         guard ["auto", "hold", "tap", "doubleTap"].contains(value) else { return fail("style: auto | hold | tap | doubleTap") }
         c.voiceStyles[c.voiceInput] = value == "auto" ? nil : value
@@ -268,7 +298,7 @@ func cliSet(_ args: [String]) -> Int32 {
 
 func cliLog(_ args: [String]) -> Int32 {
     var n = 20, follow = false
-    if args.contains("--live") {   // the step-level trace lives in the system log at debug level
+    if args.contains("--live") {  // the step-level trace lives in the system log at debug level
         let stream = Process()
         stream.executableURL = URL(fileURLWithPath: "/usr/bin/log")
         stream.arguments = ["stream", "--level", "debug", "--style", "compact", "--predicate", "subsystem == \"com.zl190.hijack\""]
@@ -276,8 +306,7 @@ func cliLog(_ args: [String]) -> Int32 {
     }
     var i = 0
     while i < args.count {
-        if args[i] == "-f" { follow = true }
-        else if args[i] == "-n", i + 1 < args.count, let v = Int(args[i + 1]) { n = v; i += 1 }
+        if args[i] == "-f" { follow = true } else if args[i] == "-n", i + 1 < args.count, let v = Int(args[i + 1]) { n = v; i += 1 }
         i += 1
     }
     let tail = Process()
@@ -303,12 +332,16 @@ func cliStats(_ args: [String], json: Bool) -> Int32 {
     // unresolved key (an old line, or an id no longer installed) comes back unchanged.
     let toolNames = Dictionary(s.tools.map { (voiceProvider(for: $0.key).name, $0.value) }, uniquingKeysWith: +)
     if json {
-        var d: [String: Any] = ["span": span, "dictations": s.dictations, "tooShort": s.tooShort,
+        var d: [String: Any] = [
+            "span": span, "dictations": s.dictations, "tooShort": s.tooShort,
             "outcomes": Dictionary(uniqueKeysWithValues: s.outcomes.map { ($0.key.rawValue, $0.value) }),
             "failureCauses": Dictionary(uniqueKeysWithValues: s.causes.map { ($0.key.rawValue, $0.value) }),
-            "tools": toolNames, "keyTapPaused": s.tapPaused, "slowKeyEvents": s.slowKeys, "triggerCaughtUp": s.caughtUp]
+            "tools": toolNames, "keyTapPaused": s.tapPaused, "slowKeyEvents": s.slowKeys, "triggerCaughtUp": s.caughtUp,
+        ]
         if let r = s.successRate { d["successRate"] = (r * 1000).rounded() / 1000 }
-        for (k, v) in [("talkKeyMsP50", s.sentP50), ("talkKeyMsP95", s.sentP95), ("textInMsP50", s.textInP50), ("textInMsP95", s.textInP95)] {
+        for (k, v) in [
+            ("talkKeyMsP50", s.sentP50), ("talkKeyMsP95", s.sentP95), ("textInMsP50", s.textInP50), ("textInMsP95", s.textInP95),
+        ] {
             if let v { d[k] = v }
         }
         printJSON(d); return 0
@@ -319,15 +352,26 @@ func cliStats(_ args: [String], json: Bool) -> Int32 {
         let share = String(format: "%3.0f%%", Double(n) / Double(s.dictations) * 100)
         print("  " + label.padding(toLength: 22, withPad: " ", startingAt: 0) + String(format: "%5d", n) + "  \(share)" + note)
     }
-    print("Dictations".padding(toLength: 24, withPad: " ", startingAt: 0) + String(format: "%5d", s.dictations)
-          + (s.tooShort > 0 ? "  (+\(s.tooShort) too short to start)" : ""))
+    print(
+        "Dictations".padding(toLength: 24, withPad: " ", startingAt: 0) + String(format: "%5d", s.dictations)
+            + (s.tooShort > 0 ? "  (+\(s.tooShort) too short to start)" : ""))
     for o in DictationEntry.Outcome.allCases where o != .tooShort { if let n = s.outcomes[o] { row(o.rawValue, n) } }
     for c in DictationEntry.Cause.allCases { if let n = s.causes[c] { print("      \(n) × \(c.rawValue)") } }
-    if let r = s.successRate { print("Success rate".padding(toLength: 24, withPad: " ", startingAt: 0) + String(format: "%5.1f%%", r * 100) + "  (text arrived ÷ text arrived + no window)") }
+    if let r = s.successRate {
+        print(
+            "Success rate".padding(toLength: 24, withPad: " ", startingAt: 0) + String(format: "%5.1f%%", r * 100)
+                + "  (text arrived ÷ text arrived + no window)")
+    }
     func ms(_ v: Int?) -> String { v.map { $0 < 1000 ? "\($0) ms" : String(format: "%.2f s", Double($0) / 1000) } ?? "–" }
     print("Talk key sent after".padding(toLength: 24, withPad: " ", startingAt: 0) + "p50 \(ms(s.sentP50))   p95 \(ms(s.sentP95))")
     print("Text in after release".padding(toLength: 24, withPad: " ", startingAt: 0) + "p50 \(ms(s.textInP50))   p95 \(ms(s.textInP95))")
-    print("Incidents".padding(toLength: 24, withPad: " ", startingAt: 0) + "key tap paused by macOS \(s.tapPaused) · slow key events \(s.slowKeys) · shortcut caught up \(s.caughtUp)")
-    if toolNames.count > 1 { print("By voice tool".padding(toLength: 24, withPad: " ", startingAt: 0) + toolNames.sorted { $0.value > $1.value }.map { "\($0.key) \($0.value)" }.joined(separator: " · ")) }
+    print(
+        "Incidents".padding(toLength: 24, withPad: " ", startingAt: 0)
+            + "key tap paused by macOS \(s.tapPaused) · slow key events \(s.slowKeys) · shortcut caught up \(s.caughtUp)")
+    if toolNames.count > 1 {
+        print(
+            "By voice tool".padding(toLength: 24, withPad: " ", startingAt: 0)
+                + toolNames.sorted { $0.value > $1.value }.map { "\($0.key) \($0.value)" }.joined(separator: " · "))
+    }
     return 0
 }

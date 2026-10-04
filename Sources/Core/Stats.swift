@@ -6,11 +6,11 @@ import Foundation
 /// One dictation, as its summary line tells it.
 struct DictationEntry: Equatable {
     enum Outcome: String, CaseIterable {
-        case textArrived = "text arrived"          // the voice window came and went
-        case noWindow = "no voice window"          // the talk key went out, but no window was seen
-        case interrupted = "interrupted"           // the next press came before the text
-        case unverified = "not watched"            // an app tool: its window isn't watched
-        case tooShort = "too short to start"       // released before the talk key was sent
+        case textArrived = "text arrived"  // the voice window came and went
+        case noWindow = "no voice window"  // the talk key went out, but no window was seen
+        case interrupted = "interrupted"  // the next press came before the text
+        case unverified = "not watched"  // an app tool: its window isn't watched
+        case tooShort = "too short to start"  // released before the talk key was sent
     }
     /// Why a dictation with no voice window failed, from the checks on its line.
     enum Cause: String, CaseIterable {
@@ -20,12 +20,12 @@ struct DictationEntry: Equatable {
         case unknown = "not enough checks on the line"
         case sourceNotSwitched = "input source never switched (talk key not sent)"
     }
-    var day: String              // yyyy-MM-dd
+    var day: String  // yyyy-MM-dd
     var tool: String
     var toggle: Bool
     var heldMs: Int
     var sentMs: Int?
-    var textInMs: Int?           // release → voice window gone
+    var textInMs: Int?  // release → voice window gone
     var outcome: Outcome
     var cause: Cause?
     var tapDisabled: Bool
@@ -34,10 +34,12 @@ struct DictationEntry: Equatable {
     /// Parses a summary line written since 1.1.2 ("yyyy-MM-dd HH:mm:ss.SSS dictation …"); nil for any other line.
     static func parse(_ line: String) -> DictationEntry? {
         guard line.count > 24, line.dropFirst(23).hasPrefix(" dictation "),
-              line.prefix(4).allSatisfy(\.isNumber) else { return nil }
+            line.prefix(4).allSatisfy(\.isNumber)
+        else { return nil }
         func num(_ pattern: String) -> Double? {
             guard let r = try? Regex(pattern), let m = line.firstMatch(of: r), m.count > 1,
-                  let s = m[1].substring else { return nil }
+                let s = m[1].substring
+            else { return nil }
             return Double(s)
         }
         func word(_ pattern: String) -> String? {
@@ -50,26 +52,36 @@ struct DictationEntry: Equatable {
         let echo = line.contains("echo missing") ? false : line.contains("echo after") ? true : nil
         let mic = word(#"mic tool (on|off)"#).map { $0 == "on" }
         let outcome: Outcome
-        if line.contains("input source never switched") { outcome = .noWindow }
-        else if sent == nil { outcome = .tooShort }
-        else if line.contains("interrupted by the next press") { outcome = .interrupted }
-        else if textIn != nil { outcome = .textArrived }
-        else if line.contains("no switch back needed") { outcome = .unverified }
-        else { outcome = .noWindow }
+        if line.contains("input source never switched") {
+            outcome = .noWindow
+        } else if sent == nil {
+            outcome = .tooShort
+        } else if line.contains("interrupted by the next press") {
+            outcome = .interrupted
+        } else if textIn != nil {
+            outcome = .textArrived
+        } else if line.contains("no switch back needed") {
+            outcome = .unverified
+        } else {
+            outcome = .noWindow
+        }
         var cause: Cause?
         if outcome == .noWindow {
-            cause = line.contains("input source never switched") ? .sourceNotSwitched
+            cause =
+                line.contains("input source never switched")
+                ? .sourceNotSwitched
                 : echo == false ? .keyNotSent : mic == false ? .toolDidntListen : mic == true ? .windowNotSeen : .unknown
         }
-        return DictationEntry(day: String(line.prefix(10)), tool: tool, toggle: line.contains("(toggle)"),
-                              heldMs: Int(held * 1000), sentMs: sent, textInMs: textIn, outcome: outcome, cause: cause,
-                              tapDisabled: line.contains("key tap disabled"), secureInput: line.contains("secure input on"))
+        return DictationEntry(
+            day: String(line.prefix(10)), tool: tool, toggle: line.contains("(toggle)"),
+            heldMs: Int(held * 1000), sentMs: sent, textInMs: textIn, outcome: outcome, cause: cause,
+            tapDisabled: line.contains("key tap disabled"), secureInput: line.contains("secure input on"))
     }
 }
 
 /// The numbers for a set of dictations (and the incidents logged around them).
 struct DictationStats: Equatable {
-    var dictations: Int                       // the talk key went out (too-short taps not counted)
+    var dictations: Int  // the talk key went out (too-short taps not counted)
     var outcomes: [DictationEntry.Outcome: Int]
     var causes: [DictationEntry.Cause: Int]
     var tooShort: Int

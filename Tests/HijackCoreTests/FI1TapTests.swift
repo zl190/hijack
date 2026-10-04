@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import HijackCore
 
 // FI-1: the event tap goes away or lies (docs/fmea.md FM-01, 02, 04, 24, 25, 26).
@@ -9,9 +10,9 @@ final class FI1TapTests: XCTestCase {
         let r = Rig()
         r.pressUntilListening()
         XCTAssertEqual(r.keys.count(Rig.fn, down: true), 1)
-        r.tap.keysDown = []                                  // the keyboard has Fn up; we still have it down
+        r.tap.keysDown = []  // the keyboard has Fn up; we still have it down
         XCTAssertTrue(r.engine.handle(KeyInput(kind: .tapDisabledByTimeout)))
-        r.clock.advance(0)                                   // reconcile runs on the next turn
+        r.clock.advance(0)  // reconcile runs on the next turn
         XCTAssertTrue(r.sink.has("catching up"))
         XCTAssertEqual(r.keys.count(Rig.fn, down: false), 1, "the talk key is released once")
         XCTAssertEqual(r.engine.machine.state, .waitingForText)
@@ -192,10 +193,16 @@ extension FI1TapTests {
         let r = Rig()
         var built = 0
         r.sink.keepTraces = false
-        r.engine.trace({ built += 1; return "expensive" }())
+        r.engine.trace(
+            {
+                built += 1; return "expensive"
+            }())
         XCTAssertEqual(built, 0)
         r.sink.keepTraces = true
-        r.engine.trace({ built += 1; return "expensive" }())
+        r.engine.trace(
+            {
+                built += 1; return "expensive"
+            }())
         XCTAssertEqual(built, 1)
         XCTAssertEqual(r.sink.traces.last, "expensive")
     }

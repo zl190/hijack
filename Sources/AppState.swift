@@ -9,12 +9,12 @@ let stateURL = FileManager.default.homeDirectoryForCurrentUser
 
 struct AppState: Codable {
     var pid: Int32
-    var trusted: Bool          // Accessibility granted to the app
-    var tapActive: Bool        // the key listener is installed
+    var trusted: Bool  // Accessibility granted to the app
+    var tapActive: Bool  // the key listener is installed
     // Secure Event Input, as of the last menu open or dictation summary (Sources/Menu.swift). It is not
     // pushed on every change: a CLI process can read it, but it can be stale between those two moments.
     var secureInput: Bool
-    var secureInputApp: String?   // the frontmost app's name when secureInput was last true; nil otherwise
+    var secureInputApp: String?  // the frontmost app's name when secureInput was last true; nil otherwise
     var updated: Date
 
     init(pid: Int32, trusted: Bool, tapActive: Bool, secureInput: Bool, secureInputApp: String?, updated: Date) {

@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import HijackCore
 
 // FM-18 and review-4 S4: the watch covers only folders that exist, and never climbs to a parent.
@@ -40,7 +41,9 @@ final class WatchTests: XCTestCase {
     func testS4_OnlyTheFoldersThatExistAreWatched() throws {
         let present = root.appendingPathComponent("present")
         try FileManager.default.createDirectory(at: present, withIntermediateDirectories: true)
-        let watch = SettingsWatch(paths: [present.appendingPathComponent("a.json"), root.appendingPathComponent("absent/b.json")], events: fake) {}
+        let watch = SettingsWatch(
+            paths: [present.appendingPathComponent("a.json"), root.appendingPathComponent("absent/b.json")], events: fake
+        ) {}
         XCTAssertEqual(watch.roots, [present.path])
     }
 
@@ -64,7 +67,7 @@ final class WatchTests: XCTestCase {
         let config = folder.appendingPathComponent("config.json")
         let changed = expectation(description: "onChange")
         changed.assertForOverFulfill = false
-        let watch = SettingsWatch(paths: [config]) { changed.fulfill() }   // events: defaults to LiveFolderEvents()
+        let watch = SettingsWatch(paths: [config]) { changed.fulfill() }  // events: defaults to LiveFolderEvents()
         XCTAssertEqual(watch.roots, [folder.path])
         XCTAssertTrue(watch.isWatching)
         try "{}".write(to: config, atomically: true, encoding: .utf8)

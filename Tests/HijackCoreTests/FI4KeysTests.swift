@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import HijackCore
 
 // FI-4: the talk key does not go out, or stays out (docs/fmea.md FM-08, 09, 10).
@@ -55,7 +56,7 @@ final class FI4KeysTests: XCTestCase {
         r.tap.flagsDown = [.maskSecondaryFn]
         r.engine.start()
         r.clock.advance(0.4)
-        r.release()                                            // the user lets go of Fn (an edge through the tap)
+        r.release()  // the user lets go of Fn (an edge through the tap)
         r.tap.flagsDown = []
         r.clock.advance(0.6)
         XCTAssertEqual(r.keys.posted.count, 0)

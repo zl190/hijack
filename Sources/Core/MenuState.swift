@@ -5,8 +5,8 @@
 /// The status item icon. Two states only: a third "Active" state was ruled out in the review (§5a item 2)
 /// because changing the icon on every talk-key edge adds main-thread work (FM-26).
 enum IconState: Equatable {
-    case idle   // key listener on, Accessibility granted
-    case off    // key listener off, or Accessibility missing (FM-02, FM-24 revoked while running)
+    case idle  // key listener on, Accessibility granted
+    case off  // key listener off, or Accessibility missing (FM-02, FM-24 revoked while running)
 
     /// `tapInstalled`: has `Engine.start()` ever tried to install the tap? On every normal launch
     /// `updateIcon()` paints once before that (review-4 M1) — at that moment `tapActive` is trivially
@@ -23,7 +23,7 @@ enum IconState: Equatable {
 /// time.
 enum MenuFault: Equatable {
     case keyListenerOff
-    case stillHolding(talkKey: String)   // a session the engine thinks is active, with the physical key already up
+    case stillHolding(talkKey: String)  // a session the engine thinks is active, with the physical key already up
     case secureInput(app: String)
 }
 

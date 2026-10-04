@@ -1,5 +1,6 @@
 import Foundation
 import XCTest
+
 @testable import HijackCore
 
 // One test per acceptance line in docs/state-machine.md, then the generated state diagram.
@@ -24,8 +25,9 @@ final class SessionMachineTests: XCTestCase {
         XCTAssertEqual(t(.idle, .press, hold).0, .starting)
         XCTAssertEqual(t(.idle, .press, hold).1, [.swallowKey, .begin, .switchToVoice, .scheduleTalkKey])
         XCTAssertEqual(t(.idle, .press, holdApp).1, [.swallowKey, .begin, .scheduleTalkKey])
-        XCTAssertEqual(t(.idle, .press, SessionMode(toggle: true, switchesInput: true, passthrough: true)).0, .starting,
-                       "toggle never passes through")
+        XCTAssertEqual(
+            t(.idle, .press, SessionMode(toggle: true, switchesInput: true, passthrough: true)).0, .starting,
+            "toggle never passes through")
     }
     // 3
     func testTalkKeyIsSentOnlyWhileStarting() {
@@ -80,16 +82,20 @@ final class SessionMachineTests: XCTestCase {
     // 10 and invariants over every (state, event, mode)
     func testEveryCombinationIsDefinedAndConsistent() {
         let modes = [hold, holdApp, toggle, toggleApp, own]
-        for s in SessionState.allCases { for e in SessionEvent.allCases { for m in modes {
-            let (next, fx) = t(s, e, m)
-            let keyEvent = e == .press || e == .release || e == .otherKey
-            let keyFx = fx.filter { [.passKey, .swallowKey, .swallowKeyAndItsRelease].contains($0) }
-            XCTAssertEqual(keyFx.count, keyEvent ? 1 : 0, "\(s) \(e) \(m): a key event gets exactly one pass/swallow")
-            if fx.contains(.sendTalkKey) { XCTAssertEqual(next, .listening) }
-            if fx.contains(.releaseTalkKey) { XCTAssertEqual(s, .listening, "only a sent key is released") }
-            if fx.contains(.waitForText) { XCTAssertTrue(m.switchesInput) }
-            if next == .waitingForText && s != .waitingForText { XCTAssertTrue(fx.contains(.waitForText)) }
-        }}}
+        for s in SessionState.allCases {
+            for e in SessionEvent.allCases {
+                for m in modes {
+                    let (next, fx) = t(s, e, m)
+                    let keyEvent = e == .press || e == .release || e == .otherKey
+                    let keyFx = fx.filter { [.passKey, .swallowKey, .swallowKeyAndItsRelease].contains($0) }
+                    XCTAssertEqual(keyFx.count, keyEvent ? 1 : 0, "\(s) \(e) \(m): a key event gets exactly one pass/swallow")
+                    if fx.contains(.sendTalkKey) { XCTAssertEqual(next, .listening) }
+                    if fx.contains(.releaseTalkKey) { XCTAssertEqual(s, .listening, "only a sent key is released") }
+                    if fx.contains(.waitForText) { XCTAssertTrue(m.switchesInput) }
+                    if next == .waitingForText && s != .waitingForText { XCTAssertTrue(fx.contains(.waitForText)) }
+                }
+            }
+        }
     }
     // A sequence, the way the engine drives it: hold, speak, release, text arrives.
     func testHoldDictationEndToEnd() {
@@ -97,8 +103,12 @@ final class SessionMachineTests: XCTestCase {
         var all: [SessionEffect] = []
         for e: SessionEvent in [.press, .keySent, .release, .textDone] { all += machine.handle(e, hold) }
         XCTAssertEqual(machine.state, .idle)
-        XCTAssertEqual(all, [.swallowKey, .begin, .switchToVoice, .scheduleTalkKey, .sendTalkKey,
-                             .swallowKey, .releaseTalkKey, .waitForText, .finish])
+        XCTAssertEqual(
+            all,
+            [
+                .swallowKey, .begin, .switchToVoice, .scheduleTalkKey, .sendTalkKey,
+                .swallowKey, .releaseTalkKey, .waitForText, .finish,
+            ])
     }
 
     // The state diagram, generated from the transition function. HIJACK_UPDATE_DIAGRAMS=1 rewrites it;
@@ -133,32 +143,42 @@ final class SessionMachineTests: XCTestCase {
     func testStateDiagramIsCurrent() throws {
         // Configurations. "Same key": the shortcut is the talk key, so a press passes through whenever the voice
         // input method is already active (decided per press), else it starts a dictation.
-        let profiles: [(String, [SessionMode])] = [("按住", [hold]), ("按住·同键", [hold, own]), ("按住·app", [holdApp]),
-                                                   ("免按", [toggle]), ("免按·app", [toggleApp])]
+        let profiles: [(String, [SessionMode])] = [
+            ("按住", [hold]), ("按住·同键", [hold, own]), ("按住·app", [holdApp]),
+            ("免按", [toggle]), ("免按·app", [toggleApp]),
+        ]
         // Per configuration, only the (state, mode) pairs it can reach from idle: what can't happen isn't drawn.
         func reachable(_ modes: [SessionMode]) -> Set<SessionState> {
             var seen: Set<SessionState> = [.idle], todo: [SessionState] = [.idle]
-            while let s = todo.popLast() { for e in SessionEvent.allCases { for m in modes {
-                let next = t(s, e, m).0
-                if seen.insert(next).inserted { todo.append(next) }
-            }}}
+            while let s = todo.popLast() {
+                for e in SessionEvent.allCases {
+                    for m in modes {
+                        let next = t(s, e, m).0
+                        if seen.insert(next).inserted { todo.append(next) }
+                    }
+                }
+            }
             return seen
         }
         func valid(_ s: SessionState, _ m: SessionMode) -> Bool { !(m.passthrough && (s == .starting || s == .listening)) }
         var edges: [String: [String]] = [:], order: [String] = []
-        for s in SessionState.allCases { for e in SessionEvent.allCases { for (name, modes) in profiles {
-            let reach = reachable(modes)
-            guard reach.contains(s) else { continue }
-            var outcomes: [(SessionState, [SessionEffect])] = []
-            for m in modes where valid(s, m) { outcomes.append(t(s, e, m)) }
-            for (next, fx) in outcomes {
-            guard next != s else { continue }    // staying put (repeats, stale events) is left out of the picture
-            let shown = fx.filter { ![.passKey, .swallowKey].contains($0) }.map { "\($0)" }
-            let key = "\(s.rawValue)|\(next.rawValue)|\(e.rawValue)|\(shown.joined(separator: ", "))"
-            if edges[key] == nil { order.append(key) }
-            if !edges[key, default: []].contains(name) { edges[key, default: []].append(name) }
+        for s in SessionState.allCases {
+            for e in SessionEvent.allCases {
+                for (name, modes) in profiles {
+                    let reach = reachable(modes)
+                    guard reach.contains(s) else { continue }
+                    var outcomes: [(SessionState, [SessionEffect])] = []
+                    for m in modes where valid(s, m) { outcomes.append(t(s, e, m)) }
+                    for (next, fx) in outcomes {
+                        guard next != s else { continue }  // staying put (repeats, stale events) is left out of the picture
+                        let shown = fx.filter { ![.passKey, .swallowKey].contains($0) }.map { "\($0)" }
+                        let key = "\(s.rawValue)|\(next.rawValue)|\(e.rawValue)|\(shown.joined(separator: ", "))"
+                        if edges[key] == nil { order.append(key) }
+                        if !edges[key, default: []].contains(name) { edges[key, default: []].append(name) }
+                    }
+                }
             }
-        }}}
+        }
         var lines = ["stateDiagram-v2", "  [*] --> idle"]
         for key in order {
             let p = key.split(separator: "|", omittingEmptySubsequences: false).map(String.init)
@@ -172,8 +192,9 @@ final class SessionMachineTests: XCTestCase {
         if ProcessInfo.processInfo.environment["HIJACK_UPDATE_DIAGRAMS"] == "1" {
             try diagram.write(to: url, atomically: true, encoding: .utf8)
         } else {
-            XCTAssertEqual(try? String(contentsOf: url, encoding: .utf8), diagram,
-                           "docs/diagrams/states.mmd is out of date: run scripts/diagrams.sh")
+            XCTAssertEqual(
+                try? String(contentsOf: url, encoding: .utf8), diagram,
+                "docs/diagrams/states.mmd is out of date: run scripts/diagrams.sh")
         }
     }
 }

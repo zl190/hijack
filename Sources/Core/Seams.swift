@@ -1,5 +1,5 @@
-import Foundation
 import CoreGraphics
+import Foundation
 
 // MARK: seams — the system services that Engine uses, as protocols.
 // The app installs the live implementations (Sources/System.swift). The tests install fakes and inject faults.
@@ -14,7 +14,7 @@ struct KeyInput: Equatable {
     var kind: Kind
     var code: Int = 0
     var flags: CGEventFlags = []
-    var ours: Bool = false       // posted by Engine itself (the event carries the marker)
+    var ours: Bool = false  // posted by Engine itself (the event carries the marker)
 }
 
 /// Posts key events to the system. Returns false when the system refuses to create the event (FM-08).
@@ -30,12 +30,12 @@ protocol InputSources {
 
 /// The event tap and the system key state.
 protocol TapControl: AnyObject {
-    var trusted: Bool { get }                                   // Accessibility granted
-    func install(_ onEvent: @escaping (KeyInput) -> Bool) -> Bool   // create the tap; false when the system refuses
+    var trusted: Bool { get }  // Accessibility granted
+    func install(_ onEvent: @escaping (KeyInput) -> Bool) -> Bool  // create the tap; false when the system refuses
     var isEnabled: Bool { get }
     func enable()
-    func keyIsDown(_ code: Int) -> Bool                         // the key as the keyboard has it
-    func modifierIsDown(_ flag: CGEventFlags) -> Bool           // the modifier as the system has it
+    func keyIsDown(_ code: Int) -> Bool  // the key as the keyboard has it
+    func modifierIsDown(_ flag: CGEventFlags) -> Bool  // the modifier as the system has it
     var secureInputOn: Bool { get }
 }
 
@@ -44,9 +44,18 @@ enum WindowState: Equatable {
     case visible(Int)
     case none(String)
     case unknown(String)
-    var busy: Bool? { switch self { case .visible: return true; case .none: return false; case .unknown: return nil } }
+    var busy: Bool? {
+        switch self {
+        case .visible: return true;
+        case .none: return false;
+        case .unknown: return nil
+        }
+    }
     var text: String {
-        switch self { case .visible(let n): return "\(n) window\(n == 1 ? "" : "s")"; case .none(let why), .unknown(let why): return why }
+        switch self {
+        case .visible(let n): return "\(n) window\(n == 1 ? "" : "s")";
+        case .none(let why), .unknown(let why): return why
+        }
     }
 }
 
@@ -54,7 +63,7 @@ enum WindowState: Equatable {
 protocol Probes {
     func processIDs(ofProvider id: String) -> [pid_t]
     func windows(of pids: [pid_t]) -> WindowState
-    func micInUse(by pids: [pid_t]?) -> Bool?     // nil: by anyone on the default input device
+    func micInUse(by pids: [pid_t]?) -> Bool?  // nil: by anyone on the default input device
     func frontApp() -> String
 }
 
@@ -69,7 +78,7 @@ protocol Scheduler {
 /// Where Engine writes: the log file, the trace, the settings window, state.json.
 protocol Sink {
     func log(_ line: String)
-    func trace(_ msg: @autoclosure @escaping () -> String)   // built only when someone streams the debug log
+    func trace(_ msg: @autoclosure @escaping () -> String)  // built only when someone streams the debug log
     func report(_ phase: String, _ detail: String)
     func state(trusted: Bool, tapActive: Bool)
     func sourceName(_ id: String) -> String

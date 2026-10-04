@@ -10,34 +10,34 @@ enum SessionState: String, CaseIterable {
 }
 
 enum SessionEvent: String, CaseIterable {
-    case press        // the shortcut went down
-    case release      // the shortcut went up
-    case otherKey     // another key, while a toggle session runs and "any key stops" is on
-    case keySent      // the input source is ready: send the talk key
-    case textDone     // the voice window went, or the wait timed out
-    case switchFailed // the input source did not switch within maxSwitchWait: end without the talk key
-    case quit         // the app is quitting: stop now, release the talk key, skip waitingForText (FM-10)
+    case press  // the shortcut went down
+    case release  // the shortcut went up
+    case otherKey  // another key, while a toggle session runs and "any key stops" is on
+    case keySent  // the input source is ready: send the talk key
+    case textDone  // the voice window went, or the wait timed out
+    case switchFailed  // the input source did not switch within maxSwitchWait: end without the talk key
+    case quit  // the app is quitting: stop now, release the talk key, skip waitingForText (FM-10)
 }
 
 /// What the current press is: fixed for the press, read by the engine before it hands the event over.
 struct SessionMode: Equatable {
-    var toggle: Bool = false          // tap to start, tap to stop
-    var switchesInput: Bool = true    // an input method (switch to it and back); false: an app with its own hotkey
-    var passthrough: Bool = false     // the shortcut is the tool's own key and the tool is already active
+    var toggle: Bool = false  // tap to start, tap to stop
+    var switchesInput: Bool = true  // an input method (switch to it and back); false: an app with its own hotkey
+    var passthrough: Bool = false  // the shortcut is the tool's own key and the tool is already active
 }
 
 enum SessionEffect: Equatable {
-    case passKey                  // let the key event through
-    case swallowKey               // drop the key event
+    case passKey  // let the key event through
+    case swallowKey  // drop the key event
     case swallowKeyAndItsRelease  // drop it, and its key-up later (a key that stopped a toggle session)
-    case finishPrevious           // the previous dictation is still waiting for its text: write it up now
-    case begin                    // a new dictation
-    case switchToVoice            // select the voice input method
-    case scheduleTalkKey          // send the talk key once the switch is ready (and the hold delay is over)
+    case finishPrevious  // the previous dictation is still waiting for its text: write it up now
+    case begin  // a new dictation
+    case switchToVoice  // select the voice input method
+    case scheduleTalkKey  // send the talk key once the switch is ready (and the hold delay is over)
     case sendTalkKey
     case releaseTalkKey
-    case waitForText              // watch the voice window, then report textDone
-    case finish                   // summary line; an input method also switches back
+    case waitForText  // watch the voice window, then report textDone
+    case finish  // summary line; an input method also switches back
 }
 
 struct SessionMachine {
@@ -60,32 +60,33 @@ struct SessionMachine {
         // Stop a running session. `keyEffect` is what happens to the key event that stopped it.
         func stop(_ keyEffect: SessionEffect) -> (SessionState, [SessionEffect]) {
             let release: [SessionEffect] = s == .listening ? [.releaseTalkKey] : []
-            return mode.switchesInput ? (.waitingForText, [keyEffect] + release + [.waitForText])
-                                      : (.idle, [keyEffect] + release + [.finish])
+            return mode.switchesInput
+                ? (.waitingForText, [keyEffect] + release + [.waitForText])
+                : (.idle, [keyEffect] + release + [.finish])
         }
         switch (s, e) {
-        case (.idle, .press):                 return start()
-        case (.waitingForText, .press):       return start([.finishPrevious])
-        case (.passthrough, .release):        return (.idle, [.passKey])
-        case (.starting, .keySent):           return (.listening, [.sendTalkKey])
+        case (.idle, .press): return start()
+        case (.waitingForText, .press): return start([.finishPrevious])
+        case (.passthrough, .release): return (.idle, [.passKey])
+        case (.starting, .keySent): return (.listening, [.sendTalkKey])
         case (.starting, .release), (.listening, .release):
             return mode.toggle ? (s, [.swallowKey]) : stop(.swallowKey)
         case (.starting, .press), (.listening, .press):
-            return mode.toggle ? stop(.swallowKey) : (s, [.swallowKey])           // hold: a repeat, swallowed
+            return mode.toggle ? stop(.swallowKey) : (s, [.swallowKey])  // hold: a repeat, swallowed
         case (.starting, .otherKey), (.listening, .otherKey):
             return mode.toggle ? stop(.swallowKeyAndItsRelease) : (s, [.passKey])
-        case (.waitingForText, .textDone):    return (.idle, [.finish])
-        case (.starting, .switchFailed):      return (.idle, [.finish])                 // FM-05: the key stays unsent
+        case (.waitingForText, .textDone): return (.idle, [.finish])
+        case (.starting, .switchFailed): return (.idle, [.finish])  // FM-05: the key stays unsent
         // The process is exiting right after this call: no switch-back wait, just release what was sent.
         case (.starting, .quit), (.listening, .quit):
             return (.idle, s == .listening ? [.releaseTalkKey] : [])
-        case (_, .quit):                      return (s, [])                            // idle/waitingForText/passthrough: nothing to release
+        case (_, .quit): return (s, [])  // idle/waitingForText/passthrough: nothing to release
         case (.idle, .release), (.waitingForText, .release):
-            return (s, [.swallowKey])                                              // toggle: the tap that stopped it
-        case (.passthrough, .press):          return (s, [.passKey])
-        case (_, .otherKey):                  return (s, [.passKey])
+            return (s, [.swallowKey])  // toggle: the tap that stopped it
+        case (.passthrough, .press): return (s, [.passKey])
+        case (_, .otherKey): return (s, [.passKey])
         case (_, .keySent), (_, .textDone), (_, .switchFailed):
-            return (s, [])                                                         // stale: from an earlier dictation
+            return (s, [])  // stale: from an earlier dictation
         }
     }
 }

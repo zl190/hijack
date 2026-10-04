@@ -1,11 +1,11 @@
 import AppKit
-import os
 import ApplicationServices
 import Carbon
 import ServiceManagement
+import os
 
 let appName = "Hijack"
-let marker: Int64 = 0x5357424B               // tags events we post ourselves
+let marker: Int64 = 0x5357_424B  // tags events we post ourselves
 let weTypeID = "com.tencent.inputmethod.wetype.pinyin"
 
 // MARK: language  (system by default; config can force English or Chinese)
@@ -23,7 +23,9 @@ func L(_ zhText: String, _ en: String) -> String { zh() ? spaced(zhText) : en }
 // reads "按住右 Option 用 Handy 听写". Applied to every Chinese string, so copy never spaces by hand.
 func spaced(_ s: String) -> String {
     var out = "", prev: Character?
-    func cjk(_ c: Character) -> Bool { c.unicodeScalars.contains { (0x4E00...0x9FFF).contains($0.value) || (0x3400...0x4DBF).contains($0.value) } }
+    func cjk(_ c: Character) -> Bool {
+        c.unicodeScalars.contains { (0x4E00...0x9FFF).contains($0.value) || (0x3400...0x4DBF).contains($0.value) }
+    }
     func latin(_ c: Character) -> Bool { c.isASCII && (c.isLetter || c.isNumber) }
     for c in s {
         if let p = prev, (cjk(p) && latin(c)) || (latin(p) && cjk(c)) { out.append(" ") }
@@ -39,10 +41,10 @@ func spaced(_ s: String) -> String {
 // events; always on, so an intermittent failure is already on record when it happens. trace(): each step
 // of a session, to the system log at debug level (kept only while someone watches: `hijack log --live`).
 let logURL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/\(appName).log")
-let logLimit = 1_000_000   // past this the app moves the file to Hijack.old.log and starts a new one
+let logLimit = 1_000_000  // past this the app moves the file to Hijack.old.log and starts a new one
 let tracer = Logger(subsystem: "com.zl190.hijack", category: "session")
-func trace(_ msg: @autoclosure @escaping () -> String) { tracer.debug("\(msg(), privacy: .public)") }   // built only while someone watches
-var logInApp = false   // the app writes on a background queue and rotates; a CLI process writes directly and exits
+func trace(_ msg: @autoclosure @escaping () -> String) { tracer.debug("\(msg(), privacy: .public)") }  // built only while someone watches
+var logInApp = false  // the app writes on a background queue and rotates; a CLI process writes directly and exits
 private let logQueue = DispatchQueue(label: "com.zl190.hijack.log", qos: .utility)
 private let logTime: DateFormatter = {
     let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd HH:mm:ss.SSS"; return f
@@ -62,5 +64,5 @@ func log(_ msg: String) {
         _ = line.withUnsafeBytes { Darwin.write(fd, $0.baseAddress, $0.count) }
         close(fd)
     }
-    if logInApp { logQueue.async(execute: write) } else { write() }   // never file I/O on the main thread (it serves the key tap)
+    if logInApp { logQueue.async(execute: write) } else { write() }  // never file I/O on the main thread (it serves the key tap)
 }

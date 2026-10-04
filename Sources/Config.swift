@@ -10,37 +10,41 @@ let configURL = FileManager.default.homeDirectoryForCurrentUser.appendingPathCom
 
 final class Config {
     static let shared: Config = Config()
-    var trigger: KeySpec?          // nil = "follow" the voice key
+    var trigger: KeySpec?  // nil = "follow" the voice key
     var voiceInput: String = weTypeID
-    var voiceKeys: [String: KeySpec] = [:]   // per voice input; missing = "auto" (detected, or a known default)
-    var triggerMode: String = "hold"                 // "hold": hold to talk · "toggle": tap to start, tap again to stop
-    var stopOnAnyKey: Bool = true                  // toggle: any key also stops (that key is swallowed, never typed)
+    var voiceKeys: [String: KeySpec] = [:]  // per voice input; missing = "auto" (detected, or a known default)
+    var triggerMode: String = "hold"  // "hold": hold to talk · "toggle": tap to start, tap again to stop
+    var stopOnAnyKey: Bool = true  // toggle: any key also stops (that key is swallowed, never typed)
     var voiceStyles: [String: String] = [:]  // per voice input: how it wants its key — "hold" | "tap" | "doubleTap"
     var showMenuBarIcon: Bool = true
     var showDockIcon: Bool = false
-    var lastError: String?         // why the file couldn't be read (a code; see errorText); previous values stay in effect
+    var lastError: String?  // why the file couldn't be read (a code; see errorText); previous values stay in effect
     // Localized at display time: the language setting lives in this object, so it can't be read while loading.
     var errorText: String? {
         lastError.map { _ in L("配置文件不是有效的 JSON，正在沿用上一次的设置", "The config file isn't valid JSON; keeping the previous settings") }
     }
     var language: String = "system"
-    var holdDelay: Double = 0.2            // minimum hold before the voice method gets its key
-    var restoreTimeout: Double = 5.0       // longest wait after release before switching back
-    var fallbackDelay: Double = 2.5        // used when the voice method shows no window to watch
+    var holdDelay: Double = 0.2  // minimum hold before the voice method gets its key
+    var restoreTimeout: Double = 5.0  // longest wait after release before switching back
+    var fallbackDelay: Double = 2.5  // used when the voice method shows no window to watch
     private var loadedAt: Date?
     private var checkedAt: Date = .distantPast
 
     init() { reload(force: true) }
 
     func reload(force: Bool = false) {
-        guard force || Date().timeIntervalSince(checkedAt) > 0.5 else { return }   // at most twice a second
+        guard force || Date().timeIntervalSince(checkedAt) > 0.5 else { return }  // at most twice a second
         checkedAt = Date()
         let mtime = (try? FileManager.default.attributesOfItem(atPath: configURL.path)[.modificationDate]) as? Date
         guard force || mtime != loadedAt else { return }
         guard let mtime, let data = try? Data(contentsOf: configURL),
-              let d = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            if mtime == nil { migrateFromDefaults(); save() }
-            else { lastError = "invalidJSON"; log("config: can't parse \(configURL.path), keeping previous values") }
+            let d = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else {
+            if mtime == nil {
+                migrateFromDefaults(); save()
+            } else {
+                lastError = "invalidJSON"; log("config: can't parse \(configURL.path), keeping previous values")
+            }
             loadedAt = mtime; return
         }
         loadedAt = mtime
@@ -49,9 +53,13 @@ final class Config {
         voiceInput = d["voiceInput"] as? String ?? weTypeID
         voiceKeys = [:]
         for (id, v) in d["voiceKeys"] as? [String: Any] ?? [:] {
-            if let k = KeySpec(json: v) { voiceKeys[id] = k } else if (v as? String) != "auto" { log("config: unknown voiceKeys[\(id)] \(v)") }
+            if let k = KeySpec(json: v) {
+                voiceKeys[id] = k
+            } else if (v as? String) != "auto" {
+                log("config: unknown voiceKeys[\(id)] \(v)")
+            }
         }
-        if let old = KeySpec(json: d["voiceKey"]), voiceKeys[voiceInput] == nil { voiceKeys[voiceInput] = old }   // older single "voiceKey"
+        if let old = KeySpec(json: d["voiceKey"]), voiceKeys[voiceInput] == nil { voiceKeys[voiceInput] = old }  // older single "voiceKey"
         showMenuBarIcon = d["showMenuBarIcon"] as? Bool ?? true
         showDockIcon = d["showDockIcon"] as? Bool ?? false
         triggerMode = (d["triggerMode"] as? String) == "toggle" ? "toggle" : "hold"
@@ -67,8 +75,14 @@ final class Config {
         holdDelay = timing("holdDelay", default: 0.2, range: holdDelayRange, name: "holdDelay")
         restoreTimeout = timing("restoreTimeout", default: 5.0, range: restoreTimeoutRange, name: "restoreTimeout")
         fallbackDelay = timing("fallbackDelay", default: 2.5, range: fallbackDelayRange, name: "fallbackDelay")
-        if !force { log("config: reloaded (trigger \(trigger?.name ?? "follow"), voiceInput \(voiceInput), voiceKeys \(voiceKeys.mapValues(\.name)))") }
-        if d["trigger"] != nil, (d["trigger"] as? String) != "follow", trigger == nil { log("config: unknown trigger \(d["trigger"]!), following the voice key") }
+        if !force {
+            log(
+                "config: reloaded (trigger \(trigger?.name ?? "follow"), voiceInput \(voiceInput), voiceKeys \(voiceKeys.mapValues(\.name)))"
+            )
+        }
+        if d["trigger"] != nil, (d["trigger"] as? String) != "follow", trigger == nil {
+            log("config: unknown trigger \(d["trigger"]!), following the voice key")
+        }
     }
 
     func save() {

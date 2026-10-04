@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import HijackCore
 
 // HCI review: fault signals (docs/hci-review-faults.md §5, items 1-4). Each test names the row it covers.
@@ -48,7 +49,8 @@ final class MenuStateTests: XCTestCase {
 
     // A stuck session outranks Secure Input (it traps the very next press).
     func testStillHoldingWinsOverSecureInput() {
-        XCTAssertEqual(MenuFaults.firstLine(tapActive: true, stillHoldingTalkKey: "Fn", secureInputApp: "Terminal"), .stillHolding(talkKey: "Fn"))
+        XCTAssertEqual(
+            MenuFaults.firstLine(tapActive: true, stillHoldingTalkKey: "Fn", secureInputApp: "Terminal"), .stillHolding(talkKey: "Fn"))
     }
 
     // A dead key listener wins over both of the others at once.
@@ -87,7 +89,7 @@ final class HCIFaultsTests: XCTestCase {
         let r = Rig()
         r.tap.trusted = false
         _ = r.engine.handle(KeyInput(kind: .tapDisabledByTimeout))
-        r.clock.advance(0)   // the write is off the tap callback, one tick later (review-4 M2)
+        r.clock.advance(0)  // the write is off the tap callback, one tick later (review-4 M2)
         XCTAssertTrue(r.sink.has("Accessibility permission is gone"))
         XCTAssertEqual(r.sink.states.last.map { [$0.trusted, $0.tapActive] }, [false, false])
     }
@@ -110,7 +112,7 @@ final class HCIFaultsTests: XCTestCase {
     func testStopStuckSession_HoldMode() {
         let r = Rig()
         r.pressUntilListening()
-        r.engine.physicalDown = false   // the keyboard already has it up; only our bookkeeping is stuck
+        r.engine.physicalDown = false  // the keyboard already has it up; only our bookkeeping is stuck
         XCTAssertTrue(r.engine.machine.isActive, "setup: still active")
         r.engine.stopStuckSession()
         XCTAssertEqual(r.engine.machine.state, .waitingForText)
@@ -121,8 +123,8 @@ final class HCIFaultsTests: XCTestCase {
     func testStopStuckSession_ResyncsPhysicalDownToTheLiveKeyState() {
         let r = Rig()
         r.pressUntilListening()
-        r.engine.physicalDown = true   // stale: the tap missed the release, the keyboard already has it up
-        r.tap.keysDown = []             // the live keyboard state: up
+        r.engine.physicalDown = true  // stale: the tap missed the release, the keyboard already has it up
+        r.tap.keysDown = []  // the live keyboard state: up
         r.engine.stopStuckSession()
         XCTAssertFalse(r.engine.physicalDown, "resynced to the live key state, like reconcileAfterWake")
     }
@@ -212,7 +214,7 @@ final class HCIFaultsTests: XCTestCase {
     // S1: passthrough IS isActive, so stopForQuit() does call run(.quit) here — the machine's own
     // catch-all (SessionMachine.swift) must leave it alone, with nothing posted.
     func testStopForQuit_PassthroughDoesNothing() {
-        let r = Rig(current: Rig.voice)   // already on the voice input source: the press passes through
+        let r = Rig(current: Rig.voice)  // already on the voice input source: the press passes through
         r.press()
         XCTAssertEqual(r.engine.machine.state, .passthrough, "setup")
         let postedBefore = r.keys.posted.count
@@ -249,11 +251,11 @@ final class HCIFaultsTests: XCTestCase {
     func testFM09_MicOffForASecondReportsNotListening() {
         let r = Rig()
         r.probes.micTool = false
-        r.press(); r.clock.advance(0.52)               // first sample: mic off starts now
+        r.press(); r.clock.advance(0.52)  // first sample: mic off starts now
         XCTAssertFalse(r.sink.reports.contains { $0.phase == "notListening" }, "not yet 1s")
-        r.clock.advance(0.5)                           // second sample: ~0.5s since the mic first read off
+        r.clock.advance(0.5)  // second sample: ~0.5s since the mic first read off
         XCTAssertFalse(r.sink.reports.contains { $0.phase == "notListening" })
-        r.clock.advance(0.5)                           // third sample: ~1.0s since the mic first read off
+        r.clock.advance(0.5)  // third sample: ~1.0s since the mic first read off
         XCTAssertTrue(r.sink.reports.contains { $0.phase == "notListening" && $0.detail == "WeType" })
     }
 
@@ -280,14 +282,14 @@ final class HCIFaultsTests: XCTestCase {
     func testFM16_DoneReportWaitsForConfirmationThenConfirms() {
         let r = Rig()
         r.pressUntilListening(); r.release()
-        r.clock.advance(2.4)   // short of fallbackDelay (2.5): the dictation hasn't ended yet
+        r.clock.advance(2.4)  // short of fallbackDelay (2.5): the dictation hasn't ended yet
         XCTAssertFalse(r.sink.reports.contains { $0.phase == "done" }, "not before fallbackDelay")
         // review-4: at 2.4s the old code is ALSO silent (finish() itself hasn't run yet), so that
         // assertion alone passes on a revert. The discriminating moment is here: past fallbackDelay
         // (finish() has run and started the restore) but before the 0.1s confirm it waits on.
-        r.clock.advance(0.2)   // cumulative ~2.6s: finish() has run; the 0.1s confirm has not
+        r.clock.advance(0.2)  // cumulative ~2.6s: finish() has run; the 0.1s confirm has not
         XCTAssertFalse(r.sink.reports.contains { $0.phase == "done" }, "not before the 0.1s confirm")
-        r.clock.advance(0.3)   // past the confirm
+        r.clock.advance(0.3)  // past the confirm
         let done = r.sink.reports.last { $0.phase == "done" }
         XCTAssertTrue(done?.detail.contains("back to") == true, done?.detail ?? "nil")
     }
@@ -297,13 +299,13 @@ final class HCIFaultsTests: XCTestCase {
     func testS1_SampleCompletingAfterReleaseDoesNotReport() {
         let r = Rig()
         r.probes.micTool = false
-        r.pressUntilListening(hold: 0.6, echo: false)   // exactly one sample has completed; micOffSince is set
-        r.probes.micTool = true                          // the tool "recovers" — the next sample would report it
+        r.pressUntilListening(hold: 0.6, echo: false)  // exactly one sample has completed; micOffSince is set
+        r.probes.micTool = true  // the tool "recovers" — the next sample would report it
         r.clock.deferOffMain = true
-        r.clock.advance(0.5)                              // the second sample's work runs; its completion is held
+        r.clock.advance(0.5)  // the second sample's work runs; its completion is held
         r.release()
         let lastPhaseAfterRelease = r.sink.reports.last?.phase
-        r.clock.flushOffMain()                            // now let the held (stale) completion run
+        r.clock.flushOffMain()  // now let the held (stale) completion run
         XCTAssertEqual(r.sink.reports.last?.phase, lastPhaseAfterRelease, "a stale sample must not report after release")
     }
 
@@ -338,7 +340,7 @@ extension HCIFaultsTests {
         let r = Rig(toggle: true, switchesInput: false, trigger: KeySpec.named("right_option")!)
         r.pressUntilListening()
         let before = r.planReads
-        r.release()   // toggle: releasing the trigger alone keeps the session running
+        r.release()  // toggle: releasing the trigger alone keeps the session running
         XCTAssertEqual(r.engine.machine.state, .listening, "setup: toggle keeps going")
         r.clock.advance(0)
         XCTAssertEqual(r.planReads, before, "still active: nothing to refresh")

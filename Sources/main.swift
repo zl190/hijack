@@ -7,7 +7,7 @@ import ApplicationServices
 import Carbon
 import ServiceManagement
 
-localize = L   // Core (Keys, Engine) speaks the configured language
+localize = L  // Core (Keys, Engine) speaks the configured language
 
 // `hijack <command>` runs the CLI and exits; anything else starts the app.
 if let code = runCLI(Array(CommandLine.arguments.dropFirst())) { exit(code) }

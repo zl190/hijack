@@ -1,5 +1,5 @@
-import Foundation
 import CoreServices
+import Foundation
 
 // MARK: settings watch — re-read settings when their files change, instead of checking every second.
 // FSEvents with file-level events: catches the config file (written by replacing it) and a voice tool's
@@ -33,8 +33,9 @@ final class LiveFolderEvents: FolderEvents {
     @discardableResult func start(roots: [String], latency: Double, onChange: @escaping () -> Void) -> Bool {
         guard !roots.isEmpty else { return false }
         self.onChange = onChange
-        var context = FSEventStreamContext(version: 0, info: Unmanaged.passUnretained(self).toOpaque(),
-                                           retain: nil, release: nil, copyDescription: nil)
+        var context = FSEventStreamContext(
+            version: 0, info: Unmanaged.passUnretained(self).toOpaque(),
+            retain: nil, release: nil, copyDescription: nil)
         let callback: FSEventStreamCallback = { _, info, _, _, _, _ in
             Unmanaged<LiveFolderEvents>.fromOpaque(info!).takeUnretainedValue().onChange?()
         }
@@ -44,9 +45,10 @@ final class LiveFolderEvents: FolderEvents {
         //   Without NoDefer: 317 ms for the first write, then 14 ms to 82 ms.
         // FSEvents.h does not explain the short delays without NoDefer.
         // Keep NoDefer. It gives a stable delay.
-        stream = FSEventStreamCreate(nil, callback, &context, roots as CFArray,
-                                     FSEventStreamEventId(kFSEventStreamEventIdSinceNow), latency,
-                                     FSEventStreamCreateFlags(kFSEventStreamCreateFlagFileEvents | kFSEventStreamCreateFlagNoDefer))
+        stream = FSEventStreamCreate(
+            nil, callback, &context, roots as CFArray,
+            FSEventStreamEventId(kFSEventStreamEventIdSinceNow), latency,
+            FSEventStreamCreateFlags(kFSEventStreamCreateFlagFileEvents | kFSEventStreamCreateFlagNoDefer))
         guard let stream else { return false }
         FSEventStreamSetDispatchQueue(stream, .main)
         FSEventStreamStart(stream)

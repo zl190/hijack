@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import HijackCore
 
 // review-5 #14: Config.swift (outside this package's test target) writes config.json by hand and loads
