@@ -73,22 +73,24 @@ release-checks:
 		echo "assets/sparkle-public-key.txt is the placeholder. Run generate_keys and paste the public key."; exit 1; \
 	} || true
 
-# Build, zip, write and sign the appcast, upload both assets. Skipped when the release already has both.
+# Build, zip, write and sign the appcast, upload the assets. Skipped when the release already has all three.
 # Sparkle: one archive per version in dist/ (older zips stay there, out of git). The appcast keeps one item,
 # the new release: older items would get this release's download URL, where their zips do not exist.
 # generate_appcast reads the .md next to the zip as release notes (embedded as Markdown; a link would point
 # at a file that is never uploaded), signs the archive with the EdDSA key from the keychain, and writes
 # dist/appcast.xml. The release asset keeps the name Hijack.zip (the cask URL), so the enclosure URL is
-# rewritten from Hijack-$(VERSION).zip to Hijack.zip.
+# rewritten from Hijack-$(VERSION).zip to Hijack.zip. dist/Hijack.zip.sha256 (W4) carries the same name and
+# the shasum -c format, so install.sh can fetch and check it next to the zip.
 release-assets:
 	@assets="$$(gh release view "v$(VERSION)" --json assets -q '.assets[].name')"; \
-	if echo "$$assets" | grep -qx "Hijack.zip" && echo "$$assets" | grep -qx "appcast.xml"; then \
-		echo "v$(VERSION) already has Hijack.zip and appcast.xml: no build, no upload"; exit 0; \
+	if echo "$$assets" | grep -qx "Hijack.zip" && echo "$$assets" | grep -qx "Hijack.zip.sha256" && echo "$$assets" | grep -qx "appcast.xml"; then \
+		echo "v$(VERSION) already has Hijack.zip, Hijack.zip.sha256 and appcast.xml: no build, no upload"; exit 0; \
 	fi; \
 	set -e; \
 	HIJACK_SIGN_ID="$(RELEASE_SIGN_ID)" ./build.sh; \
 	ditto -c -k --keepParent $(APP) $(ZIP); \
 	mkdir -p dist; \
+	shasum -a 256 $(ZIP) | awk '{print $$1 "  Hijack.zip"}' > dist/Hijack.zip.sha256; \
 	cp $(ZIP) dist/Hijack-$(VERSION).zip; \
 	cp release-notes/v$(VERSION).md dist/Hijack-$(VERSION).md; \
 	$(SPARKLE_BIN)/generate_appcast --embed-release-notes --maximum-versions 1 --download-url-prefix "$(RELEASE_URL)" dist; \
@@ -96,7 +98,7 @@ release-assets:
 		echo "The $(VERSION) item in dist/appcast.xml has no EdDSA signature. Is the Sparkle key in the keychain, and does it match the public key in the app?"; exit 1; \
 	}; \
 	sed -i '' 's|/Hijack-$(VERSION)\.zip"|/Hijack.zip"|' dist/appcast.xml; \
-	gh release upload "v$(VERSION)" $(ZIP) dist/appcast.xml --clobber
+	gh release upload "v$(VERSION)" $(ZIP) dist/Hijack.zip.sha256 dist/appcast.xml --clobber
 
 release-publish:
 	@if gh release view "v$(VERSION)" --json isDraft -q '.isDraft' | grep -q true; then \
