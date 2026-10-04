@@ -1,10 +1,12 @@
 #!/bin/sh
-# Mutation harness for install.sh (W4, docs/engineering-wave-spec.md §3).
+# Mutation harness for install.sh (W4, docs/engineering-wave-spec.md §3; review-6 S4).
 # Serves a locally built Hijack.zip and its checksum over python3 -m http.server, then runs install.sh
 # against four inputs: a good zip with a good checksum, a tampered zip, a release with no checksum file,
 # and a zip whose checksum is correct but whose signed contents are not. Never touches /Applications and
-# never kills the real running Hijack: HIJACK_INSTALL_DIR always points at a temp dir here, and install.sh
-# only pkills Hijack when HIJACK_INSTALL_DIR is exactly /Applications.
+# never touches the real running Hijack: HIJACK_INSTALL_DIR always points at a temp dir here, and
+# install.sh only pkills Hijack, opens the app, and writes the ~/.local/bin link when HIJACK_INSTALL_DIR
+# is exactly /Applications. A temp-dir install is asserted by the bundle landing there and passing
+# codesign, never by it running.
 set -u
 cd "$(dirname "$0")/.."
 ROOT="$(pwd)"
@@ -71,12 +73,13 @@ else
   RC_A=$?
 fi
 cat "$WORK/a.log"
-if [ "$RC_A" -eq 0 ] && [ -d "$INSTALL_A/Hijack.app" ]; then
-  ok "good zip + good checksum installs the app"
+# Assert the bundle landed and is signed; never that it runs (S4 — install.sh must not open a temp-dir
+# install, and this harness must not launch a stray Hijack on the user's Mac).
+if [ "$RC_A" -eq 0 ] && [ -d "$INSTALL_A/Hijack.app" ] && codesign --verify --strict "$INSTALL_A/Hijack.app" >/dev/null 2>&1; then
+  ok "good zip + good checksum installs a signed app, without opening it"
 else
-  fail "good zip + good checksum did not install the app (exit $RC_A)"
+  fail "good zip + good checksum did not install a signed app (exit $RC_A)"
 fi
-pkill -f "$INSTALL_A/Hijack.app/Contents/MacOS/Hijack" 2>/dev/null || true
 
 echo
 echo "== case (b): tampered zip (one byte appended), checksum file unchanged -> refused =="

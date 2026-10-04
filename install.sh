@@ -60,9 +60,9 @@ rm -rf "$INSTALL_DIR/Hijack.app"
 mkdir -p "$INSTALL_DIR"
 mv "$APP" "$INSTALL_DIR/"
 xattr -dr com.apple.quarantine "$INSTALL_DIR/Hijack.app" 2>/dev/null || true
-# LaunchServices can refuse a launch right after the bundle is replaced (-600/-609) while it re-registers it
-for try in 1 2 3; do open "$INSTALL_DIR/Hijack.app" && break; sleep 2; done
 if [ "$INSTALL_DIR" = /Applications ]; then
+  # LaunchServices can refuse a launch right after the bundle is replaced (-600/-609) while it re-registers it
+  for try in 1 2 3; do open "$INSTALL_DIR/Hijack.app" && break; sleep 2; done
   # the `hijack` command: link it into ~/.local/bin when that's on PATH
   if [ -d "$HOME/.local/bin" ] && echo ":$PATH:" | grep -q ":$HOME/.local/bin:"; then
     ln -sf "$INSTALL_DIR/Hijack.app/Contents/MacOS/Hijack" "$HOME/.local/bin/hijack" && echo "Linked the hijack command into ~/.local/bin"
