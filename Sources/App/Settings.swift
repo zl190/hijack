@@ -30,6 +30,7 @@ final class SettingsStore: ObservableObject {
     @Published var showMenuBarIcon: Bool = true
     @Published var showDockIcon: Bool = false
     @Published var launchAtLogin: Bool = false
+    @Published var loginItemStatus: SMAppService.Status = .notRegistered  // review-5 #16: surfaces .requiresApproval
     @Published var language: String = "system"
     @Published var holdDelay: Double = 0.2
     @Published var restoreTimeout: Double = 5.0
@@ -77,7 +78,8 @@ final class SettingsStore: ObservableObject {
         showMenuBarIcon = c.showMenuBarIcon; showDockIcon = c.showDockIcon; language = c.language
         holdDelay = c.holdDelay; restoreTimeout = c.restoreTimeout; fallbackDelay = c.fallbackDelay
         configError = c.errorText
-        launchAtLogin = SMAppService.mainApp.status == .enabled
+        loginItemStatus = SMAppService.mainApp.status
+        launchAtLogin = loginItemStatus == .enabled
         trusted = AXIsProcessTrusted()
         var rows = installedProviders()
         if !rows.contains(where: { $0.id == c.voiceInput }) { rows.append(voiceProvider(for: c.voiceInput)) }
@@ -510,17 +512,30 @@ struct GeneralTab: View {
                 }
             }
             Card {
-                Row(title: L("开机启动", "Open at Login")) {
+                Row(title: L("开机启动", "Open at Login"), divider: store.loginItemStatus != .requiresApproval) {
                     Toggle(
                         "",
                         isOn: Binding(
                             get: { store.launchAtLogin },
                             set: { on in
-                                if on { try? SMAppService.mainApp.register() } else { try? SMAppService.mainApp.unregister() }
+                                // Review-5 #16: SMAppService errors were swallowed (try?), so a failed
+                                // register/unregister left the toggle wrong with no trace in the log.
+                                do {
+                                    if on { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
+                                } catch {
+                                    log("login item \(on ? "register" : "unregister") failed: \(error)")
+                                }
                                 store.refresh()
                             })
                     ).toggleStyle(.switch).labelsHidden()
                         .accessibilityLabel(L("开机启动", "Open at Login"))
+                }
+                // .requiresApproval: macOS registered it but the user hasn't approved it in System
+                // Settings yet. The toggle alone showed this as plainly off, with no reason given.
+                if store.loginItemStatus == .requiresApproval {
+                    Row(title: L("需要在「系统设置 › 通用 › 登录项」里允许", "Needs approval in System Settings › General › Login Items"), divider: false) {
+                        Button(L("去设置…", "Open Settings…")) { SMAppService.openSystemSettingsLoginItems() }
+                    }
                 }
                 Row(title: L("在菜单栏显示图标", "Show in Menu Bar")) {
                     Toggle("", isOn: Binding(get: { store.showMenuBarIcon }, set: { v in store.edit { $0.showMenuBarIcon = v } }))

@@ -92,13 +92,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         // Reopens Hijack after an installer replaces it (brew can't: its install sandbox denies launching apps).
         // The system keeps the plist from registration time, so re-register when the bundled one changes.
+        // Review-5 #16: read the status first and register only from .notRegistered — the old code compared
+        // against `!= .enabled`, so a pending .requiresApproval re-ran unregister+register on every launch
+        // with nothing for it to fix, and every error from either call was swallowed (try?).
         let plist = "com.zl190.hijack.relauncher.plist"
         let relauncher = SMAppService.agent(plistName: plist)
         let current = (try? Data(contentsOf: Bundle.main.bundleURL.appendingPathComponent("Contents/Library/LaunchAgents/" + plist)))?
             .base64EncodedString()
-        if relauncher.status != .enabled || UserDefaults.standard.string(forKey: "relauncherPlist") != current {
-            try? relauncher.unregister()
-            if (try? relauncher.register()) != nil { UserDefaults.standard.set(current, forKey: "relauncherPlist") }
+        let plistChanged = UserDefaults.standard.string(forKey: "relauncherPlist") != current
+        switch relauncher.status {
+        case .notRegistered:
+            do {
+                try relauncher.register()
+                UserDefaults.standard.set(current, forKey: "relauncherPlist")
+            } catch { log("relauncher agent register failed: \(error)") }
+        case .enabled where plistChanged:
+            do {
+                try relauncher.unregister()
+                try relauncher.register()
+                UserDefaults.standard.set(current, forKey: "relauncherPlist")
+            } catch { log("relauncher agent re-register failed: \(error)") }
+        case .requiresApproval:
+            log("relauncher agent needs approval in System Settings › General › Login Items")
+        default:
+            break
         }
         if !AXIsProcessTrusted() {  // first run: the window explains what's missing; the system prompt adds us to the list
             SettingsWindowController.show()
