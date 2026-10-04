@@ -43,17 +43,20 @@ final class PropertyTests: XCTestCase {
         return Run(seed: seed, mode: mode, events: events)
     }
 
-    /// Tracks the history an invariant needs across a run: nothing here is in `SessionMachine` itself,
-    /// which is why these are properties of the *trace*, not of a single `transition` call.
-    struct History {
-        var releasedSinceLastSend = false  // line 4 / line 12: a release with no sendTalkKey after it
-        var awaitingCloseSinceLastSend = false  // lines 2, 4, 7, 11, 12: a send not yet closed by release/finish
-    }
-
     /// Runs one `Run` to completion, failing with the seed, mode and sequence on the first broken invariant.
+    ///
+    /// review 6, S8: one `talkKeyDown` bool, updated in effect order within each step (not `.contains`,
+    /// which would lose the order `stop()` puts `releaseTalkKey` before `finish` in the same step), is the
+    /// strongest statement docs/state-machine.md supports: `sendTalkKey` and `releaseTalkKey` strictly
+    /// alternate (every exit from `listening` emits `releaseTalkKey` — SessionMachine.swift's own `stop()`),
+    /// and the key is up at every `begin` and every `finish`. This subsumes the two weaker trackers it
+    /// replaces (a double release with no send between; a send left open across a begin) and also catches
+    /// what they missed: a double send with no release between, and a send left open across a *finish*
+    /// (not just a begin) — found by review 6 reading `stop()`'s own `mode.toggle && !mode.switchesInput`
+    /// branch, which the old, hold-mode-only check at line 4 could not see.
     func check(_ run: Run) {
         var machine = SessionMachine()
-        var history = History()
+        var talkKeyDown = false
         func fail(_ line: Int, _ what: String, at step: Int, event: SessionEvent) {
             XCTFail(
                 """
@@ -67,32 +70,38 @@ final class PropertyTests: XCTestCase {
             let effects = machine.handle(event, run.mode)
             let after = machine.state
 
-            // Line 12: quit from starting or listening goes to idle; elsewhere it changes nothing (tested
-            // directly in SessionMachineTests). The property test covers only the first half, over every
-            // state the random walk actually reaches.
-            if event == .quit, before == .starting || before == .listening {
-                guard after == .idle else { fail(12, "after quit from \(before), the state must be idle", at: step, event: event); return }
-            }
-
-            // Lines 4 and 12: a sent talk key is released at most once before it is sent again.
-            // releaseTalkKey never appears twice with no sendTalkKey between the two appearances.
-            if effects.contains(.releaseTalkKey) {
-                guard !history.releasedSinceLastSend else {
-                    fail(4, "releaseTalkKey appeared twice with no sendTalkKey between", at: step, event: event); return
-                }
-                history.releasedSinceLastSend = true
-            }
-            if effects.contains(.sendTalkKey) { history.releasedSinceLastSend = false }
-
-            // Lines 2, 4, 7, 11, 12: every sendTalkKey is closed (releaseTalkKey or finish) before the next begin.
-            if effects.contains(.begin) {
-                guard !history.awaitingCloseSinceLastSend else {
-                    fail(2, "begin arrived before the previous sendTalkKey was closed by releaseTalkKey or finish", at: step, event: event)
-                    return
+            // Line 12, both halves: quit from starting or listening goes to idle; everywhere else it
+            // changes nothing at all (not just "not idle" — the exact prior state, cheaply checked).
+            if event == .quit {
+                let expected: SessionState = before == .starting || before == .listening ? .idle : before
+                guard after == expected else {
+                    fail(12, "quit from \(before) must leave the state at \(expected), got \(after)", at: step, event: event); return
                 }
             }
-            if effects.contains(.sendTalkKey) { history.awaitingCloseSinceLastSend = true }
-            if effects.contains(.releaseTalkKey) || effects.contains(.finish) { history.awaitingCloseSinceLastSend = false }
+
+            // Lines 2, 4, 7, 11, 12: sendTalkKey and releaseTalkKey strictly alternate, and the key is up
+            // (not sent, or already released) at every begin and every finish. Effects are walked in the
+            // order `SessionMachine.transition` returns them, because `stop()` can emit releaseTalkKey and
+            // finish in the same step, release first — order is the whole point of "closed before finish".
+            for effect in effects {
+                switch effect {
+                case .begin:
+                    guard !talkKeyDown else { fail(2, "begin arrived with the talk key still down", at: step, event: event); return }
+                case .sendTalkKey:
+                    guard !talkKeyDown else {
+                        fail(4, "sendTalkKey arrived with the talk key already down", at: step, event: event); return
+                    }
+                    talkKeyDown = true
+                case .releaseTalkKey:
+                    guard talkKeyDown else {
+                        fail(4, "releaseTalkKey arrived with the talk key already up", at: step, event: event); return
+                    }
+                    talkKeyDown = false
+                case .finish:
+                    guard !talkKeyDown else { fail(7, "finish arrived with the talk key still down", at: step, event: event); return }
+                default: break
+                }
+            }
 
             // Line 4: in hold mode, a release from listening always yields releaseTalkKey.
             if !run.mode.toggle, before == .listening, event == .release {
