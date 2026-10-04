@@ -330,8 +330,8 @@ struct DictationTab: View {
                 }
             }
             Card(title: L("试一下", "Try It")) {
-                if MenuFaults.showsStaleAccessibilityGuidance(trusted: store.trusted) {
-                    Row(title: L("辅助功能未生效", "Accessibility isn't working"), hint: staleAccessibilityGuidance) {
+                if !store.trusted {
+                    Row(title: L("辅助功能未生效", "Accessibility isn't working"), hint: accessibilityNotTrustedGuidance) {
                         Button(L("去系统设置…", "Open System Settings…")) {
                             if let accessibilityURL { NSWorkspace.shared.open(accessibilityURL) }
                         }

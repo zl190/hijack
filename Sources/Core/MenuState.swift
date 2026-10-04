@@ -44,14 +44,6 @@ public enum MenuFaults {
         return nil
     }
 
-    /// Review-5 #7 (stale-grant-guidance): whether the menu first line, Settings' Try It card and
-    /// `hijack doctor` should show the stale-grant wording in place of the plain "go grant it" line. Kept
-    /// as its own decision (not folded into `firstLine`'s not-trusted branch) because the three surfaces
-    /// that use it do not all read `tapActive` the same way the menu does. `AXIsProcessTrusted()` alone
-    /// cannot tell a first-time grant from a signed build replacing an ad-hoc one (or the reverse), which
-    /// leaves System Settings showing the switch already on — so the same wording covers both.
-    public static func showsStaleAccessibilityGuidance(trusted: Bool) -> Bool { !trusted }
-
     /// FM-01, FM-04, FM-25: hold mode only. Toggle mode has the shortcut up for the whole, normal
     /// dictation (it stops on the next press, not on release) — that is not a fault, so toggle never
     /// shows this line. `keyIsPhysicallyDown` must be the live key state, not a cached edge flag: a

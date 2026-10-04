@@ -242,8 +242,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             engine.tap.secureInputOn ? (NSWorkspace.shared.frontmostApplication?.localizedName ?? L("另一个 app", "Another app")) : nil
         let fault = MenuFaults.firstLine(
             tapActive: engine.tap.isEnabled, stillHoldingTalkKey: stillHolding, secureInputApp: secureApp, recordingPaused: engine.paused)
-        if MenuFaults.showsStaleAccessibilityGuidance(trusted: AXIsProcessTrusted()) {
-            add("⚠︎ " + staleAccessibilityGuidance, #selector(openAccessibility))
+        if !AXIsProcessTrusted() {
+            add("⚠︎ " + accessibilityNotTrustedGuidance, #selector(openAccessibility))
         } else if let fault {
             switch fault {
             case .recordingPaused:

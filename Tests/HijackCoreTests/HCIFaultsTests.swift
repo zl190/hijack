@@ -91,17 +91,6 @@ final class MenuStateTests: XCTestCase {
     func testStillHoldingTalkKey_NotActiveShowsNoLine() {
         XCTAssertNil(MenuFaults.stillHoldingTalkKey(toggle: false, isActive: false, keyIsPhysicallyDown: false, talkKeyName: "Fn"))
     }
-
-    // Review-5 #7: not trusted shows the stale-grant guidance (covers both a first-time grant and a
-    // build swap that leaves System Settings showing the switch already on).
-    func testShowsStaleAccessibilityGuidance_NotTrusted() {
-        XCTAssertTrue(MenuFaults.showsStaleAccessibilityGuidance(trusted: false))
-    }
-
-    // The other side of the same, single branch: trusted shows nothing.
-    func testShowsStaleAccessibilityGuidance_Trusted() {
-        XCTAssertFalse(MenuFaults.showsStaleAccessibilityGuidance(trusted: true))
-    }
 }
 
 final class HCIFaultsTests: XCTestCase {
