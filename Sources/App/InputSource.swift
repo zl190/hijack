@@ -29,11 +29,3 @@ func select(_ id: String) -> Bool {
     else { return false }
     return TISSelectInputSource(src) == noErr
 }
-
-// Select and confirm: re-read the current source a moment later and retry once if it didn't stick.
-func switchTo(_ id: String, _ label: String) {
-    let ok = select(id)
-    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-        if currentID() == id { trace("\(label) \(id) ok=\(ok)") } else { log("\(label) \(id) didn't stick, retry ok=\(select(id))") }
-    }
-}

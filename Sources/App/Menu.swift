@@ -371,9 +371,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let c = Config.shared; c.reload(); c.triggerMode = sender.representedObject as? String ?? "hold"; c.save()
         log("trigger mode set to \(c.triggerMode)")
     }
-    @objc func toggleStopOnAnyKey() {
-        let c = Config.shared; c.reload(); c.stopOnAnyKey.toggle(); c.save()
-    }
     @objc func setVoiceStyle(_ sender: NSMenuItem) {
         let c = Config.shared; c.reload()
         let v = sender.representedObject as? String
@@ -384,15 +381,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard let id = sender.representedObject as? String else { return }
         let c = Config.shared; c.reload(); c.voiceInput = id; c.save()
         log("voice source set to \(id)")
-    }
-    @objc func setLanguage(_ sender: NSMenuItem) {
-        let c = Config.shared; c.reload(); c.language = sender.representedObject as? String ?? "system"; c.save()
-    }
-    @objc func toggleIcon() {
-        let c = Config.shared; c.reload(); c.showMenuBarIcon.toggle(); c.save(); updateIcon()
-    }
-    @objc func toggleLogin() {
-        if SMAppService.mainApp.status == .enabled { try? SMAppService.mainApp.unregister() } else { try? SMAppService.mainApp.register() }
     }
     @objc func openConfig() {
         Config.shared.reload()
