@@ -14,10 +14,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Becomes blocking after the first full format (see docs/swift-format.md).
+      # Blocking since the full format on 2026-10-04 (see docs/swift-format.md).
       - name: Check formatting
         run: make lint
-        continue-on-error: true
 
       - name: Run the unit tests
         run: make test

@@ -58,10 +58,43 @@ rule toggles:
    1 GroupNumericLiterals
 ```
 
-These are not bugs in the config — they are real formatting differences that only the full
-`make fmt` pass resolves. A dry run of `make fmt` touches 26 of the repo's 27 Swift files
-(all but `Sources/Focus.swift`), netting roughly +610/-371 lines in `Sources` and +127/-86 in
-`Tests`.
+These were formatting differences, not config errors. The full `make fmt` pass resolved them on 2026-10-04
+(28 files, +805/-487 lines).
+
+## Status
+
+Done on 2026-10-04:
+
+1. The full `make fmt` pass landed as one commit after the in-flight branches merged.
+2. `make lint` reports zero findings on main.
+3. The CI step is blocking: a push with a formatting difference fails the `ci` check.
+
+Open: review the 77 `NeverForceUnwrap` hits by hand and decide whether to turn the rule on.
+
+## Disabled rules` section above the table for the full one-sentence
+reasoning kept as a code comment equivalent (JSON itself cannot hold comments).
+
+## Current lint status
+
+`make lint` exits non-zero with 589 violations across 9 rule categories, all of them downstream
+of the codebase's dense one-statement-per-line style (semicolon-joined switches, packed struct
+literals, long argument lists), which swift-format reflows onto multiple lines regardless of
+rule toggles:
+
+```
+ 168 AddLines
+ 157 Spacing
+ 152 Indentation
+  74 LineLength
+  20 RemoveLine
+   9 TrailingComma
+   6 OrderedImports
+   2 EndOfLineComment
+   1 GroupNumericLiterals
+```
+
+These were formatting differences, not config errors. The full `make fmt` pass resolved them on 2026-10-04
+(28 files, +805/-487 lines).
 
 ## Plan
 
