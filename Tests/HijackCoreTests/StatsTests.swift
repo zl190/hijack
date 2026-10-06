@@ -23,6 +23,28 @@ final class StatsTests: XCTestCase {
     let app =
         "2026-10-03 21:04:00.000 dictation Handy (hold): held 1.50s, Option sent after 200ms, no switch back needed | echo after 201ms, mic tool on device on | front=x"
 
+    // W7: the post probe adds `post: seen` / `post: not seen` / `post: ?` right after the echo field.
+    let postNotSeen =
+        "2026-10-06 18:00:00.000 dictation WeType (hold): held 2.00s, Fn sent after 210ms, window never closed after release, back after 2.50s | echo missing, post: not seen, mic tool off device off, window while held: no window (pid 912) | front=x"
+    let postSeenOK =
+        "2026-10-06 18:01:00.000 dictation WeType (hold): held 3.0s, Fn sent after 238ms, window closed 1627ms after release, back after 1.82s | echo after 245ms, post: seen, mic tool on device on, window while held: 1 window | front=x"
+    let postNotSeenNoEcho =
+        "2026-10-06 18:02:00.000 dictation WeType (hold): held 2.00s, Fn sent after 210ms, window never closed after release, back after 2.50s | post: not seen, mic tool on device on, window while held: no window (pid 912) | front=x"
+    func testPostFieldDoesNotBreakParsingAndIsRead() {
+        let bad = DictationEntry.parse(postNotSeen)!
+        XCTAssertEqual(bad.postSeen, false); XCTAssertEqual(bad.cause, .keyNotSent); XCTAssertEqual(bad.sentMs, 210)
+        let good = DictationEntry.parse(postSeenOK)!
+        XCTAssertEqual(good.postSeen, true); XCTAssertEqual(good.outcome, .textArrived); XCTAssertNil(good.cause)
+        XCTAssertNil(DictationEntry.parse(noEcho)!.postSeen, "an older line has no post field")
+    }
+    // `post: not seen` alone is enough for the keyNotSent bucket when the echo field is absent.
+    func testPostNotSeenWithoutAnEchoFieldIsKeyNotSent() {
+        XCTAssertEqual(DictationEntry.parse(postNotSeenNoEcho)!.cause, .keyNotSent)
+        // Out of range: the same line with `post: seen` is a window problem, not a key problem.
+        XCTAssertEqual(
+            DictationEntry.parse(postNotSeenNoEcho.replacingOccurrences(of: "post: not seen", with: "post: seen"))!.cause, .windowNotSeen)
+    }
+
     func testParsesASuccess() {
         let e = DictationEntry.parse(ok1)!
         XCTAssertEqual(e.tool, "WeType"); XCTAssertEqual(e.heldMs, 3000); XCTAssertEqual(e.sentMs, 238)

@@ -24,6 +24,8 @@ public struct KeyInput: Equatable {
 /// Posts key events to the system. Returns false when the system refuses to create the event (FM-08).
 public protocol KeyPoster {
     @discardableResult func post(_ key: KeySpec, down: Bool) -> Bool
+    /// Replace the event source the posts go through (W7): a source held across system sleep can stop reaching the HID stream.
+    func rebuild(reason: String)
 }
 
 /// The keyboard input sources (TIS).

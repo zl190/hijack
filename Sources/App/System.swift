@@ -31,9 +31,19 @@ extension Engine {
     }
 }
 
-struct LiveKeyPoster: KeyPoster {
+/// Posts through one explicit HID-state event source instead of the implicit one (`keyboardEventSource: nil`).
+/// The implicit source goes stale in a long-lived process after system sleep: posts stop reaching the HID
+/// stream (docs/incidents/2026-10-04-echo-missing.md). `rebuild` swaps in a fresh source.
+final class LiveKeyPoster: KeyPoster {
+    private var source = CGEventSource(stateID: .hidSystemState)
+
+    func rebuild(reason: String) {
+        source = CGEventSource(stateID: .hidSystemState)
+        log("event source rebuilt (\(reason))")
+    }
+
     @discardableResult func post(_ key: KeySpec, down: Bool) -> Bool {
-        guard let e = CGEvent(keyboardEventSource: nil, virtualKey: CGKeyCode(key.code), keyDown: down) else { return false }
+        guard let e = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(key.code), keyDown: down) else { return false }
         if key.modifierOnly, let n = key.named, let flag = n.flag {
             e.type = .flagsChanged
             e.flags = down ? CGEventFlags(rawValue: flag.rawValue | n.device) : []
@@ -63,7 +73,7 @@ struct LiveKeyPoster: KeyPoster {
         case .command: code = 55
         case .fn: code = 63
         }
-        guard let e = CGEvent(keyboardEventSource: nil, virtualKey: CGKeyCode(code), keyDown: down) else { return }
+        guard let e = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(code), keyDown: down) else { return }
         e.type = .flagsChanged
         e.flags = held.reduce(into: CGEventFlags()) { $0.insert($1.flag) }
         e.setIntegerValueField(.eventSourceUserData, value: marker)

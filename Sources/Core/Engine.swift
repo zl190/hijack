@@ -50,6 +50,7 @@ public struct DictationRecord {
     public var heldWindow: WindowState?  // same sample
     public var sawWindow: Bool = false  // its voice window was on screen at some point after release
     public var windowGoneMs: Int?  // release → voice window gone (the text is in)
+    public var postSeen: Bool?  // 0.3 s after the talk key went out, the system key state shows it down (nil: not sampled)
     public var switchFailed: Bool = false  // the input source never switched: the talk key was not sent (FM-05)
 }
 
@@ -142,7 +143,16 @@ public final class Engine {
         }
     }
 
+    /// A source rebuilt before the first post after a gap longer than this (W7).
+    public static let idleRebuildAfter: TimeInterval = 600
+    public var lastPostAt: Date?
+
     public func post(_ key: KeySpec, down: Bool) {
+        let now = clock.now
+        if let last = lastPostAt, now.timeIntervalSince(last) > Self.idleRebuildAfter {
+            keys.rebuild(reason: "idle \(Int(now.timeIntervalSince(last) / 60))m")
+        }
+        lastPostAt = now
         if !keys.post(key, down: down) { log("couldn't create the \(key.name) \(down ? "press" : "release") event") }
     }
 
@@ -325,6 +335,12 @@ public final class Engine {
     public func sampleWhileHeld(gen: Int, after delay: Double) {
         clock.after(delay) { [self] in
             guard machine.state == .listening, gen == generation else { return }
+            // W7: did the system see our talk key go down? Only a held key can be read back: a tapped
+            // key is already up by now. A cheap state read, so it stays on the main thread.
+            if record.postSeen == nil, plan.style == "hold" {
+                let key = plan.forwardKey
+                record.postSeen = key.modifierOnly ? key.named?.flag.map { tap.modifierIsDown($0) } ?? false : tap.keyIsDown(key.code)
+            }
             let pids = voicePIDs, watched = plan.switchesInput, probes = probes
             clock.offMain({ () -> ((Bool?, Bool?), WindowState) in
                 let mic = (probes.micInUse(by: pids), probes.micInUse(by: nil))
@@ -371,7 +387,7 @@ public final class Engine {
             }
             line += ", \(end)"
             line +=
-                " | echo \(r.echoMs.map { "after \($0)ms" } ?? "missing"), mic tool \(onOff(r.heldMic?.tool)) device \(onOff(r.heldMic?.device))"
+                " | echo \(r.echoMs.map { "after \($0)ms" } ?? "missing"), post: \(r.postSeen.map { $0 ? "seen" : "not seen" } ?? "?"), mic tool \(onOff(r.heldMic?.tool)) device \(onOff(r.heldMic?.device))"
             if p.switchesInput { line += ", window while held: \(r.heldWindow?.text ?? "?")" }
         } else if r.switchFailed {
             line += ", \(end)"
@@ -405,6 +421,7 @@ public final class Engine {
     /// after the sleep or the lock is the user's: the notification came late (review-4 S3). Then the trigger is re-read.
     public func reconcileAfterWake(_ wake: Wake) {
         let reason = wake == .systemWake ? "system wake" : "screen unlocked"
+        if wake == .systemWake { keys.rebuild(reason: "system wake") }
         let since = wake == .systemWake ? sleptAt : lockedAt
         if machine.isActive, since.map({ record.pressedAt < $0 }) ?? true {
             log("session was active across \(reason): stopping it")

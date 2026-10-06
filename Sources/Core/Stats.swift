@@ -28,6 +28,7 @@ public struct DictationEntry: Equatable {
     public var textInMs: Int?  // release → voice window gone
     public var outcome: Outcome
     public var cause: Cause?
+    public var postSeen: Bool?  // W7: the system key state showed the talk key down 0.3 s after it was posted (nil: no field)
     public var tapDisabled: Bool
     public var secureInput: Bool
 
@@ -50,6 +51,7 @@ public struct DictationEntry: Equatable {
         let sent = num(#"sent after (\d+)ms"#).map { Int($0) }
         let textIn = num(#"window closed (\d+)ms after release"#).map { Int($0) }
         let echo = line.contains("echo missing") ? false : line.contains("echo after") ? true : nil
+        let post = line.contains("post: not seen") ? false : line.contains("post: seen") ? true : nil
         let mic = word(#"mic tool (on|off)"#).map { $0 == "on" }
         let outcome: Outcome
         if line.contains("input source never switched") {
@@ -70,12 +72,13 @@ public struct DictationEntry: Equatable {
             cause =
                 line.contains("input source never switched")
                 ? .sourceNotSwitched
-                : echo == false ? .keyNotSent : mic == false ? .toolDidntListen : mic == true ? .windowNotSeen : .unknown
+                : echo == false || (echo == nil && post == false)
+                    ? .keyNotSent : mic == false ? .toolDidntListen : mic == true ? .windowNotSeen : .unknown
         }
         return DictationEntry(
             day: String(line.prefix(10)), tool: tool, toggle: line.contains("(toggle)"),
             heldMs: Int(held * 1000), sentMs: sent, textInMs: textIn, outcome: outcome, cause: cause,
-            tapDisabled: line.contains("key tap disabled"), secureInput: line.contains("secure input on"))
+            postSeen: post, tapDisabled: line.contains("key tap disabled"), secureInput: line.contains("secure input on"))
     }
 }
 

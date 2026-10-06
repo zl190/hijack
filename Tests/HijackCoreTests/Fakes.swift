@@ -37,6 +37,8 @@ final class FakeClock: Scheduler {
 final class FakeKeys: KeyPoster {
     var posted: [(key: KeySpec, down: Bool)] = []
     var failNext = 0  // the next N posts return false (FM-08)
+    var rebuilds: [String] = []  // the reason of each rebuild(reason:) call (W7)
+    func rebuild(reason: String) { rebuilds.append(reason) }
     @discardableResult func post(_ key: KeySpec, down: Bool) -> Bool {
         if failNext > 0 { failNext -= 1; return false }
         posted.append((key, down)); return true
