@@ -143,16 +143,7 @@ public final class Engine {
         }
     }
 
-    /// A source rebuilt before the first post after a gap longer than this (W7).
-    public static let idleRebuildAfter: TimeInterval = 600
-    public var lastPostAt: Date?
-
     public func post(_ key: KeySpec, down: Bool) {
-        let now = clock.now
-        if let last = lastPostAt, now.timeIntervalSince(last) > Self.idleRebuildAfter {
-            keys.rebuild(reason: "idle \(Int(now.timeIntervalSince(last) / 60))m")
-        }
-        lastPostAt = now
         if !keys.post(key, down: down) { log("couldn't create the \(key.name) \(down ? "press" : "release") event") }
     }
 
@@ -180,6 +171,9 @@ public final class Engine {
         voicePIDs = probes.processIDs(ofProvider: plan.providerID)
         record.keySentMs = ms(since: record.pressedAt)
         enterPhase("listening"); mark("talk key sent")
+        // W7: staleness flaps inside a degraded run (echo seen, then missing 10 s later, no sleep between),
+        // so the source is replaced before every dictation's press, not only after sleep or idle.
+        keys.rebuild(reason: "dictation")
         startVoice()
         sampleWhileHeld(gen: generation, after: 0.3)
         report("listening", plan.voiceName)
@@ -338,8 +332,10 @@ public final class Engine {
             // W7: did the system see our talk key go down? Only a held key can be read back: a tapped
             // key is already up by now. A cheap state read, so it stays on the main thread.
             if record.postSeen == nil, plan.style == "hold" {
-                let key = plan.forwardKey
-                record.postSeen = key.modifierOnly ? key.named?.flag.map { tap.modifierIsDown($0) } ?? false : tap.keyIsDown(key.code)
+                // Unverified which state shows a posted Fn: read both, say which one did (trace).
+                let seen = tap.postedKeyVisible(plan.forwardKey)
+                record.postSeen = seen.hid || seen.session
+                trace("post sample hid=\(seen.hid ? "on" : "off") session=\(seen.session ? "on" : "off")")
             }
             let pids = voicePIDs, watched = plan.switchesInput, probes = probes
             clock.offMain({ () -> ((Bool?, Bool?), WindowState) in

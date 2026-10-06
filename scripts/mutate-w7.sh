@@ -7,7 +7,9 @@ set -u
 cd "$(dirname "$0")/.."
 fail=0
 current=""
-trap '[ -n "$current" ] && [ -f "$current.w7orig" ] && mv "$current.w7orig" "$current"' EXIT INT TERM
+restore() { [ -n "$current" ] && [ -f "$current.w7orig" ] && mv "$current.w7orig" "$current"; current=""; }
+trap restore EXIT
+trap 'restore; exit 130' INT TERM
 
 green() { swift test --filter "$1" 2>&1 | grep -q "with 0 failures" && ! swift test --filter "$1" 2>&1 | grep -q "error: -\["; }
 red() { ! swift test --filter "$1" >/dev/null 2>&1; }
@@ -29,14 +31,23 @@ mutate "a rebuild-on-wake dropped" $E 's|if wake == .systemWake { keys.rebuild(r
   'EventSourceTests/testSystemWakeRebuildsTheSource'
 mutate "a2 rebuild also on screen unlock" $E 's|if wake == .systemWake { keys.rebuild|if true { keys.rebuild|' \
   'EventSourceTests/testScreenUnlockDoesNotRebuildTheSource'
-mutate "b idle threshold 10 min -> 100 min" $E 's|idleRebuildAfter: TimeInterval = 600|idleRebuildAfter: TimeInterval = 6000|' \
-  'EventSourceTests/(testPressAfterElevenMinutesRebuildsBeforeThePost|testTenMinutesAndASecondRebuilds)'
-mutate "b2 idle boundary > -> >=" $E 's|> Self.idleRebuildAfter|>= Self.idleRebuildAfter|' \
-  'EventSourceTests/testExactlyTenMinutesDoesNotRebuild'
+mutate "b per-dictation rebuild dropped" $E 's|keys.rebuild(reason: "dictation")||' \
+  'EventSourceTests/(testEveryDictationRebuildsOnceBeforeItsPress|testWakeThenDictationRebuildsTwice)'
+mutate "b2 rebuild moved after the press post" $E 's|keys.rebuild(reason: "dictation")|_ = 0|; s|        startVoice()$|        startVoice(); keys.rebuild(reason: "dictation")|' \
+  'EventSourceTests/testEveryDictationRebuildsOnceBeforeItsPress'
 mutate "c summary always prints post: seen" $E 's|r.postSeen.map { $0 ? "seen" : "not seen" } ?? "?"|"seen"|' \
   'EventSourceTests/testSummaryHasPostNotSeenWhenTheKeyStateIsUp'
+mutate "c2 post sample reads hid only" $E 's|record.postSeen = seen.hid \|\| seen.session|record.postSeen = seen.hid|' \
+  'EventSourceTests/testSessionStateAloneCountsAsSeen'
 mutate "d stats ignores post: not seen" Sources/Core/Stats.swift 's|line.contains("post: not seen")|line.contains("post: NOT-SEEN")|' \
   'StatsTests/(testPostFieldDoesNotBreakParsingAndIsRead|testPostNotSeenWithoutAnEchoFieldIsKeyNotSent)'
+
+# Static check (a grep, not a test): the App side must not fall back to the implicit event source in post/postModifier.
+if grep -q 'CGEvent(keyboardEventSource: source' Sources/App/System.swift && ! grep -q 'CGEvent(keyboardEventSource: nil' Sources/App/System.swift; then
+  echo "PASS static grep: Sources/App/System.swift creates events through the explicit source"
+else
+  echo "FAIL static grep: Sources/App/System.swift has the implicit nil source again"; fail=1
+fi
 
 [ "$fail" -eq 0 ] && echo "ALL PASS" || echo "SOME FAILED"
 exit "$fail"

@@ -42,6 +42,8 @@ public protocol TapControl: AnyObject {
     func enable()
     func keyIsDown(_ code: Int) -> Bool  // the key as the keyboard has it
     func modifierIsDown(_ flag: CGEventFlags) -> Bool  // the modifier as the system has it
+    /// W7: is the talk key down right now, in the HID system state and in the combined session state?
+    func postedKeyVisible(_ key: KeySpec) -> (hid: Bool, session: Bool)
     var secureInputOn: Bool { get }
 }
 

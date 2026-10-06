@@ -33,7 +33,7 @@ one system sleep at 12:41 with wake at 13:09; screen sleeps at 14:04 and 14:14. 
 ## Experiment (ticket W7, implemented 2026-10-06)
 
 1. (Implemented: `LiveKeyPoster` in `Sources/App/System.swift`, `Engine.post`, `reconcileAfterWake`.) Hold one explicit `CGEventSource(stateID: .hidSystemState)` in `LiveKeyPoster` and post through it.
-   Rebuild it on `didWake` and on the first post after a gap longer than 10 minutes. Log `event source
+   Rebuild it before every dictation's press and on `didWake` (changed after review: the field log shows staleness flapping within a degraded run, 17:13:36 echo then 17:13:46 missing with no sleep between, so a wake or idle trigger alone cannot pass the acceptance below). Log `event source
    rebuilt (reason)`.
 2. (Implemented: `Engine.sampleWhileHeld`, `Engine.summary`.) 0.3 s after the talk key goes out, read `flagsState` (modifier-only key) or `keyState` (other key) through the tap and put
    the result on the summary line as `post: seen` / `post: not seen` / `post: ?` (`?`: released before the sample, or a tap-style key that is already up). This separates "post failed" from "tool ignored".
@@ -57,8 +57,10 @@ of a failed post shows `post: not seen` and the next dictation shows `event sour
 
 - `LiveKeyPoster` holds one `CGEventSource(stateID: .hidSystemState)`; every event goes through it. `rebuild(reason:)`
   swaps it and logs `event source rebuilt (<reason>)`.
-- `Engine` rebuilds on `reconcileAfterWake(.systemWake)` (reason `system wake`; a screen unlock does not) and before the
-  first post after more than 10 minutes without a post (reason `idle <N>m`).
+- `Engine` rebuilds before every dictation's talk-key press (`sendKey`, reason `dictation`) and on
+  `reconcileAfterWake(.systemWake)` (reason `system wake`, a log marker; a screen unlock does not). A failed rebuild keeps the old source and logs it.
+- The probe reads the key state in both `.hidSystemState` and `.combinedSessionState`; `post: seen` means either showed it.
+  The trace line `post sample hid=<on/off> session=<on/off>` (`hijack log --live`) tells which state works.
 - The summary line carries `post: seen` / `post: not seen` / `post: ?` after the echo field. Stats reads it; a line with
   `post: not seen` and no echo field counts under `talk key never went out`.
 - Mutation checks: `scripts/mutate-w7.sh` (output below). Tests: `Tests/HijackCoreTests/EventSourceTests.swift`, `StatsTests`.
@@ -70,14 +72,17 @@ PASS a rebuild-on-wake dropped: broken -> tests RED
 PASS a rebuild-on-wake dropped: restored -> tests GREEN
 PASS a2 rebuild also on screen unlock: broken -> tests RED
 PASS a2 rebuild also on screen unlock: restored -> tests GREEN
-PASS b idle threshold 10 min -> 100 min: broken -> tests RED
-PASS b idle threshold 10 min -> 100 min: restored -> tests GREEN
-PASS b2 idle boundary > -> >=: broken -> tests RED
-PASS b2 idle boundary > -> >=: restored -> tests GREEN
+PASS b per-dictation rebuild dropped: broken -> tests RED
+PASS b per-dictation rebuild dropped: restored -> tests GREEN
+PASS b2 rebuild moved after the press post: broken -> tests RED
+PASS b2 rebuild moved after the press post: restored -> tests GREEN
 PASS c summary always prints post: seen: broken -> tests RED
 PASS c summary always prints post: seen: restored -> tests GREEN
+PASS c2 post sample reads hid only: broken -> tests RED
+PASS c2 post sample reads hid only: restored -> tests GREEN
 PASS d stats ignores post: not seen: broken -> tests RED
 PASS d stats ignores post: not seen: restored -> tests GREEN
+PASS static grep: Sources/App/System.swift creates events through the explicit source
 ALL PASS
 ```
 

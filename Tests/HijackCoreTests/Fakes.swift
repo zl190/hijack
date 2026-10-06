@@ -38,8 +38,10 @@ final class FakeKeys: KeyPoster {
     var posted: [(key: KeySpec, down: Bool)] = []
     var failNext = 0  // the next N posts return false (FM-08)
     var rebuilds: [String] = []  // the reason of each rebuild(reason:) call (W7)
-    func rebuild(reason: String) { rebuilds.append(reason) }
+    var timeline: [String] = []  // "rebuild:<reason>" and "post:<key id>:down|up" in call order
+    func rebuild(reason: String) { rebuilds.append(reason); timeline.append("rebuild:\(reason)") }
     @discardableResult func post(_ key: KeySpec, down: Bool) -> Bool {
+        timeline.append("post:\(key.logID):\(down ? "down" : "up")")
         if failNext > 0 { failNext -= 1; return false }
         posted.append((key, down)); return true
     }
@@ -70,6 +72,8 @@ final class FakeTap: TapControl {
     var enableFails = 0  // the next N enables do nothing (FM-02)
     var keysDown: Set<Int> = []
     var flagsDown: CGEventFlags = []
+    var sessionKeysDown: Set<Int> = []  // the combined session state (W7 probe reads both)
+    var sessionFlagsDown: CGEventFlags = []
     var secureInputOn = false
     var onEvent: ((KeyInput) -> Bool)?
     func install(_ onEvent: @escaping (KeyInput) -> Bool) -> Bool {
@@ -80,6 +84,10 @@ final class FakeTap: TapControl {
     func enable() { if enableFails > 0 { enableFails -= 1 } else { enabled = true } }
     func keyIsDown(_ code: Int) -> Bool { keysDown.contains(code) }
     func modifierIsDown(_ flag: CGEventFlags) -> Bool { flagsDown.contains(flag) }
+    func postedKeyVisible(_ key: KeySpec) -> (hid: Bool, session: Bool) {
+        if key.modifierOnly, let flag = key.named?.flag { return (flagsDown.contains(flag), sessionFlagsDown.contains(flag)) }
+        return (keysDown.contains(key.code), sessionKeysDown.contains(key.code))
+    }
 }
 
 final class FakeProbes: Probes {
