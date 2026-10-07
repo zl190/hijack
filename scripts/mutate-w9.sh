@@ -28,7 +28,7 @@ mutate() { # name file sed-expression test-filter
 
 E=Sources/Core/Engine.swift
 T=AppNapTests
-mutate "a summary always prints nap: off" $E 's|return ", nap: \\(s.napped ? "on" : "off"), role: \\(s.role)"|return ", nap: off, role: \\(s.role)"|' \
+mutate "a summary always prints nap: off" $E 's|return ", nap: \\(s.napped ? "on" : "off")" +|return ", nap: off" +|' \
   "$T/(testNappedShowsNapOnAndTheRole|testStartedAndRelaunchLinesCarryNapFromAReadAtThatMoment|testNapIsIndependentOfPostSeen)"
 mutate "a2 unreadable prints nap: off" $E 's|guard let s else { return ", nap: ?" }|guard let s else { return ", nap: off" }|' \
   "$T/(testUnreadableShowsNapQuestionMarkAndNoRole|testTapStyleHasNoSample|testReleaseBeforeTheSampleHasNoSample)"

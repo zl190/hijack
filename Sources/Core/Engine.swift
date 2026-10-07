@@ -379,7 +379,7 @@ public final class Engine {
     /// W9: `, nap: on|off|?` and, when it was read, `, role: N`. Substrings the stats parser looks for.
     func napField(_ s: ProcessState?) -> String {
         guard let s else { return ", nap: ?" }
-        return ", nap: \(s.napped ? "on" : "off"), role: \(s.role)"
+        return ", nap: \(s.napped ? "on" : "off")" + (s.role.map { ", role: \($0)" } ?? "")
     }
     /// W9: ` nap=on|off|?` read now, for the `started:` and `self-relaunch:` lines.
     func napNow() -> String { " nap=" + (probes.processState().map { $0.napped ? "on" : "off" } ?? "?") }
@@ -432,9 +432,15 @@ public final class Engine {
                 return
             }
         }
-        supervisor.lastRelaunchAt = now
         log("self-relaunch: \(why)\(napNow())")
-        supervisor.relaunch(reason: why)
+        // Not inline: for an app provider this summary runs inside the CGEventTap callback (ADR 0011), and a quit
+        // there would never return the swallowed trigger key-up. The next main-loop turn is outside the callback.
+        // The time is stored only when the relauncher started, so a failed spawn does not use up the rate limit.
+        let relaunchNextTurn = { [self] in
+            guard !machine.isActive else { trace("self-relaunch cancelled: a session started"); return }
+            if supervisor.relaunch(reason: why) { supervisor.lastRelaunchAt = clock.now }
+        }
+        clock.after(0, relaunchNextTurn)
     }
 
     /// The tap was off for a while, so key events may have been missed: line our idea of the trigger up with

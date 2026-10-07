@@ -123,6 +123,7 @@ final class SelfRelaunchTests: XCTestCase {
         r.release()  // waiting for text
         r.press()  // the next press interrupts: summary(end: interrupted) runs with a new session starting
         XCTAssertTrue(r.sink.summaries.contains { $0.contains("interrupted by the next press") }, "\(r.sink.summaries)")
+        r.clock.advance(0)  // a scheduled relaunch would run now
         XCTAssertEqual(r.supervisor.relaunches, [])
     }
 
@@ -148,5 +149,42 @@ final class SelfRelaunchTests: XCTestCase {
         ]
         XCTAssertEqual(DictationStats.compute(lines: lines, today: "2026-10-07").selfRelaunches, 2)
         XCTAssertEqual(DictationStats.compute(lines: [], today: "2026-10-07").selfRelaunches, 0)
+    }
+
+    // M2 (review round 1): for an app provider the summary runs inside the tap callback. The relaunch waits for the next turn.
+    func testAppProviderRelaunchHappensAfterTheCallbackReturns() {
+        let r = Rig(switchesInput: false, trigger: KeySpec.named("right_option")!)
+        r.pressUntilListening(hold: 0.6, echo: false)
+        r.release()  // the callback: the summary is written here
+        XCTAssertTrue(
+            r.sink.summaries.last?.contains("echo missing") ?? false, "setup: the summary came out of the callback: \(r.sink.lines)")
+        XCTAssertTrue(r.sink.has("self-relaunch: "), "decided and logged in the callback")
+        XCTAssertEqual(r.supervisor.relaunches, [], "but not relaunched inside it")
+        XCTAssertNil(r.supervisor.lastRelaunchAt)
+        r.clock.advance(0)  // the next main-loop turn
+        XCTAssertEqual(r.supervisor.relaunches, [Self.why])
+        XCTAssertNotNil(r.supervisor.lastRelaunchAt)
+    }
+    // A session that starts between the decision and the next turn wins: no relaunch.
+    func testNewSessionBeforeTheScheduledRelaunchCancelsIt() {
+        let r = Rig(switchesInput: false, trigger: KeySpec.named("right_option")!)
+        r.pressUntilListening(hold: 0.6, echo: false)
+        r.release()
+        r.press()  // a new session before the scheduled block runs
+        r.clock.advance(0)
+        XCTAssertEqual(r.supervisor.relaunches, [])
+    }
+    // A failed spawn does not use up the rate limit, and the next failure tries again.
+    func testFailedSpawnDoesNotConsumeTheRateLimit() {
+        let r = Rig()
+        r.supervisor.relaunchResult = false
+        dictate(r)
+        XCTAssertEqual(r.supervisor.relaunches.count, 1)
+        XCTAssertNil(r.supervisor.lastRelaunchAt)
+        r.supervisor.relaunchResult = true
+        r.clock.advance(60)
+        dictate(r)
+        XCTAssertEqual(r.supervisor.relaunches.count, 2)
+        XCTAssertNotNil(r.supervisor.lastRelaunchAt)
     }
 }

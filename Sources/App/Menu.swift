@@ -152,6 +152,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // key before the process exits, not rely on the next launch's clearStuckModifier() to find it stuck.
     func applicationWillTerminate(_ n: Notification) {
         engine.stopForQuit()
+        flushLog()
     }
 
     // Menu bar icon + Dock icon follow the config.

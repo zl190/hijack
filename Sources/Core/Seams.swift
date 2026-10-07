@@ -71,8 +71,8 @@ public enum WindowState: Equatable {
 /// policy's `active` word). `role`: the Mach task role (1 foreground, 2 background, 7 default, ...).
 public struct ProcessState: Equatable {
     public var napped: Bool
-    public var role: Int
-    public init(napped: Bool, role: Int) { self.napped = napped; self.role = role }
+    public var role: Int?  // nil when the role read failed but the nap read worked
+    public init(napped: Bool, role: Int?) { self.napped = napped; self.role = role }
 }
 
 /// Probes of the voice tool: its processes, its windows, the microphone, the app in front.
@@ -107,7 +107,8 @@ public protocol Sink {
 public protocol Supervisor: AnyObject {
     /// Start a fresh copy of the app and quit this one. `reason` goes to the log by the caller; the live one
     /// also marks the exit as a self-relaunch so the next `started:` line can say so.
-    func relaunch(reason: String)
+    /// Returns false when the new process could not be started (nothing was quit, and the caller must not count it).
+    func relaunch(reason: String) -> Bool
     /// When the app last relaunched itself. Persisted, so a process that is broken from birth cannot loop.
     var lastRelaunchAt: Date? { get set }
     /// True once when the previous exit was a self-relaunch (and clears the mark). Read at startup.

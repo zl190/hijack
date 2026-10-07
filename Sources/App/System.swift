@@ -199,8 +199,8 @@ struct LiveProbes: Probes {
         let kr2 = cat.withUnsafeMutableBufferPointer {
             task_policy_get(mach_task_self_, task_policy_flavor_t(1), $0.baseAddress, &catCount, &catDefault)
         }
-        guard kr == KERN_SUCCESS, kr2 == KERN_SUCCESS else { return nil }
-        return ProcessState(napped: raw[0] == 1, role: Int(cat[0]))
+        guard kr == KERN_SUCCESS else { return nil }
+        return ProcessState(napped: raw[0] != 0, role: kr2 == KERN_SUCCESS ? Int(cat[0]) : nil)
     }
 }
 
@@ -281,30 +281,52 @@ extension Notification.Name {
     static let hijackStateChanged = Notification.Name("HijackStateChanged")  // trusted / tapActive changed
 }
 
-/// The one relaunch path (review-4 M4): a detached `open -b` after this process has exited, because
+/// The one relaunch path (review-4 M4): a detached `open -b` once this process is gone, because
 /// openApplication(at:) alone would activate the copy that is still running. The menu's Reopen action and the
 /// self-relaunch (W8) both go through here; `selfInitiated` marks the exit so the next `started:` line says so.
-func relaunchProcess(selfInitiated: Bool) {
+/// The shell waits for our pid to disappear (capped at 10 s, then opens anyway and the instance lock decides)
+/// instead of sleeping a fixed time. Returns false, without quitting, when the relauncher cannot be spawned.
+/// The quit itself runs on the next main-loop turn, so the caller can still record that the spawn worked.
+@discardableResult
+func relaunchProcess(selfInitiated: Bool) -> Bool {
     if selfInitiated { UserDefaults.standard.set(true, forKey: LiveSupervisor.markKey) }
     let reopen = Process()
     reopen.executableURL = URL(fileURLWithPath: "/bin/sh")
-    reopen.arguments = ["-c", "sleep 0.5; open -b com.zl190.hijack"]
-    try? reopen.run()
-    NSApp.terminate(nil)
+    reopen.arguments = [
+        "-c",
+        "n=0; while kill -0 \(getpid()) 2>/dev/null && [ $n -lt 100 ]; do sleep 0.1; n=$((n+1)); done; open -b com.zl190.hijack",
+    ]
+    do {
+        try reopen.run()
+    } catch {
+        UserDefaults.standard.removeObject(forKey: LiveSupervisor.markKey)
+        log("self-relaunch aborted: couldn't spawn the relauncher (\(error))")
+        return false
+    }
+    DispatchQueue.main.async {
+        flushLog()  // the log is written on a background queue, and terminate() ends in exit()
+        NSApp.terminate(nil)
+    }
+    return true
 }
 
 /// W8: relaunch through `relaunchProcess`; the last-relaunch time and the exit mark live in UserDefaults.
 final class LiveSupervisor: Supervisor {
     static let markKey = "selfRelaunchMark"
     static let atKey = "selfRelaunchAt"
-    func relaunch(reason: String) { relaunchProcess(selfInitiated: true) }
+    func relaunch(reason: String) -> Bool { relaunchProcess(selfInitiated: true) }
     var lastRelaunchAt: Date? {
         get { UserDefaults.standard.object(forKey: LiveSupervisor.atKey) as? Date }
         set { UserDefaults.standard.set(newValue, forKey: LiveSupervisor.atKey) }
     }
-    func takeSelfRelaunchMark() -> Bool {
-        let marked = UserDefaults.standard.bool(forKey: LiveSupervisor.markKey)
-        if marked { UserDefaults.standard.removeObject(forKey: LiveSupervisor.markKey) }
+    /// main.swift reads and clears the UserDefaults mark right after the CLI dispatch (a process that dies before
+    /// `start()` must not leave it behind) and keeps the answer here until the `started:` line asks once.
+    static var consumedMark = false
+    static func consumeMarkFromDefaults() -> Bool {
+        let marked = UserDefaults.standard.bool(forKey: markKey)
+        if marked { UserDefaults.standard.removeObject(forKey: markKey) }
+        consumedMark = marked
         return marked
     }
+    func takeSelfRelaunchMark() -> Bool { defer { LiveSupervisor.consumedMark = false }; return LiveSupervisor.consumedMark }
 }

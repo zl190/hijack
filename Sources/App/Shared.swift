@@ -63,6 +63,8 @@ private let logQueue = DispatchQueue(label: "com.zl190.hijack.log", qos: .utilit
 private let logTime: DateFormatter = {
     let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd HH:mm:ss.SSS"; return f
 }()
+/// Wait until every queued log line is on disk. Before a quit: `terminate` ends in `exit()`, which does not drain the queue.
+func flushLog() { if logInApp { logQueue.sync {} } }
 func log(_ msg: String) {
     trace(msg)
     let now = Date()

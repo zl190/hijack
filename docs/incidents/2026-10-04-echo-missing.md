@@ -97,6 +97,18 @@ logs `self-relaunch: ...` and starts a fresh process, at most once per 10 minute
 `(after self-relaunch)`. The dictation that triggers it is lost. The root cause is still open. See
 `docs/adr/0022-relaunch-on-a-failed-post.md`.
 
+Review round 1 of W8 (2026-10-07) found three gaps on the relaunch path and one smaller one; all are fixed:
+
+1. The old process could still be alive when the relauncher opened the app (a fixed `sleep 0.5`). Now the shell waits for our
+   pid (cap 10 s, then `open -b` anyway), and `main.swift` retries the instance lock for up to 3 s after a self-relaunch. A failed
+   spawn no longer quits the app and no longer uses up the rate limit (`Supervisor.relaunch` returns Bool).
+2. For an app provider the summary, and so the relaunch, ran inside the CGEventTap callback. The relaunch now runs on the next
+   main-loop turn, with the active-session check repeated there.
+3. The log is written on a background queue and `terminate` ends in `exit()`, so the evidence lines could be lost. The queue is
+   flushed before the quit and in `applicationWillTerminate`.
+4. The self-relaunch mark could outlive a process that died before `start()`. It is now read and cleared in `main.swift` right
+   after the CLI dispatch.
+
 ## W9 (2026-10-07): App Nap state on every dictation line
 
 Owner observation, 2026-10-07: while the fault is on, switching to WeType by hand and holding the physical Fn works. So the
@@ -116,6 +128,8 @@ all zero on a non-napped process.
 
 Caveat: `active=1` has not been observed on this machine yet (a nap cannot be forced on demand). The mapping "App Nap =
 suppression `active`" is the documented implementation of App Nap, not something measured here.
+
+The role read can fail while the nap read works: then the line has `nap: on|off` and no `role:`. `active` is `raw[0] != 0`.
 
 Mutation checks (`scripts/mutate-w9.sh`, 2026-10-07):
 

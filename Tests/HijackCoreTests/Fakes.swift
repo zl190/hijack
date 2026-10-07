@@ -125,7 +125,8 @@ final class FakeSupervisor: Supervisor {
     var relaunches: [String] = []
     var lastRelaunchAt: Date?
     var mark = false
-    func relaunch(reason: String) { relaunches.append(reason) }
+    var relaunchResult = true  // false: the relauncher could not be spawned
+    func relaunch(reason: String) -> Bool { relaunches.append(reason); return relaunchResult }
     func takeSelfRelaunchMark() -> Bool { defer { mark = false }; return mark }
 }
 

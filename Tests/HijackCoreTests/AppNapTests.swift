@@ -86,4 +86,12 @@ final class AppNapTests: XCTestCase {
         XCTAssertEqual(none.napped, 0)
         XCTAssertEqual(none.nappedFailed, 0)
     }
+
+    // The role read can fail while the nap read works: still say nap, leave the role out.
+    func testNapWithoutARoleStillShowsNap() {
+        let r = Rig(); r.probes.process = ProcessState(napped: true, role: nil)
+        let l = line(r)
+        XCTAssertTrue(l.contains(", nap: on, mic tool"), l)
+        XCTAssertFalse(l.contains("role:"), l)
+    }
 }

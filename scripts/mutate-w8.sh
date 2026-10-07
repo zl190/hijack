@@ -28,7 +28,7 @@ mutate() { # name file sed-expression test-filter
 
 E=Sources/Core/Engine.swift
 T=SelfRelaunchTests
-mutate "a relaunch call dropped" $E 's|supervisor.relaunch(reason: why)|_ = why|' \
+mutate "a relaunch call dropped" $E 's|if supervisor.relaunch(reason: why) {|if why.isEmpty {|' \
   "$T/(testFailedPostRelaunchesOnceAfterTheSummaryLine|testSecondFailureElevenMinutesLaterRelaunches)"
 mutate "b hold threshold 0.5 s -> 0.0 s" $E 's|relaunchMinHold: TimeInterval = 0.5|relaunchMinHold: TimeInterval = 0.0|' \
   "$T/testHeldUnderHalfASecondDoesNotRelaunch"
@@ -42,7 +42,7 @@ mutate "d rate limit 10 min -> 0" $E 's|relaunchGap: TimeInterval = 600|relaunch
   "$T/(testSecondFailureNineMinutesLaterIsSuppressed|testPersistedDateSuppressesInAFreshProcess)"
 mutate "d2 rate limit 10 min -> 20 min" $E 's|relaunchGap: TimeInterval = 600|relaunchGap: TimeInterval = 1200|' \
   "$T/(testSecondFailureElevenMinutesLaterRelaunches|testPersistedDateOlderThanTheGapRelaunches)"
-mutate "d3 relaunch time not persisted" $E 's|supervisor.lastRelaunchAt = now|_ = now|' \
+mutate "d3 relaunch time not persisted" $E 's|supervisor.lastRelaunchAt = clock.now|_ = clock.now|' \
   "$T/(testFailedPostRelaunchesOnceAfterTheSummaryLine|testSecondFailureNineMinutesLaterIsSuppressed)"
 mutate "g echo condition dropped" $E 's|, r.echoMs == nil, r.postSeen|, r.postSeen|' \
   "$T/(testEchoSeenDoesNotRelaunch|testEchoSeenWithMicOffDoesNotRelaunch)"
@@ -54,6 +54,12 @@ mutate "j active-session guard dropped" $E 's|guard !machine.isActive else|guard
   "$T/testNoRelaunchWhileANewerSessionIsActive"
 mutate "k started line never says after self-relaunch" $E 's|(supervisor.takeSelfRelaunchMark() ? " (after self-relaunch)" : "")|(supervisor.takeSelfRelaunchMark() ? "" : "")|' \
   "$T/testStartedLineSaysAfterSelfRelaunchOnce"
+mutate "l relaunch inside the callback, not on the next turn" $E 's|clock.after(0, relaunchNextTurn)|relaunchNextTurn()|' \
+  "$T/testAppProviderRelaunchHappensAfterTheCallbackReturns"
+mutate "m rate limit used up even when the spawn failed" $E 's|if supervisor.relaunch(reason: why) { supervisor.lastRelaunchAt = clock.now }|_ = supervisor.relaunch(reason: why); supervisor.lastRelaunchAt = clock.now|' \
+  "$T/testFailedSpawnDoesNotConsumeTheRateLimit"
+mutate "n session guard inside the scheduled block dropped" $E 's|guard !machine.isActive else { trace("self-relaunch cancelled: a session started"); return }|_ = 0|' \
+  "$T/testNewSessionBeforeTheScheduledRelaunchCancelsIt"
 mutate "e stats counts suppressed lines too" Sources/Core/Stats.swift 's|contains("self-relaunch: ")|contains("self-relaunch")|' \
   "$T/testStatsCountsRelaunchesNotSuppressed"
 
@@ -65,6 +71,25 @@ if grep -q 'relaunchProcess(selfInitiated: false)' Sources/App/Menu.swift \
   echo "PASS static grep: Menu.swift and LiveSupervisor share relaunchProcess, one open -b spawn in Sources"
 else
   echo "FAIL static grep: the relaunch path is duplicated (open -b spawns: $n_open)"; fail=1
+fi
+
+# Static checks on the App side (no test can run the real Process): the relauncher waits for our pid with a cap,
+# the log is flushed before the quit, the lock is retried after a self-relaunch.
+L=Sources/App/System.swift
+if grep -q 'kill -0 \\(getpid())' $L && grep -q '\[ \$n -lt 100 \]' $L && grep -q 'open -b com.zl190.hijack' $L && ! grep -q 'sleep 0.5; open' $L; then
+  echo "PASS static grep: the relauncher shell waits for our pid (cap 10 s), no fixed sleep"
+else
+  echo "FAIL static grep: the pid wait loop is gone from the relauncher shell string"; fail=1
+fi
+if grep -A1 'flushLog()' $L | grep -q 'NSApp.terminate' && grep -A1 'engine.stopForQuit()' Sources/App/Menu.swift | grep -q 'flushLog()'; then
+  echo "PASS static grep: the log is flushed before terminate (relaunchProcess) and in applicationWillTerminate"
+else
+  echo "FAIL static grep: a flushLog() call before terminate is missing"; fail=1
+fi
+if grep -q 'usleep(100_000)' Sources/App/main.swift && grep -q 'instance lock acquired after' Sources/App/main.swift; then
+  echo "PASS static grep: main.swift retries the instance lock after a self-relaunch"
+else
+  echo "FAIL static grep: the lock retry is gone from main.swift"; fail=1
 fi
 
 [ "$fail" -eq 0 ] && echo "ALL PASS" || echo "SOME FAILED"
