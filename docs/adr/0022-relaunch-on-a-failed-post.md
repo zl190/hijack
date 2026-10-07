@@ -3,7 +3,7 @@
 - Topic: Faults and reliability
 - Status: Accepted
 - Date: 2026-10-07
-- Evidence: docs/incidents/2026-10-04-echo-missing.md, docs/sleep-wake-event-tap-prior-art.md section 4.3, `~/Library/Logs/Hijack.log` 2026-10-04 and 2026-10-06
+- Evidence: the `nap:` field on each dictation line (W9) records whether App Nap was engaged when the post failed; docs/incidents/2026-10-04-echo-missing.md, docs/sleep-wake-event-tap-prior-art.md section 4.3, `~/Library/Logs/Hijack.log` 2026-10-04 and 2026-10-06
 
 ## Context
 

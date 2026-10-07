@@ -97,6 +97,8 @@ final class FakeProbes: Probes {
     var micDevice: Bool? = true
     var front = "front=test"
     var calls = 0
+    var process: ProcessState?  // W9: nil by default (unreadable)
+    func processState() -> ProcessState? { process }
     func processIDs(ofProvider id: String) -> [pid_t] { calls += 1; return pids }
     func windows(of pids: [pid_t]) -> WindowState { calls += 1; return pids.isEmpty ? .unknown("not running") : window }
     func micInUse(by pids: [pid_t]?) -> Bool? { calls += 1; return pids == nil ? micDevice : micTool }

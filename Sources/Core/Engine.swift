@@ -51,6 +51,7 @@ public struct DictationRecord {
     public var sawWindow: Bool = false  // its voice window was on screen at some point after release
     public var windowGoneMs: Int?  // release → voice window gone (the text is in)
     public var postSeen: Bool?  // 0.3 s after the talk key went out, the system key state shows it down (nil: not sampled)
+    public var heldProcess: ProcessState?  // W9: App Nap state at the same 0.3 s sample (nil: not sampled or unreadable)
     public var switchFailed: Bool = false  // the input source never switched: the talk key was not sent (FM-05)
 }
 
@@ -342,6 +343,7 @@ public final class Engine {
                 // Unverified which state shows a posted Fn: read both, say which one did (trace).
                 let seen = tap.postedKeyVisible(plan.forwardKey)
                 record.postSeen = seen.hid || seen.session
+                record.heldProcess = probes.processState()  // W9: one cheap Mach call, like the key-state read
                 trace("post sample hid=\(seen.hid ? "on" : "off") session=\(seen.session ? "on" : "off")")
             }
             let pids = voicePIDs, watched = plan.switchesInput, probes = probes
@@ -374,6 +376,14 @@ public final class Engine {
         }
     }
 
+    /// W9: `, nap: on|off|?` and, when it was read, `, role: N`. Substrings the stats parser looks for.
+    func napField(_ s: ProcessState?) -> String {
+        guard let s else { return ", nap: ?" }
+        return ", nap: \(s.napped ? "on" : "off"), role: \(s.role)"
+    }
+    /// W9: ` nap=on|off|?` read now, for the `started:` and `self-relaunch:` lines.
+    func napNow() -> String { " nap=" + (probes.processState().map { $0.napped ? "on" : "off" } ?? "?") }
+
     // The one line per dictation that goes to the file. When it didn't work, the checks tell which step failed:
     // the key never went out (echo), the voice tool didn't start listening (mic), or we missed its window.
     public func summary(end: String) {
@@ -390,7 +400,7 @@ public final class Engine {
             }
             line += ", \(end)"
             line +=
-                " | echo \(r.echoMs.map { "after \($0)ms" } ?? "missing"), post: \(r.postSeen.map { $0 ? "seen" : "not seen" } ?? "?"), mic tool \(onOff(r.heldMic?.tool)) device \(onOff(r.heldMic?.device))"
+                " | echo \(r.echoMs.map { "after \($0)ms" } ?? "missing"), post: \(r.postSeen.map { $0 ? "seen" : "not seen" } ?? "?")\(napField(r.heldProcess)), mic tool \(onOff(r.heldMic?.tool)) device \(onOff(r.heldMic?.device))"
             if p.switchesInput { line += ", window while held: \(r.heldWindow?.text ?? "?")" }
         } else if r.switchFailed {
             line += ", \(end)"
@@ -423,7 +433,7 @@ public final class Engine {
             }
         }
         supervisor.lastRelaunchAt = now
-        log("self-relaunch: \(why)")
+        log("self-relaunch: \(why)\(napNow())")
         supervisor.relaunch(reason: why)
     }
 
@@ -620,6 +630,6 @@ public final class Engine {
         clock.after(1) { [self] in clearStuckModifier() }
         log(
             "started: trigger \(plan.trigger.name), forward \(plan.forwardKey.name), voice \(plan.voiceID)"
-                + (supervisor.takeSelfRelaunchMark() ? " (after self-relaunch)" : ""))
+                + (supervisor.takeSelfRelaunchMark() ? " (after self-relaunch)" : "") + napNow())
     }
 }

@@ -22,7 +22,7 @@ final class SelfRelaunchTests: XCTestCase {
         let relaunch = lines.firstIndex { $0.hasPrefix("self-relaunch: ") }
         XCTAssertNotNil(summary); XCTAssertNotNil(relaunch)
         XCTAssertLessThan(summary ?? 99, relaunch ?? -1, "the summary line comes first: \(lines)")
-        XCTAssertEqual(lines[relaunch ?? 0], "self-relaunch: \(Self.why)")
+        XCTAssertEqual(lines[relaunch ?? 0], "self-relaunch: \(Self.why) nap=?")
         XCTAssertNotNil(r.supervisor.lastRelaunchAt, "the time is persisted through the supervisor")
     }
     // An unsampled probe (released before the 0.3 s sample could run) counts as not seen.
@@ -131,7 +131,8 @@ final class SelfRelaunchTests: XCTestCase {
         let r = Rig(start: false)
         r.supervisor.mark = true
         r.engine.start()
-        XCTAssertTrue(r.sink.lines.contains { $0.hasPrefix("started: ") && $0.hasSuffix(" (after self-relaunch)") }, "\(r.sink.lines)")
+        XCTAssertTrue(
+            r.sink.lines.contains { $0.hasPrefix("started: ") && $0.hasSuffix(" (after self-relaunch) nap=?") }, "\(r.sink.lines)")
         let r2 = Rig(start: false)
         r2.engine.start()
         XCTAssertFalse(r2.sink.has("after self-relaunch"))

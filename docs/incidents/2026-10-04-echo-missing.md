@@ -96,3 +96,46 @@ dictation (held 0.5 s or more, talk key sent) with `echo missing` and `post` not
 logs `self-relaunch: ...` and starts a fresh process, at most once per 10 minutes. The next `started:` line ends with
 `(after self-relaunch)`. The dictation that triggers it is lost. The root cause is still open. See
 `docs/adr/0022-relaunch-on-a-failed-post.md`.
+
+## W9 (2026-10-07): App Nap state on every dictation line
+
+Owner observation, 2026-10-07: while the fault is on, switching to WeType by hand and holding the physical Fn works. So the
+break is only in Hijack's posted Fn. Owner's hypothesis: the system degraded the process (swap, App Nap). Hijack is an
+`LSUIElement` accessory with no `beginActivity` declaration, so it is eligible for App Nap. Whether it was napped at failure
+time is unknown.
+
+W9 makes it visible. A process can read its own App Nap state without root: `task_policy_get` with flavor
+`TASK_SUPPRESSION_POLICY` (3) returns 16 `integer_t` words (XNU `osfmk/mach/task_policy_private.h`, not in the SDK, so
+declared by hand); word 0 is `active` (1: App Nap engaged). Flavor 1 (`TASK_CATEGORY_POLICY`) gives the task role.
+`TASK_POLICY_STATE` (4) is root-only and is not used. On this machine (macOS 26) the call returns `KERN_SUCCESS`, count 16,
+all zero on a non-napped process.
+
+- Summary line: `post: ..., nap: on|off|?, role: N, mic tool ...` (sampled with the post probe, 0.3 s after the talk key; `?` when not sampled or unreadable, and then no role).
+- `started:` and `self-relaunch:` lines end with ` nap=on|off|?`, read at that moment: the state of the process about to die and of the new one.
+- `hijack stats`: `App Nap  napped during N of M sampled dictations (K of those failed)`; `--json`: `nappedSampled`, `napped`, `nappedFailed`.
+
+Caveat: `active=1` has not been observed on this machine yet (a nap cannot be forced on demand). The mapping "App Nap =
+suppression `active`" is the documented implementation of App Nap, not something measured here.
+
+Mutation checks (`scripts/mutate-w9.sh`, 2026-10-07):
+
+```
+PASS a summary always prints nap: off: broken -> tests RED
+PASS a summary always prints nap: off: restored -> tests GREEN
+PASS a2 unreadable prints nap: off: broken -> tests RED
+PASS a2 unreadable prints nap: off: restored -> tests GREEN
+PASS b stats counts nap: ? as napped: broken -> tests RED
+PASS b stats counts nap: ? as napped: restored -> tests GREEN
+PASS b2 stats counts nap: ? as sampled: broken -> tests RED
+PASS b2 stats counts nap: ? as sampled: restored -> tests GREEN
+PASS c sample taken from postSeen instead of the probe: broken -> tests RED
+PASS c sample taken from postSeen instead of the probe: restored -> tests GREEN
+PASS d started line drops the nap suffix: broken -> tests RED
+PASS d started line drops the nap suffix: restored -> tests GREEN
+PASS d2 relaunch line drops the nap suffix: broken -> tests RED
+PASS d2 relaunch line drops the nap suffix: restored -> tests GREEN
+PASS e sample moved to every state (no hold-style gate): broken -> tests RED
+PASS e sample moved to every state (no hold-style gate): restored -> tests GREEN
+PASS static grep: LiveProbes uses flavor 3 with count 16 and never flavor 4
+ALL PASS
+```

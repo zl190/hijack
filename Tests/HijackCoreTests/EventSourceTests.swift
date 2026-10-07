@@ -52,13 +52,13 @@ final class EventSourceTests: XCTestCase {
         r.pressUntilListening(); r.release(); r.clock.advance(2.6)
         let line = r.sink.summaries.last ?? ""
         XCTAssertTrue(line.contains("echo after"), line)
-        XCTAssertTrue(line.contains(", post: seen, mic tool"), line)
+        XCTAssertTrue(line.contains(", post: seen, nap: ?, mic tool"), line)
     }
     func testSessionStateAloneCountsAsSeen() {
         let r = Rig()
         r.tap.sessionFlagsDown = [.maskSecondaryFn]
         r.pressUntilListening(); r.release(); r.clock.advance(2.6)
-        XCTAssertTrue(r.sink.summaries.last?.contains(", post: seen, mic tool") == true, r.sink.summaries.last ?? "")
+        XCTAssertTrue(r.sink.summaries.last?.contains(", post: seen, nap: ?, mic tool") == true, r.sink.summaries.last ?? "")
         XCTAssertTrue(r.sink.traces.contains("post sample hid=off session=on"), "\(r.sink.traces)")
     }
     func testHidStateAloneCountsAsSeenAndIsTraced() {
@@ -71,7 +71,7 @@ final class EventSourceTests: XCTestCase {
         let r = Rig()
         r.pressUntilListening(); r.release(); r.clock.advance(2.6)
         let line = r.sink.summaries.last ?? ""
-        XCTAssertTrue(line.contains(", post: not seen, mic tool"), line)
+        XCTAssertTrue(line.contains(", post: not seen, nap: ?, mic tool"), line)
         XCTAssertTrue(r.sink.traces.contains("post sample hid=off session=off"), "\(r.sink.traces)")
     }
     // A released-before-sample dictation never got the reading: `?`, not a guess.

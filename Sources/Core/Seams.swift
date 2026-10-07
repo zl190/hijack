@@ -67,12 +67,22 @@ public enum WindowState: Equatable {
     }
 }
 
+/// W9: how the system treats this process right now. `napped`: App Nap is engaged (the task suppression
+/// policy's `active` word). `role`: the Mach task role (1 foreground, 2 background, 7 default, ...).
+public struct ProcessState: Equatable {
+    public var napped: Bool
+    public var role: Int
+    public init(napped: Bool, role: Int) { self.napped = napped; self.role = role }
+}
+
 /// Probes of the voice tool: its processes, its windows, the microphone, the app in front.
 public protocol Probes {
     func processIDs(ofProvider id: String) -> [pid_t]
     func windows(of pids: [pid_t]) -> WindowState
     func micInUse(by pids: [pid_t]?) -> Bool?  // nil: by anyone on the default input device
     func frontApp() -> String
+    /// W9: this process's App Nap state and task role; nil when the system call fails.
+    func processState() -> ProcessState?
 }
 
 /// Time and deferred work. The live one is the main queue. The fake one advances by hand.

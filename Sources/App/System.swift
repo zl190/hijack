@@ -4,6 +4,7 @@ import ApplicationServices
 import Carbon
 import CoreAudio
 import os
+import Darwin
 
 // MARK: live seams — the macOS side of Sources/Core/Seams.swift. Engine never calls the system directly.
 
@@ -182,6 +183,25 @@ struct LiveProbes: Probes {
     func windows(of pids: [pid_t]) -> WindowState { onScreenWindows(of: pids) }
     func micInUse(by pids: [pid_t]?) -> Bool? { micInUseLive(by: pids) }
     func frontApp() -> String { frontAppLive() }
+    // W9: App Nap, read without root. XNU's TASK_SUPPRESSION_POLICY (flavor 3, osfmk/mach/task_policy_private.h) is
+    // 16 integer_t words; word 0 is `active` (1: App Nap engaged). Flavor 4 (TASK_POLICY_STATE) is root-only: never use it.
+    // Flavor 1 is TASK_CATEGORY_POLICY: word 0 is the task role.
+    func processState() -> ProcessState? {
+        var raw = [integer_t](repeating: 0, count: 16)
+        var count = mach_msg_type_number_t(16)
+        var getDefault: boolean_t = 0
+        let kr = raw.withUnsafeMutableBufferPointer {
+            task_policy_get(mach_task_self_, task_policy_flavor_t(3), $0.baseAddress, &count, &getDefault)
+        }
+        var cat = [integer_t](repeating: 0, count: 1)
+        var catCount = mach_msg_type_number_t(1)
+        var catDefault: boolean_t = 0
+        let kr2 = cat.withUnsafeMutableBufferPointer {
+            task_policy_get(mach_task_self_, task_policy_flavor_t(1), $0.baseAddress, &catCount, &catDefault)
+        }
+        guard kr == KERN_SUCCESS, kr2 == KERN_SUCCESS else { return nil }
+        return ProcessState(napped: raw[0] == 1, role: Int(cat[0]))
+    }
 }
 
 struct LiveScheduler: Scheduler {
