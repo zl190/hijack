@@ -24,6 +24,8 @@ public struct KeyInput: Equatable {
 /// Posts key events to the system. Returns false when the system refuses to create the event (FM-08).
 public protocol KeyPoster {
     @discardableResult func post(_ key: KeySpec, down: Bool) -> Bool
+    /// Replace the event source the posts go through (W7): a source held across system sleep can stop reaching the HID stream.
+    func rebuild(reason: String)
 }
 
 /// The keyboard input sources (TIS).
@@ -40,6 +42,8 @@ public protocol TapControl: AnyObject {
     func enable()
     func keyIsDown(_ code: Int) -> Bool  // the key as the keyboard has it
     func modifierIsDown(_ flag: CGEventFlags) -> Bool  // the modifier as the system has it
+    /// W7: is the talk key down right now, in the HID system state and in the combined session state?
+    func postedKeyVisible(_ key: KeySpec) -> (hid: Bool, session: Bool)
     var secureInputOn: Bool { get }
 }
 

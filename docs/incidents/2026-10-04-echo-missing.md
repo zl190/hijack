@@ -1,6 +1,6 @@
 # Incident 2026-10-04: the talk key did not go out (echo missing)
 
-Status: open. Source: `~/Library/Logs/Hijack.log`, build 1.1.4 (signed, installed 2026-10-03 23:27).
+Status: fix in progress (W7). Source: `~/Library/Logs/Hijack.log`, build 1.1.4 (signed, installed 2026-10-03 23:27).
 
 ## What the log shows
 
@@ -30,14 +30,61 @@ one system sleep at 12:41 with wake at 13:09; screen sleeps at 14:04 and 14:14. 
   after a stale period. The echo alone does not settle it.
 - The success rate for the day is 88.5% because of these rows. The SLO line prints `not met`.
 
-## Experiment (ticket W7, not started)
+## Experiment (ticket W7, implemented 2026-10-06)
 
-1. Hold one explicit `CGEventSource(stateID: .hidSystemState)` in `LiveKeyPoster` and post through it.
-   Rebuild it on `didWake` and on the first post after a gap longer than 10 minutes. Log `event source
+1. (Implemented: `LiveKeyPoster` in `Sources/App/System.swift`, `Engine.post`, `reconcileAfterWake`.) Hold one explicit `CGEventSource(stateID: .hidSystemState)` in `LiveKeyPoster` and post through it.
+   Rebuild it before every dictation's press and on `didWake` (changed after review: the field log shows staleness flapping within a degraded run, 17:13:36 echo then 17:13:46 missing with no sleep between, so a wake or idle trigger alone cannot pass the acceptance below). Log `event source
    rebuilt (reason)`.
-2. After each post, read `CGEventSource.flagsState(.hidSystemState)` and `keyState` for the talk key and put
-   both on the summary line as `post: seen/not seen`. This separates "post failed" from "tool ignored".
-3. Keep the echo probe. With 1 and 2, the next occurrence tells which hypothesis holds.
+2. (Implemented: `Engine.sampleWhileHeld`, `Engine.summary`.) 0.3 s after the talk key goes out, read `flagsState` (modifier-only key) or `keyState` (other key) through the tap and put
+   the result on the summary line as `post: seen` / `post: not seen` / `post: ?` (`?`: released before the sample, or a tap-style key that is already up). This separates "post failed" from "tool ignored".
+3. (Kept.) Keep the echo probe. With 1 and 2, the next occurrence tells which hypothesis holds.
 
 Acceptance: a dictation after a system sleep shows `echo after N ms` and `post: seen`; the summary line
 of a failed post shows `post: not seen` and the next dictation shows `event source rebuilt`.
+
+## 2026-10-06 recurrence
+
+- The process started 2026-10-04 18:19 and went through 6 system sleeps by 2026-10-06.
+- 2026-10-06, 10 dictations: 8 `echo missing`, 1 `mic off`, 1 ok. Success rate 33%.
+- `hijack doctor` was all green during the failures (Accessibility granted, tap active). Not a permission or tap fault.
+- Restart experiment: Hijack quit and relaunched at 18:36:29 with the same 1.1.4 build. The next dictation at 18:38:20
+  logged `echo after 237ms, mic tool on device on, window while held: 1 window`, and the text came back after 3.85 s.
+  A fresh process posts fine; the old one could not. This matches H3 of `docs/review-3/senior-review.md`.
+- Residual: 17:13:36 the same day (and row 3 above) saw the echo with the mic still off. H3 does not explain it. The
+  `post:` field separates the two: `post: seen` with `mic tool off` points at the tool, `post: not seen` at the source.
+
+### What W7 changed
+
+- `LiveKeyPoster` holds one `CGEventSource(stateID: .hidSystemState)`; every event goes through it. `rebuild(reason:)`
+  swaps it and logs `event source rebuilt (<reason>)`.
+- `Engine` rebuilds before every dictation's talk-key press (`sendKey`, reason `dictation`) and on
+  `reconcileAfterWake(.systemWake)` (reason `system wake`, a log marker; a screen unlock does not). A failed rebuild keeps the old source and logs it.
+- The probe reads the key state in both `.hidSystemState` and `.combinedSessionState`; `post: seen` means either showed it.
+  The trace line `post sample hid=<on/off> session=<on/off>` (`hijack log --live`) tells which state works.
+- The summary line carries `post: seen` / `post: not seen` / `post: ?` after the echo field. Stats reads it; a line with
+  `post: not seen` and no echo field counts under `talk key never went out`.
+- Mutation checks: `scripts/mutate-w7.sh` (output below). Tests: `Tests/HijackCoreTests/EventSourceTests.swift`, `StatsTests`.
+
+### Mutation check output (`scripts/mutate-w7.sh`, 2026-10-06)
+
+```
+PASS a rebuild-on-wake dropped: broken -> tests RED
+PASS a rebuild-on-wake dropped: restored -> tests GREEN
+PASS a2 rebuild also on screen unlock: broken -> tests RED
+PASS a2 rebuild also on screen unlock: restored -> tests GREEN
+PASS b per-dictation rebuild dropped: broken -> tests RED
+PASS b per-dictation rebuild dropped: restored -> tests GREEN
+PASS b2 rebuild moved after the press post: broken -> tests RED
+PASS b2 rebuild moved after the press post: restored -> tests GREEN
+PASS c summary always prints post: seen: broken -> tests RED
+PASS c summary always prints post: seen: restored -> tests GREEN
+PASS c2 post sample reads hid only: broken -> tests RED
+PASS c2 post sample reads hid only: restored -> tests GREEN
+PASS d stats ignores post: not seen: broken -> tests RED
+PASS d stats ignores post: not seen: restored -> tests GREEN
+PASS static grep: Sources/App/System.swift creates events through the explicit source
+ALL PASS
+```
+
+Left for the owner: a dictation after a real system sleep shows `echo after N ms` and `post: seen`; a failed post shows
+`post: not seen` and the next dictation shows `event source rebuilt`.

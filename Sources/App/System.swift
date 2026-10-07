@@ -31,9 +31,35 @@ extension Engine {
     }
 }
 
-struct LiveKeyPoster: KeyPoster {
+/// Posts through one explicit HID-state event source instead of the implicit one (`keyboardEventSource: nil`).
+/// The implicit source goes stale in a long-lived process after system sleep: posts stop reaching the HID
+/// stream (docs/incidents/2026-10-04-echo-missing.md). `rebuild` swaps in a fresh source.
+final class LiveKeyPoster: KeyPoster {
+    private var source = CGEventSource(stateID: .hidSystemState)
+    private var warnedNoSource = false
+
+    /// `CGEventSource(stateID:)` can fail: then the old source stays (it may still work), and the line says so.
+    func rebuild(reason: String) {
+        if let fresh = CGEventSource(stateID: .hidSystemState) {
+            source = fresh
+            log("event source rebuilt (\(reason))")
+        } else {
+            log("event source rebuild failed (\(reason)), keeping the old one")
+        }
+    }
+
+    /// Creates the event through the explicit source. With none (only if the very first creation failed)
+    /// it says so once and posts with the implicit source, as before W7.
+    private func makeEvent(_ code: Int, down: Bool) -> CGEvent? {
+        if source == nil, !warnedNoSource {
+            warnedNoSource = true
+            log("no event source, posting with the implicit one")
+        }
+        return CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(code), keyDown: down)
+    }
+
     @discardableResult func post(_ key: KeySpec, down: Bool) -> Bool {
-        guard let e = CGEvent(keyboardEventSource: nil, virtualKey: CGKeyCode(key.code), keyDown: down) else { return false }
+        guard let e = makeEvent(key.code, down: down) else { return false }
         if key.modifierOnly, let n = key.named, let flag = n.flag {
             e.type = .flagsChanged
             e.flags = down ? CGEventFlags(rawValue: flag.rawValue | n.device) : []
@@ -63,7 +89,7 @@ struct LiveKeyPoster: KeyPoster {
         case .command: code = 55
         case .fn: code = 63
         }
-        guard let e = CGEvent(keyboardEventSource: nil, virtualKey: CGKeyCode(code), keyDown: down) else { return }
+        guard let e = makeEvent(code, down: down) else { return }
         e.type = .flagsChanged
         e.flags = held.reduce(into: CGEventFlags()) { $0.insert($1.flag) }
         e.setIntegerValueField(.eventSourceUserData, value: marker)
@@ -104,6 +130,13 @@ final class LiveTap: TapControl {
     func enable() { if let tap { CGEvent.tapEnable(tap: tap, enable: true) } }
     func keyIsDown(_ code: Int) -> Bool { CGEventSource.keyState(.hidSystemState, key: CGKeyCode(code)) }
     func modifierIsDown(_ flag: CGEventFlags) -> Bool { CGEventSource.flagsState(.hidSystemState).contains(flag) }
+    func postedKeyVisible(_ key: KeySpec) -> (hid: Bool, session: Bool) {
+        func down(_ state: CGEventSourceStateID) -> Bool {
+            if key.modifierOnly, let flag = key.named?.flag { return CGEventSource.flagsState(state).contains(flag) }
+            return CGEventSource.keyState(state, key: CGKeyCode(key.code))
+        }
+        return (down(.hidSystemState), down(.combinedSessionState))
+    }
     var secureInputOn: Bool { IsSecureEventInputEnabled() }
 
     func install(_ onEvent: @escaping (KeyInput) -> Bool) -> Bool {
