@@ -53,3 +53,4 @@ Each record has a `Topic:` line. This index groups the records by topic. Status:
 | [0012](0012-do-not-hide-a-fault-by-a-restart.md) | Do not hide a fault by a restart | Accepted | 2026-10-03 |
 | [0018](0018-show-faults-with-true-menu-text-and-an-off-icon.md) | Show faults with true menu text and an Off icon | Accepted | 2026-10-03 |
 | [0019](0019-fix-the-high-risk-failure-modes-for-1-1-4.md) | Fix the high-risk failure modes for 1.1.4 | Proposed | 2026-10-03 |
+| [0022](0022-relaunch-on-a-failed-post.md) | Relaunch on a failed post | Accepted | 2026-10-07 |

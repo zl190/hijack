@@ -25,7 +25,7 @@ extension Engine {
             plan: { Plan(Model.shared) },
             deps: Deps(
                 keys: LiveKeyPoster(), sources: LiveInputSources(), tap: tap, probes: LiveProbes(),
-                clock: LiveScheduler(), sink: LiveSink()))
+                clock: LiveScheduler(), sink: LiveSink(), supervisor: LiveSupervisor()))
         tap.triggerCode = { [unowned engine] in engine.plan.trigger.code }
         return engine
     }
@@ -259,4 +259,32 @@ extension Notification.Name {
     static let hijackActivity = Notification.Name("HijackActivity")
     static let hijackSettingsChanged = Notification.Name("HijackSettingsChanged")
     static let hijackStateChanged = Notification.Name("HijackStateChanged")  // trusted / tapActive changed
+}
+
+/// The one relaunch path (review-4 M4): a detached `open -b` after this process has exited, because
+/// openApplication(at:) alone would activate the copy that is still running. The menu's Reopen action and the
+/// self-relaunch (W8) both go through here; `selfInitiated` marks the exit so the next `started:` line says so.
+func relaunchProcess(selfInitiated: Bool) {
+    if selfInitiated { UserDefaults.standard.set(true, forKey: LiveSupervisor.markKey) }
+    let reopen = Process()
+    reopen.executableURL = URL(fileURLWithPath: "/bin/sh")
+    reopen.arguments = ["-c", "sleep 0.5; open -b com.zl190.hijack"]
+    try? reopen.run()
+    NSApp.terminate(nil)
+}
+
+/// W8: relaunch through `relaunchProcess`; the last-relaunch time and the exit mark live in UserDefaults.
+final class LiveSupervisor: Supervisor {
+    static let markKey = "selfRelaunchMark"
+    static let atKey = "selfRelaunchAt"
+    func relaunch(reason: String) { relaunchProcess(selfInitiated: true) }
+    var lastRelaunchAt: Date? {
+        get { UserDefaults.standard.object(forKey: LiveSupervisor.atKey) as? Date }
+        set { UserDefaults.standard.set(newValue, forKey: LiveSupervisor.atKey) }
+    }
+    func takeSelfRelaunchMark() -> Bool {
+        let marked = UserDefaults.standard.bool(forKey: LiveSupervisor.markKey)
+        if marked { UserDefaults.standard.removeObject(forKey: LiveSupervisor.markKey) }
+        return marked
+    }
 }

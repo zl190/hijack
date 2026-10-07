@@ -118,6 +118,15 @@ final class FakeSink: Sink {
     func has(_ text: String) -> Bool { lines.contains { $0.contains(text) } }
 }
 
+/// Supervisor (W8): records each relaunch reason and holds the persisted date and the exit mark.
+final class FakeSupervisor: Supervisor {
+    var relaunches: [String] = []
+    var lastRelaunchAt: Date?
+    var mark = false
+    func relaunch(reason: String) { relaunches.append(reason) }
+    func takeSelfRelaunchMark() -> Bool { defer { mark = false }; return mark }
+}
+
 /// FolderEvents, driven by hand: no FSEvents, no latency, no sleep (Sources/Core/Watch.swift, WatchTests.swift).
 final class FakeFolderEvents: FolderEvents {
     private(set) var startCalls = 0
@@ -148,6 +157,7 @@ final class Rig {
     let tap = FakeTap()
     let probes = FakeProbes()
     let sink = FakeSink()
+    let supervisor = FakeSupervisor()
     private(set) var engine: Engine!
 
     init(toggle: Bool = false, switchesInput: Bool = true, trigger: KeySpec = Rig.fn, current: String? = Rig.english, start: Bool = true) {
@@ -160,7 +170,7 @@ final class Rig {
             plan: { [unowned self] in
                 self.planReads += 1; return self.plan
             },
-            deps: Deps(keys: keys, sources: sources, tap: tap, probes: probes, clock: clock, sink: sink))
+            deps: Deps(keys: keys, sources: sources, tap: tap, probes: probes, clock: clock, sink: sink, supervisor: supervisor))
         if start { engine.start() }
     }
 

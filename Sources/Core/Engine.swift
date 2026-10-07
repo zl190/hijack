@@ -62,6 +62,12 @@ public final class Engine {
     public let probes: Probes
     public let clock: Scheduler
     public let sink: Sink
+    public let supervisor: Supervisor
+
+    /// W8: a dictation held at least this long, whose talk key went out, is judged on its echo and post probe.
+    public static let relaunchMinHold: TimeInterval = 0.5
+    /// W8: at most one self-relaunch per this many seconds, persisted across restarts.
+    public static let relaunchGap: TimeInterval = 600
 
     public private(set) var plan: Plan
     public var previous: String?  // the input source to restore after this dictation
@@ -88,6 +94,7 @@ public final class Engine {
     public init(plan: @escaping () -> Plan, deps: Deps) {
         makePlan = plan
         keys = deps.keys; sources = deps.sources; tap = deps.tap; probes = deps.probes; clock = deps.clock; sink = deps.sink
+        supervisor = deps.supervisor
         self.plan = plan()
         record = DictationRecord(pressedAt: deps.clock.now)
     }
@@ -394,6 +401,30 @@ public final class Engine {
         if tap.secureInputOn { line += ", secure input on" }
         log(line + " | \(probes.frontApp())")
         endDictation()
+        relaunchIfPostFailed(plan: p, record: r, held: held)
+    }
+
+    // W8 (docs/adr/0022-relaunch-on-a-failed-post.md): the talk key did not go out of this process, by both
+    // measures (our tap never saw it come back; the system key state did not show it). The only known remedy is
+    // a fresh process. Runs once per dictation, after its summary line, off the tap callback.
+    // An unsampled probe (postSeen nil) counts as not seen; echo seen with the mic off is the voice tool's side
+    // and never qualifies. Never while a session is active: that is a newer press that interrupted this summary.
+    func relaunchIfPostFailed(plan p: Plan, record r: DictationRecord, held: TimeInterval) {
+        guard p.style == "hold", held >= Engine.relaunchMinHold, r.keySentMs != nil, r.echoMs == nil, r.postSeen != true
+        else { return }
+        guard !machine.isActive else { trace("self-relaunch skipped: a session is active"); return }
+        let why = "talk key did not go out: echo missing, post not seen"
+        let now = clock.now
+        if let last = supervisor.lastRelaunchAt {
+            let age = now.timeIntervalSince(last)
+            if age < Engine.relaunchGap {
+                log("self-relaunch suppressed: last one \(Int(max(age, 0) / 60))m ago (\(why))")
+                return
+            }
+        }
+        supervisor.lastRelaunchAt = now
+        log("self-relaunch: \(why)")
+        supervisor.relaunch(reason: why)
     }
 
     /// The tap was off for a while, so key events may have been missed: line our idea of the trigger up with
@@ -587,6 +618,8 @@ public final class Engine {
         if !on { log("event tap installed but not enabled") }
         forwardKeyEdgeSeen = false
         clock.after(1) { [self] in clearStuckModifier() }
-        log("started: trigger \(plan.trigger.name), forward \(plan.forwardKey.name), voice \(plan.voiceID)")
+        log(
+            "started: trigger \(plan.trigger.name), forward \(plan.forwardKey.name), voice \(plan.voiceID)"
+                + (supervisor.takeSelfRelaunchMark() ? " (after self-relaunch)" : ""))
     }
 }

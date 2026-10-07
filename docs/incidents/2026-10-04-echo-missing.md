@@ -88,3 +88,11 @@ ALL PASS
 
 Left for the owner: a dictation after a real system sleep shows `echo after N ms` and `post: seen`; a failed post shows
 `post: not seen` and the next dictation shows `event source rebuilt`.
+
+## W8 (2026-10-07): self-relaunch on a failed post
+
+Owner decision: a liveness probe and a restart policy, not a restart on wake or on a timer. After a hold-style
+dictation (held 0.5 s or more, talk key sent) with `echo missing` and `post` not seen (nil counts as not seen), the app
+logs `self-relaunch: ...` and starts a fresh process, at most once per 10 minutes. The next `started:` line ends with
+`(after self-relaunch)`. The dictation that triggers it is lost. The root cause is still open. See
+`docs/adr/0022-relaunch-on-a-failed-post.md`.

@@ -93,6 +93,7 @@ public struct DictationStats: Equatable {
     public var tapPaused: Int, slowKeys: Int, caughtUp: Int
     public var tools: [String: Int]
     public var firstDay: String?, lastDay: String?
+    public var selfRelaunches: Int = 0  // W8: `self-relaunch:` lines (the suppressed ones are not counted)
 
     /// Share of judged dictations (text arrived or no window) where the text arrived; nil when none were judged.
     public var successRate: Double? {
@@ -136,6 +137,7 @@ public struct DictationStats: Equatable {
             slowKeys: kept.filter { $0.contains("slow key event") }.count,
             caughtUp: kept.filter { $0.contains(": catching up") }.count,
             tools: Dictionary(grouping: started, by: \.tool).mapValues(\.count),
-            firstDay: entries.first?.day, lastDay: entries.last?.day)
+            firstDay: entries.first?.day, lastDay: entries.last?.day,
+            selfRelaunches: kept.filter { $0.contains("self-relaunch: ") }.count)
     }
 }

@@ -92,6 +92,18 @@ public protocol Sink {
     func sourceName(_ id: String) -> String
 }
 
+/// The process around Engine (W8, docs/adr/0022-relaunch-on-a-failed-post.md): restart it, and remember when it last did.
+/// Engine owns the signature and the rate limit; the app side owns the Process call and UserDefaults.
+public protocol Supervisor: AnyObject {
+    /// Start a fresh copy of the app and quit this one. `reason` goes to the log by the caller; the live one
+    /// also marks the exit as a self-relaunch so the next `started:` line can say so.
+    func relaunch(reason: String)
+    /// When the app last relaunched itself. Persisted, so a process that is broken from birth cannot loop.
+    var lastRelaunchAt: Date? { get set }
+    /// True once when the previous exit was a self-relaunch (and clears the mark). Read at startup.
+    func takeSelfRelaunchMark() -> Bool
+}
+
 /// A watch on a set of folders, notifying once when something inside one of them changes. The live
 /// implementation (Sources/Core/Watch.swift) wraps FSEvents; the tests drive a fake by hand, with no
 /// real latency. One seam, not part of `Deps`: `SettingsWatch` is used from Menu.swift, outside Engine.
@@ -108,8 +120,12 @@ public struct Deps {
     public var probes: Probes
     public var clock: Scheduler
     public var sink: Sink
+    public var supervisor: Supervisor
 
-    public init(keys: KeyPoster, sources: InputSources, tap: TapControl, probes: Probes, clock: Scheduler, sink: Sink) {
+    public init(
+        keys: KeyPoster, sources: InputSources, tap: TapControl, probes: Probes, clock: Scheduler, sink: Sink, supervisor: Supervisor
+    ) {
         self.keys = keys; self.sources = sources; self.tap = tap; self.probes = probes; self.clock = clock; self.sink = sink
+        self.supervisor = supervisor
     }
 }
