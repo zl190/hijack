@@ -25,13 +25,27 @@ let lockDir = FileManager.default.homeDirectoryForCurrentUser.appendingPathCompo
 try? FileManager.default.createDirectory(at: lockDir, withIntermediateDirectories: true)
 let lockPath = lockDir.appendingPathComponent("instance.lock").path
 let lockFD = open(lockPath, O_CREAT | O_RDWR, 0o644)
+// W8: read and clear the self-relaunch mark now, so a process that dies before `start()` leaves none behind.
+let afterSelfRelaunch = LiveSupervisor.consumeMarkFromDefaults()
 if lockFD < 0 {
     log("couldn't open \(lockPath) for the instance lock (errno \(errno)); continuing without the guard")
-} else if flock(lockFD, LOCK_EX | LOCK_NB) != 0 {
-    let holder = (try? String(contentsOfFile: lockPath, encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines)
-    log("another Hijack holds the instance lock (pid \(holder ?? "?")), exiting")
-    exit(0)
 } else {
+    var gotLock = flock(lockFD, LOCK_EX | LOCK_NB) == 0
+    if !gotLock && afterSelfRelaunch {
+        // The old process is still exiting (the relauncher waits for its pid, but the kernel releases the lock a
+        // moment later): retry every 100 ms for up to 3 s before giving up.
+        for attempt in 1...30 where !gotLock {
+            usleep(100_000)
+            gotLock = flock(lockFD, LOCK_EX | LOCK_NB) == 0
+            if gotLock { log("instance lock acquired after \(attempt * 100) ms (self-relaunch)") }
+        }
+    }
+    if !gotLock {
+        let holder = (try? String(contentsOfFile: lockPath, encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines)
+        log("another Hijack holds the instance lock (pid \(holder ?? "?")), exiting")
+        flushLog()
+        exit(0)
+    }
     // Held: record our pid, for the next instance's log line if it loses the race. ftruncate first, so a
     // shorter new pid does not leave stale digits from whatever held the lock before us.
     ftruncate(lockFD, 0)
@@ -39,6 +53,7 @@ if lockFD < 0 {
     pid.withUnsafeBytes { _ = write(lockFD, $0.baseAddress, $0.count) }
     // lockFD is deliberately never closed: the lock, and the fd holding it, live for the process lifetime.
 }
+LiveSupervisor.consumedMark = afterSelfRelaunch
 
 let app = NSApplication.shared
 let delegate = AppDelegate()

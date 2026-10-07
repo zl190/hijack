@@ -152,6 +152,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // key before the process exits, not rely on the next launch's clearStuckModifier() to find it stuck.
     func applicationWillTerminate(_ n: Notification) {
         engine.stopForQuit()
+        flushLog()
     }
 
     // Menu bar icon + Dock icon follow the config.
@@ -422,11 +423,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // starts a fresh one instead.
     @objc func relaunchApp() {
         log("menu: relaunching after the key listener was found off")
-        let reopen = Process()
-        reopen.executableURL = URL(fileURLWithPath: "/bin/sh")
-        reopen.arguments = ["-c", "sleep 0.5; open -b com.zl190.hijack"]
-        try? reopen.run()
-        NSApp.terminate(nil)
+        relaunchProcess(selfInitiated: false)  // Sources/App/System.swift, shared with the W8 self-relaunch
     }
 
     // FM-01, FM-04, FM-25: the engine still thinks a session is active, but the physical key is already up.

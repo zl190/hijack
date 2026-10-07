@@ -368,6 +368,8 @@ func cliStats(_ args: [String], json: Bool) -> Int32 {
             "outcomes": Dictionary(uniqueKeysWithValues: s.outcomes.map { ($0.key.rawValue, $0.value) }),
             "failureCauses": Dictionary(uniqueKeysWithValues: s.causes.map { ($0.key.rawValue, $0.value) }),
             "tools": toolNames, "keyTapPaused": s.tapPaused, "slowKeyEvents": s.slowKeys, "triggerCaughtUp": s.caughtUp,
+            "selfRelaunches": s.selfRelaunches,
+            "nappedSampled": s.nappedSampled, "napped": s.napped, "nappedFailed": s.nappedFailed,
             "system": systemJSON(metrics, hasPayloads: hasPayloads),
         ]
         if let r = s.successRate { d["successRate"] = (r * 1000).rounded() / 1000 }
@@ -412,7 +414,13 @@ func cliStats(_ args: [String], json: Bool) -> Int32 {
             "Text in after release".padding(toLength: 24, withPad: " ", startingAt: 0) + "p50 \(ms(s.textInP50))   p95 \(ms(s.textInP95))")
         print(
             "Incidents".padding(toLength: 24, withPad: " ", startingAt: 0)
-                + "key tap paused by macOS \(s.tapPaused) · slow key events \(s.slowKeys) · shortcut caught up \(s.caughtUp)")
+                + "key tap paused by macOS \(s.tapPaused) · slow key events \(s.slowKeys) · shortcut caught up \(s.caughtUp) · self-relaunches \(s.selfRelaunches)"
+        )
+        if s.nappedSampled > 0 {
+            print(
+                "App Nap".padding(toLength: 24, withPad: " ", startingAt: 0)
+                    + "napped during \(s.napped) of \(s.nappedSampled) sampled dictations (\(s.nappedFailed) of those failed)")
+        }
         if toolNames.count > 1 {
             print(
                 "By voice tool".padding(toLength: 24, withPad: " ", startingAt: 0)

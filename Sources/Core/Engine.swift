@@ -51,6 +51,7 @@ public struct DictationRecord {
     public var sawWindow: Bool = false  // its voice window was on screen at some point after release
     public var windowGoneMs: Int?  // release → voice window gone (the text is in)
     public var postSeen: Bool?  // 0.3 s after the talk key went out, the system key state shows it down (nil: not sampled)
+    public var heldProcess: ProcessState?  // W9: App Nap state at the same 0.3 s sample (nil: not sampled or unreadable)
     public var switchFailed: Bool = false  // the input source never switched: the talk key was not sent (FM-05)
 }
 
@@ -62,6 +63,12 @@ public final class Engine {
     public let probes: Probes
     public let clock: Scheduler
     public let sink: Sink
+    public let supervisor: Supervisor
+
+    /// W8: a dictation held at least this long, whose talk key went out, is judged on its echo and post probe.
+    public static let relaunchMinHold: TimeInterval = 0.5
+    /// W8: at most one self-relaunch per this many seconds, persisted across restarts.
+    public static let relaunchGap: TimeInterval = 600
 
     public private(set) var plan: Plan
     public var previous: String?  // the input source to restore after this dictation
@@ -88,6 +95,7 @@ public final class Engine {
     public init(plan: @escaping () -> Plan, deps: Deps) {
         makePlan = plan
         keys = deps.keys; sources = deps.sources; tap = deps.tap; probes = deps.probes; clock = deps.clock; sink = deps.sink
+        supervisor = deps.supervisor
         self.plan = plan()
         record = DictationRecord(pressedAt: deps.clock.now)
     }
@@ -335,6 +343,7 @@ public final class Engine {
                 // Unverified which state shows a posted Fn: read both, say which one did (trace).
                 let seen = tap.postedKeyVisible(plan.forwardKey)
                 record.postSeen = seen.hid || seen.session
+                record.heldProcess = probes.processState()  // W9: one cheap Mach call, like the key-state read
                 trace("post sample hid=\(seen.hid ? "on" : "off") session=\(seen.session ? "on" : "off")")
             }
             let pids = voicePIDs, watched = plan.switchesInput, probes = probes
@@ -367,6 +376,14 @@ public final class Engine {
         }
     }
 
+    /// W9: `, nap: on|off|?` and, when it was read, `, role: N`. Substrings the stats parser looks for.
+    func napField(_ s: ProcessState?) -> String {
+        guard let s else { return ", nap: ?" }
+        return ", nap: \(s.napped ? "on" : "off")" + (s.role.map { ", role: \($0)" } ?? "")
+    }
+    /// W9: ` nap=on|off|?` read now, for the `started:` and `self-relaunch:` lines.
+    func napNow() -> String { " nap=" + (probes.processState().map { $0.napped ? "on" : "off" } ?? "?") }
+
     // The one line per dictation that goes to the file. When it didn't work, the checks tell which step failed:
     // the key never went out (echo), the voice tool didn't start listening (mic), or we missed its window.
     public func summary(end: String) {
@@ -383,7 +400,7 @@ public final class Engine {
             }
             line += ", \(end)"
             line +=
-                " | echo \(r.echoMs.map { "after \($0)ms" } ?? "missing"), post: \(r.postSeen.map { $0 ? "seen" : "not seen" } ?? "?"), mic tool \(onOff(r.heldMic?.tool)) device \(onOff(r.heldMic?.device))"
+                " | echo \(r.echoMs.map { "after \($0)ms" } ?? "missing"), post: \(r.postSeen.map { $0 ? "seen" : "not seen" } ?? "?")\(napField(r.heldProcess)), mic tool \(onOff(r.heldMic?.tool)) device \(onOff(r.heldMic?.device))"
             if p.switchesInput { line += ", window while held: \(r.heldWindow?.text ?? "?")" }
         } else if r.switchFailed {
             line += ", \(end)"
@@ -394,6 +411,36 @@ public final class Engine {
         if tap.secureInputOn { line += ", secure input on" }
         log(line + " | \(probes.frontApp())")
         endDictation()
+        relaunchIfPostFailed(plan: p, record: r, held: held)
+    }
+
+    // W8 (docs/adr/0022-relaunch-on-a-failed-post.md): the talk key did not go out of this process, by both
+    // measures (our tap never saw it come back; the system key state did not show it). The only known remedy is
+    // a fresh process. Runs once per dictation, after its summary line, off the tap callback.
+    // An unsampled probe (postSeen nil) counts as not seen; echo seen with the mic off is the voice tool's side
+    // and never qualifies. Never while a session is active: that is a newer press that interrupted this summary.
+    func relaunchIfPostFailed(plan p: Plan, record r: DictationRecord, held: TimeInterval) {
+        guard p.style == "hold", held >= Engine.relaunchMinHold, r.keySentMs != nil, r.echoMs == nil, r.postSeen != true
+        else { return }
+        guard !machine.isActive else { trace("self-relaunch skipped: a session is active"); return }
+        let why = "talk key did not go out: echo missing, post not seen"
+        let now = clock.now
+        if let last = supervisor.lastRelaunchAt {
+            let age = now.timeIntervalSince(last)
+            if age < Engine.relaunchGap {
+                log("self-relaunch suppressed: last one \(Int(max(age, 0) / 60))m ago (\(why))")
+                return
+            }
+        }
+        log("self-relaunch: \(why)\(napNow())")
+        // Not inline: for an app provider this summary runs inside the CGEventTap callback (ADR 0011), and a quit
+        // there would never return the swallowed trigger key-up. The next main-loop turn is outside the callback.
+        // The time is stored only when the relauncher started, so a failed spawn does not use up the rate limit.
+        let relaunchNextTurn = { [self] in
+            guard !machine.isActive else { trace("self-relaunch cancelled: a session started"); return }
+            if supervisor.relaunch(reason: why) { supervisor.lastRelaunchAt = clock.now }
+        }
+        clock.after(0, relaunchNextTurn)
     }
 
     /// The tap was off for a while, so key events may have been missed: line our idea of the trigger up with
@@ -587,6 +634,8 @@ public final class Engine {
         if !on { log("event tap installed but not enabled") }
         forwardKeyEdgeSeen = false
         clock.after(1) { [self] in clearStuckModifier() }
-        log("started: trigger \(plan.trigger.name), forward \(plan.forwardKey.name), voice \(plan.voiceID)")
+        log(
+            "started: trigger \(plan.trigger.name), forward \(plan.forwardKey.name), voice \(plan.voiceID)"
+                + (supervisor.takeSelfRelaunchMark() ? " (after self-relaunch)" : "") + napNow())
     }
 }

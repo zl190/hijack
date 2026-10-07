@@ -67,12 +67,22 @@ public enum WindowState: Equatable {
     }
 }
 
+/// W9: how the system treats this process right now. `napped`: App Nap is engaged (the task suppression
+/// policy's `active` word). `role`: the Mach task role (1 foreground, 2 background, 7 default, ...).
+public struct ProcessState: Equatable {
+    public var napped: Bool
+    public var role: Int?  // nil when the role read failed but the nap read worked
+    public init(napped: Bool, role: Int?) { self.napped = napped; self.role = role }
+}
+
 /// Probes of the voice tool: its processes, its windows, the microphone, the app in front.
 public protocol Probes {
     func processIDs(ofProvider id: String) -> [pid_t]
     func windows(of pids: [pid_t]) -> WindowState
     func micInUse(by pids: [pid_t]?) -> Bool?  // nil: by anyone on the default input device
     func frontApp() -> String
+    /// W9: this process's App Nap state and task role; nil when the system call fails.
+    func processState() -> ProcessState?
 }
 
 /// Time and deferred work. The live one is the main queue. The fake one advances by hand.
@@ -92,6 +102,19 @@ public protocol Sink {
     func sourceName(_ id: String) -> String
 }
 
+/// The process around Engine (W8, docs/adr/0022-relaunch-on-a-failed-post.md): restart it, and remember when it last did.
+/// Engine owns the signature and the rate limit; the app side owns the Process call and UserDefaults.
+public protocol Supervisor: AnyObject {
+    /// Start a fresh copy of the app and quit this one. `reason` goes to the log by the caller; the live one
+    /// also marks the exit as a self-relaunch so the next `started:` line can say so.
+    /// Returns false when the new process could not be started (nothing was quit, and the caller must not count it).
+    func relaunch(reason: String) -> Bool
+    /// When the app last relaunched itself. Persisted, so a process that is broken from birth cannot loop.
+    var lastRelaunchAt: Date? { get set }
+    /// True once when the previous exit was a self-relaunch (and clears the mark). Read at startup.
+    func takeSelfRelaunchMark() -> Bool
+}
+
 /// A watch on a set of folders, notifying once when something inside one of them changes. The live
 /// implementation (Sources/Core/Watch.swift) wraps FSEvents; the tests drive a fake by hand, with no
 /// real latency. One seam, not part of `Deps`: `SettingsWatch` is used from Menu.swift, outside Engine.
@@ -108,8 +131,12 @@ public struct Deps {
     public var probes: Probes
     public var clock: Scheduler
     public var sink: Sink
+    public var supervisor: Supervisor
 
-    public init(keys: KeyPoster, sources: InputSources, tap: TapControl, probes: Probes, clock: Scheduler, sink: Sink) {
+    public init(
+        keys: KeyPoster, sources: InputSources, tap: TapControl, probes: Probes, clock: Scheduler, sink: Sink, supervisor: Supervisor
+    ) {
         self.keys = keys; self.sources = sources; self.tap = tap; self.probes = probes; self.clock = clock; self.sink = sink
+        self.supervisor = supervisor
     }
 }

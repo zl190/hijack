@@ -93,6 +93,9 @@ public struct DictationStats: Equatable {
     public var tapPaused: Int, slowKeys: Int, caughtUp: Int
     public var tools: [String: Int]
     public var firstDay: String?, lastDay: String?
+    // W9: dictations with `nap: on|off`; of those, `nap: on`; of those, `echo missing`.
+    public var nappedSampled: Int = 0, napped: Int = 0, nappedFailed: Int = 0
+    public var selfRelaunches: Int = 0  // W8: `self-relaunch:` lines (the suppressed ones are not counted)
 
     /// Share of judged dictations (text arrived or no window) where the text arrived; nil when none were judged.
     public var successRate: Double? {
@@ -125,6 +128,7 @@ public struct DictationStats: Equatable {
             guard !xs.isEmpty else { return nil }
             let s = xs.sorted(); return s[min(s.count - 1, Int((Double(s.count) * p).rounded(.up)) - 1)]
         }
+        let dictLines = kept.filter { $0.dropFirst(23).hasPrefix(" dictation ") }
         return DictationStats(
             dictations: started.count,
             outcomes: Dictionary(grouping: started, by: \.outcome).mapValues(\.count),
@@ -136,6 +140,10 @@ public struct DictationStats: Equatable {
             slowKeys: kept.filter { $0.contains("slow key event") }.count,
             caughtUp: kept.filter { $0.contains(": catching up") }.count,
             tools: Dictionary(grouping: started, by: \.tool).mapValues(\.count),
-            firstDay: entries.first?.day, lastDay: entries.last?.day)
+            firstDay: entries.first?.day, lastDay: entries.last?.day,
+            nappedSampled: dictLines.filter { $0.contains("nap: on") || $0.contains("nap: off") }.count,
+            napped: dictLines.filter { $0.contains("nap: on") }.count,
+            nappedFailed: dictLines.filter { $0.contains("nap: on") && $0.contains("echo missing") }.count,
+            selfRelaunches: kept.filter { $0.contains("self-relaunch: ") }.count)
     }
 }

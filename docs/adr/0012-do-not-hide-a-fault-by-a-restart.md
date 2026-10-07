@@ -1,7 +1,7 @@
 # 0012. Do not hide a fault by a restart
 
 - Topic: Faults and reliability
-- Status: Accepted
+- Status: Accepted, partly superseded by 0022 (one signature)
 - Date: 2026-10-03
 - Evidence: docs/sleep-wake-event-tap-prior-art.md
 

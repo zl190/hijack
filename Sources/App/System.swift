@@ -4,6 +4,7 @@ import ApplicationServices
 import Carbon
 import CoreAudio
 import os
+import Darwin
 
 // MARK: live seams — the macOS side of Sources/Core/Seams.swift. Engine never calls the system directly.
 
@@ -25,7 +26,7 @@ extension Engine {
             plan: { Plan(Model.shared) },
             deps: Deps(
                 keys: LiveKeyPoster(), sources: LiveInputSources(), tap: tap, probes: LiveProbes(),
-                clock: LiveScheduler(), sink: LiveSink()))
+                clock: LiveScheduler(), sink: LiveSink(), supervisor: LiveSupervisor()))
         tap.triggerCode = { [unowned engine] in engine.plan.trigger.code }
         return engine
     }
@@ -182,6 +183,25 @@ struct LiveProbes: Probes {
     func windows(of pids: [pid_t]) -> WindowState { onScreenWindows(of: pids) }
     func micInUse(by pids: [pid_t]?) -> Bool? { micInUseLive(by: pids) }
     func frontApp() -> String { frontAppLive() }
+    // W9: App Nap, read without root. XNU's TASK_SUPPRESSION_POLICY (flavor 3, osfmk/mach/task_policy_private.h) is
+    // 16 integer_t words; word 0 is `active` (1: App Nap engaged). Flavor 4 (TASK_POLICY_STATE) is root-only: never use it.
+    // Flavor 1 is TASK_CATEGORY_POLICY: word 0 is the task role.
+    func processState() -> ProcessState? {
+        var raw = [integer_t](repeating: 0, count: 16)
+        var count = mach_msg_type_number_t(16)
+        var getDefault: boolean_t = 0
+        let kr = raw.withUnsafeMutableBufferPointer {
+            task_policy_get(mach_task_self_, task_policy_flavor_t(3), $0.baseAddress, &count, &getDefault)
+        }
+        var cat = [integer_t](repeating: 0, count: 1)
+        var catCount = mach_msg_type_number_t(1)
+        var catDefault: boolean_t = 0
+        let kr2 = cat.withUnsafeMutableBufferPointer {
+            task_policy_get(mach_task_self_, task_policy_flavor_t(1), $0.baseAddress, &catCount, &catDefault)
+        }
+        guard kr == KERN_SUCCESS else { return nil }
+        return ProcessState(napped: raw[0] != 0, role: kr2 == KERN_SUCCESS ? Int(cat[0]) : nil)
+    }
 }
 
 struct LiveScheduler: Scheduler {
@@ -259,4 +279,54 @@ extension Notification.Name {
     static let hijackActivity = Notification.Name("HijackActivity")
     static let hijackSettingsChanged = Notification.Name("HijackSettingsChanged")
     static let hijackStateChanged = Notification.Name("HijackStateChanged")  // trusted / tapActive changed
+}
+
+/// The one relaunch path (review-4 M4): a detached `open -b` once this process is gone, because
+/// openApplication(at:) alone would activate the copy that is still running. The menu's Reopen action and the
+/// self-relaunch (W8) both go through here; `selfInitiated` marks the exit so the next `started:` line says so.
+/// The shell waits for our pid to disappear (capped at 10 s, then opens anyway and the instance lock decides)
+/// instead of sleeping a fixed time. Returns false, without quitting, when the relauncher cannot be spawned.
+/// The quit itself runs on the next main-loop turn, so the caller can still record that the spawn worked.
+@discardableResult
+func relaunchProcess(selfInitiated: Bool) -> Bool {
+    if selfInitiated { UserDefaults.standard.set(true, forKey: LiveSupervisor.markKey) }
+    let reopen = Process()
+    reopen.executableURL = URL(fileURLWithPath: "/bin/sh")
+    reopen.arguments = [
+        "-c",
+        "n=0; while kill -0 \(getpid()) 2>/dev/null && [ $n -lt 100 ]; do sleep 0.1; n=$((n+1)); done; open -b com.zl190.hijack",
+    ]
+    do {
+        try reopen.run()
+    } catch {
+        UserDefaults.standard.removeObject(forKey: LiveSupervisor.markKey)
+        log("self-relaunch aborted: couldn't spawn the relauncher (\(error))")
+        return false
+    }
+    DispatchQueue.main.async {
+        flushLog()  // the log is written on a background queue, and terminate() ends in exit()
+        NSApp.terminate(nil)
+    }
+    return true
+}
+
+/// W8: relaunch through `relaunchProcess`; the last-relaunch time and the exit mark live in UserDefaults.
+final class LiveSupervisor: Supervisor {
+    static let markKey = "selfRelaunchMark"
+    static let atKey = "selfRelaunchAt"
+    func relaunch(reason: String) -> Bool { relaunchProcess(selfInitiated: true) }
+    var lastRelaunchAt: Date? {
+        get { UserDefaults.standard.object(forKey: LiveSupervisor.atKey) as? Date }
+        set { UserDefaults.standard.set(newValue, forKey: LiveSupervisor.atKey) }
+    }
+    /// main.swift reads and clears the UserDefaults mark right after the CLI dispatch (a process that dies before
+    /// `start()` must not leave it behind) and keeps the answer here until the `started:` line asks once.
+    static var consumedMark = false
+    static func consumeMarkFromDefaults() -> Bool {
+        let marked = UserDefaults.standard.bool(forKey: markKey)
+        if marked { UserDefaults.standard.removeObject(forKey: markKey) }
+        consumedMark = marked
+        return marked
+    }
+    func takeSelfRelaunchMark() -> Bool { defer { LiveSupervisor.consumedMark = false }; return LiveSupervisor.consumedMark }
 }
