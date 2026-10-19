@@ -64,6 +64,10 @@ mutate "b8 the source is read at every press" $E 's~if (sameKey || follow) \&\& 
   "$F/testPressesReadTheInputSourceOnlyWhenTheAnswerIsNeeded"
 mutate "b9 a too-short follow press is judged like a dictation" $E 's~if r.follow, held < p.holdDelay {~if r.follow, held < 0 {~' \
   "$F/testPressShorterThanTheHoldDelayIsTooShort"
+mutate "b10 a too-short follow press undoes the user's own source switch" $E 's~if record.follow, held < p.holdDelay, !record.sawWindow, !record.chained {~if record.follow, held < 0, !record.sawWindow, !record.chained {~' \
+  "$F/testTooShortPressThatSwitchedTheSourceItselfIsLeftAlone"
+mutate "b11 a chained too-short press drops the pending restore" $E 's~record.chained = previous != nil \&\& sourceAtPress == p.voiceID~record.chained = false~' \
+  "$F/testTooShortPressWhileWaitingStillRestores"
 mutate "c no mic or window sample while following" $E 's~guard machine.state == .listening || machine.state == .following, gen == generation else { return }~guard machine.state == .listening, gen == generation else { return }~' \
   "$F/testSamplesWhileHeldReadMicAndWindowOnly"
 mutate "c2 the key-listener chain is read for a key that was never posted" $E 's|let readChain = !record.sampled \&\& plan.style == "hold" \&\& machine.state == .listening|let readChain = !record.sampled \&\& plan.style == "hold"|' \
@@ -75,6 +79,8 @@ mutate "d2 a source that stayed is reported as changed by hand" $E 's|let stayed
 
 # Stats
 mutate "e stats does not read a follow line" $S 's~(?:hold|toggle|follow)\\):~(?:hold|toggle)\\):~' \
+  "$F/testStatsParsesFollowLines"
+mutate "e3 stats reads the mode word anywhere on the line" $S 's~let follow = modeWord == "follow"~let follow = line.contains("(follow)")~' \
   "$F/testStatsParsesFollowLines"
 mutate "e2 stats counts a follow line as a too-short tap" $S 's~} else if line.contains("released before") || (sent == nil \&\& !follow) {~} else if sent == nil {~' \
   "$F/testStatsParsesFollowLines"

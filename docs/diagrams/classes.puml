@@ -126,7 +126,8 @@ class "DictationRecord" as DictationRecord << (S, SkyBlue) struct >> {
   +ahead : [String]?
   +heldProcess : ProcessState?
   +switchFailed : Bool
-  +follow : Bool 
+  +follow : Bool
+  +chained : Bool 
 }
 class "Engine" as Engine << (C, DarkSeaGreen) >> { 
   +makePlan : () -> Plan

@@ -44,7 +44,10 @@ menu and in Settings). In it:
    previous text landed) chains: the previous dictation is written up as interrupted and the new one keeps the
    remembered source (the FM-17 rule). A press released before the hold delay (a tap or a chord on the talk key, such
    as Fn+Delete or the Globe key) is written up as `released before fn was held for 0.20s` and left unjudged by
-   `hijack stats`, as a too-short hold-mode press is; the window watch and the restore still run, as they do there.
+   `hijack stats`, as a too-short hold-mode press is. Unlike hold mode, nothing of ours was switched in, so such a
+   press restores nothing unless a voice window was seen or a restore from the previous dictation is pending: a
+   Globe-key tap that switched the input source (macOS "Change Input Source") is the user's own switch and is left
+   alone (`input source left alone`).
 5. **The summary line keeps its shape with the mode word `(follow)`** and no `sent after`, `echo`, `ahead:` or `nap:`
    fields: all four are about a posted key, and none was.
    `dictation com.tencent.inputmethod.wetype.pinyin (follow): held 2.93s, window closed 1627ms after release, back after 1.82s | mic tool on device on, window while held: 1 window | front=…`
@@ -80,7 +83,7 @@ new profile 跟随.
 
 ## Verification
 
-`swift test`: 257 tests, 0 failures (236 before W11). `scripts/mutate-w11.sh` breaks one line of shipped code at a
+`swift test`: 258 tests, 0 failures (236 before W11). `scripts/mutate-w11.sh` breaks one line of shipped code at a
 time; the named tests must go RED, then GREEN once the line is restored, and a mutant that does not compile is a FAIL.
 Output of the run on 2026-10-19:
 
@@ -109,6 +112,10 @@ PASS b8 the source is read at every press: broken -> tests RED
 PASS b8 the source is read at every press: restored -> tests GREEN
 PASS b9 a too-short follow press is judged like a dictation: broken -> tests RED
 PASS b9 a too-short follow press is judged like a dictation: restored -> tests GREEN
+PASS b10 a too-short follow press undoes the user's own source switch: broken -> tests RED
+PASS b10 a too-short follow press undoes the user's own source switch: restored -> tests GREEN
+PASS b11 a chained too-short press drops the pending restore: broken -> tests RED
+PASS b11 a chained too-short press drops the pending restore: restored -> tests GREEN
 PASS c no mic or window sample while following: broken -> tests RED
 PASS c no mic or window sample while following: restored -> tests GREEN
 PASS c2 the key-listener chain is read for a key that was never posted: broken -> tests RED
@@ -119,6 +126,8 @@ PASS d2 a source that stayed is reported as changed by hand: broken -> tests RED
 PASS d2 a source that stayed is reported as changed by hand: restored -> tests GREEN
 PASS e stats does not read a follow line: broken -> tests RED
 PASS e stats does not read a follow line: restored -> tests GREEN
+PASS e3 stats reads the mode word anywhere on the line: broken -> tests RED
+PASS e3 stats reads the mode word anywhere on the line: restored -> tests GREEN
 PASS e2 stats counts a follow line as a too-short tap: broken -> tests RED
 PASS e2 stats counts a follow line as a too-short tap: restored -> tests GREEN
 PASS static grep: follow reaches Plan, CLI, Config, menu and Settings; the pid lookup is off the tap callback

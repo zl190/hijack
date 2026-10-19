@@ -41,6 +41,8 @@ hijack restart           # quit the running app and open it again
 
 `status`, `sources`, `get`, and `stats` take `--json`.
 
+In follow mode (`triggerMode: "follow"`) a dictation line reads `dictation … (follow): held 2.9s, window closed 1627ms after release, back after 1.82s | mic tool on device on, window while held: 1 window`: no `sent`, `echo` or `ahead:` field, since nothing was posted. A press shorter than `holdDelay` (a tap or a chord on the talk key) reads `released before fn was held for 0.20s` and is not judged. `hijack stats` adds a `Follow mode` line (`followed` in `--json`) once any such line is in the period.
+
 `hijack stats` prints a `target` line under the success rate: `success >= 99.0%` is the current
 reliability bar (`Sources/Core/Stats.swift`'s `successTarget`, provisional until 7 days of 1.2.x data),
 next to this period's own rate and `met` or `not met`. `--json` carries the same two values as `target`

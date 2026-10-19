@@ -58,6 +58,7 @@ public struct DictationRecord {
     public var heldProcess: ProcessState?  // W9: App Nap state at the same 0.3 s sample (nil: not sampled or unreadable)
     public var switchFailed: Bool = false  // the input source never switched: the talk key was not sent (FM-05)
     public var follow: Bool = false  // W11: the tool took the physical key itself; nothing was switched in or posted
+    public var chained: Bool = false  // W11: pressed while the previous dictation's restore was still pending (FM-17)
 }
 
 public final class Engine {
@@ -254,6 +255,7 @@ public final class Engine {
             case .rememberSource:
                 // W11: the tool switches itself in on the physical key; we only keep where to come back to. The mic
                 // and window samples still run (off-main), so the line can say whether the tool took the key.
+                record.chained = previous != nil && sourceAtPress == p.voiceID
                 if let cur = sourceAtPress, cur != p.voiceID { previous = cur }
                 enterPhase("following"); report("listening", p.voiceName)
                 // The tool's processes, for the samples: listing running apps asks other processes, so after the
@@ -265,7 +267,7 @@ public final class Engine {
                 }
                 sampleWhileHeld(gen: gen, after: 0.3)
             case .switchToVoice:
-                let cur = sources.current()
+                let cur = sourceAtPress ?? sources.current()  // a same-key press already read it for the mode decision
                 if let cur, cur != p.voiceID { previous = cur }
                 // After the tap returns: nothing slow inside the tap, every tap after ours would wait for it.
                 if cur != p.voiceID { clock.after(0) { [self] in switchTo(p.voiceID, "switch to") } }
@@ -356,6 +358,13 @@ public final class Engine {
                     ? "input source unreadable at the press, nothing to switch back to"
                     : "started inside \(p.voiceName), nothing to switch back to")
             report("done", p.voiceName); return
+        }
+        // W11 (review round 2): a tap or a chord on the talk key is the Globe key too. If it switched the input source
+        // (macOS "Change Input Source" on Fn) and no voice window was seen, that switch is the user's own: leave it.
+        // Hijack switched nothing in, so there is nothing of ours to undo. A chained press keeps the pending restore.
+        let held = (record.releasedAt ?? clock.now).timeIntervalSince(record.pressedAt)
+        if record.follow, held < p.holdDelay, !record.sawWindow, !record.chained {
+            summary(end: "input source left alone"); report("done", ""); return
         }
         guard sources.current() == p.voiceID else {
             // W11: in follow mode the tool may simply not have taken the key: then nothing changed and nothing is switched.
@@ -457,7 +466,7 @@ public final class Engine {
             // W11: a tap or a chord on the talk key (Fn+Delete, the Globe key) is not a dictation, as a hold-mode press
             // released before the hold delay is not: the line says so and `hijack stats` leaves it unjudged. The
             // window watch and the restore still ran, as they do for a too-short hold-mode press.
-            line += ", released before \(p.forwardKey.logID) was held for \(String(format: "%.2f", p.holdDelay))s"
+            line += ", released before \(p.forwardKey.logID) was held for \(String(format: "%.2f", p.holdDelay))s, \(end)"
         } else if r.follow {
             // W11: nothing was posted, so no `sent`, `echo`, `ahead:` or `nap:`; the window and mic say whether the tool took its key.
             line += r.windowGoneMs.map { ", window closed \($0)ms after release" } ?? ", window never closed after release"

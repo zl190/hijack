@@ -100,7 +100,7 @@ final class SettingsStore: ObservableObject {
 
     var currentName: String { sources.first { $0.id == voiceInput }?.name ?? voiceInput }
     var voiceKeyForCurrent: KeySpec? { model.forwardKey }
-    var effectiveTrigger: KeySpec { trigger ?? model.forwardKey }
+    var effectiveTrigger: KeySpec { model.trigger }  // follow mode: the talk key, whatever `trigger` says (W11)
 
     // MARK: key recording — any key, any combo, or a modifier alone (left/right told apart)
 
@@ -344,7 +344,7 @@ struct DictationTab: View {
                         Button(L("改回", "Reset")) { store.edit { $0.trigger = nil } }
                     }
                 }
-                if let t = store.trigger, !t.modifierOnly, t.mods.isEmpty, t.code < 96 {
+                if let t = store.trigger, store.triggerMode != "follow", !t.modifierOnly, t.mods.isEmpty, t.code < 96 {
                     Label(
                         L("单独一个普通键当快捷键，平时打字按到它也会触发", "A plain key alone also triggers while you type"),
                         systemImage: "exclamationmark.triangle"

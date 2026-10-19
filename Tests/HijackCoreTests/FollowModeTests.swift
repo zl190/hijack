@@ -131,7 +131,7 @@ final class FollowModeTests: XCTestCase {
         let r = rig()
         r.press(); r.clock.advance(0.1); r.release(); r.clock.advance(2.6)
         let l = r.sink.summaries.last ?? ""
-        XCTAssertTrue(l.hasSuffix("(follow): held 0.10s, released before fn was held for 0.20s | front=test"), l)
+        XCTAssertTrue(l.hasSuffix("(follow): held 0.10s, released before fn was held for 0.20s, input source left alone | front=test"), l)
         XCTAssertEqual(r.lastEntry()?.outcome, .tooShort)
         XCTAssertTrue(r.keys.posted.isEmpty)
         XCTAssertEqual(r.sources.selected, [], "the source never became the voice source: nothing to switch back")
@@ -140,13 +140,25 @@ final class FollowModeTests: XCTestCase {
     }
     func testPressAtTheHoldDelayIsADictation() {
         let r = rig()
-        r.press(); r.clock.advance(0.2); r.release(); r.clock.advance(2.6)
+        r.press(); r.clock.advance(0.25); r.release(); r.clock.advance(2.6)
         let l = r.sink.summaries.last ?? ""
-        XCTAssertTrue(l.contains("(follow): held 0.20s, window never closed after release"), l)
+        XCTAssertTrue(l.contains("(follow): held 0.25s, window never closed after release"), l)
         XCTAssertTrue(l.contains("mic tool ? device ?, window while held: ?"), "released before the first sample: \(l)")
         XCTAssertEqual(r.lastEntry()?.outcome, .noWindow)
     }
-    // A too-short press while a restore is pending still restores, as a too-short hold-mode press does.
+    // The talk key is the Globe key too: a tap that switches the input source (macOS "Change Input Source") with no
+    // voice window is the user's own switch, and Hijack must not undo it (review round 2, M2).
+    func testTooShortPressThatSwitchedTheSourceItselfIsLeftAlone() {
+        let r = rig()
+        r.press(); r.sources.currentID = Rig.voice; r.clock.advance(0.1); r.release(); r.clock.advance(2.6)
+        XCTAssertEqual(r.sources.selected, [], "the user's own switch stays")
+        XCTAssertEqual(r.sources.currentID, Rig.voice)
+        XCTAssertNil(r.engine.previous)
+        let l = r.sink.summaries.last ?? ""
+        XCTAssertTrue(l.contains("released before fn was held for 0.20s, input source left alone"), l)
+        XCTAssertEqual(r.lastEntry()?.outcome, .tooShort)
+    }
+    // A too-short press while a restore is pending (a chained press) still restores: the pending restore is the previous dictation's.
     func testTooShortPressWhileWaitingStillRestores() {
         let r = rig()
         r.press(); r.sources.currentID = Rig.voice; r.clock.advance(1.0); r.release(); r.clock.advance(0.3)
@@ -154,7 +166,8 @@ final class FollowModeTests: XCTestCase {
         XCTAssertEqual(r.engine.previous, Rig.english, "kept across the chain")
         r.clock.advance(2.6)
         XCTAssertEqual(r.sources.selected, [Rig.english])
-        XCTAssertTrue((r.sink.summaries.last ?? "").contains("released before fn was held"), r.sink.summaries.last ?? "")
+        XCTAssertTrue(
+            (r.sink.summaries.last ?? "").contains("released before fn was held for 0.20s, back after"), r.sink.summaries.last ?? "")
     }
 
     // Toggle wins over follow: a toggle session needs the posted key, so `follow` is ignored and the line says (toggle).
@@ -193,14 +206,15 @@ final class FollowModeTests: XCTestCase {
         XCTAssertEqual(r.sources.selected, [Rig.voice], "the one switch-in of the first dictation; no restore to a stale source")
     }
 
-    // The input-source reads inside the tap callback at a press (ADR 0011) stay what they were: one for a
-    // press that switches in (to remember the source), none for a toggle stop press; a follow press reads once.
+    // The input-source reads inside the tap callback at a press (ADR 0011) stay what they were: one for a toggle
+    // start or a custom-shortcut hold press (the switch-in's read), none for a toggle stop press; a follow press
+    // reads once, and a same-key hold press now shares that read with its switch-in (two on the base).
     func testPressesReadTheInputSourceOnlyWhenTheAnswerIsNeeded() {
         let t = Rig(toggle: true)
         var before = t.sources.reads
         t.press()
         XCTAssertEqual(t.sources.reads - before, 1, "the start press: the switch-in's own read, as before")
-        t.clock.advance(0.3)
+        t.clock.advance(0.3); t.release()  // toggle: the release changes nothing; the next press stops
         before = t.sources.reads
         t.press()  // the stop press
         XCTAssertEqual(t.sources.reads - before, 0, "the stop press reads nothing")
@@ -276,9 +290,9 @@ final class FollowModeTests: XCTestCase {
         let hold = ok.replacingOccurrences(of: "(follow): held 2.93s,", with: "(hold): held 2.93s, fn sent after 238ms,")
         XCTAssertFalse(DictationEntry.parse(hold)!.follow)
         XCTAssertEqual(DictationEntry.parse(hold)!.sentMs, 238)
-        XCTAssertFalse(
-            DictationEntry.parse(hold.replacingOccurrences(of: "front=x", with: "front=(follow)"))!.follow, "the mode word in its slot only"
-        )
+        let decoy = hold.replacingOccurrences(of: "front=com.anthropic.claudefordesktop", with: "front=(follow)")
+        XCTAssertTrue(decoy.hasSuffix("front=(follow)"), "setup")
+        XCTAssertFalse(DictationEntry.parse(decoy)!.follow, "the mode word in its slot only")
         XCTAssertEqual(s.followed, 4)
         let short =
             "2026-10-19 18:04:00.000 dictation com.tencent.inputmethod.wetype.pinyin (follow): held 0.10s, released before fn was held for 0.20s | front=x"
