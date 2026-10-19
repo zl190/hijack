@@ -35,10 +35,7 @@ mutate "b per-dictation rebuild dropped" $E 's|keys.rebuild(reason: "dictation")
   'EventSourceTests/(testEveryDictationRebuildsOnceBeforeItsPress|testWakeThenDictationRebuildsTwice)'
 mutate "b2 rebuild moved after the press post" $E 's|keys.rebuild(reason: "dictation")|_ = 0|; s|        startVoice()$|        startVoice(); keys.rebuild(reason: "dictation")|' \
   'EventSourceTests/testEveryDictationRebuildsOnceBeforeItsPress'
-mutate "c summary always prints post: seen" $E 's|r.postSeen.map { $0 ? "seen" : "not seen" } ?? "?"|"seen"|' \
-  'EventSourceTests/testSummaryHasPostNotSeenWhenTheKeyStateIsUp'
-mutate "c2 post sample reads hid only" $E 's|record.postSeen = seen.hid \|\| seen.session|record.postSeen = seen.hid|' \
-  'EventSourceTests/testSessionStateAloneCountsAsSeen'
+# c, c2 (the `post:` probe) were removed on 2026-10-19 with the probe itself: scripts/mutate-w10.sh covers the field that replaced it.
 mutate "d stats ignores post: not seen" Sources/Core/Stats.swift 's|line.contains("post: not seen")|line.contains("post: NOT-SEEN")|' \
   'StatsTests/(testPostFieldDoesNotBreakParsingAndIsRead|testPostNotSeenWithoutAnEchoFieldIsKeyNotSent)'
 

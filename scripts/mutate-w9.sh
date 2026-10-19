@@ -29,20 +29,20 @@ mutate() { # name file sed-expression test-filter
 E=Sources/Core/Engine.swift
 T=AppNapTests
 mutate "a summary always prints nap: off" $E 's|return ", nap: \\(s.napped ? "on" : "off")" +|return ", nap: off" +|' \
-  "$T/(testNappedShowsNapOnAndTheRole|testStartedAndRelaunchLinesCarryNapFromAReadAtThatMoment|testNapIsIndependentOfPostSeen)"
+  "$T/(testNappedShowsNapOnAndTheRole|testStartedAndRelaunchLinesCarryNapFromAReadAtThatMoment|testNapIsIndependentOfTheListenerChain)"
 mutate "a2 unreadable prints nap: off" $E 's|guard let s else { return ", nap: ?" }|guard let s else { return ", nap: off" }|' \
   "$T/(testUnreadableShowsNapQuestionMarkAndNoRole|testTapStyleHasNoSample|testReleaseBeforeTheSampleHasNoSample)"
 mutate "b stats counts nap: ? as napped" Sources/Core/Stats.swift 's|napped: dictLines.filter { $0.contains("nap: on") }.count|napped: dictLines.filter { $0.contains("nap: on") \|\| $0.contains("nap: ?") }.count|' \
   "$T/testStatsCountsNappedSampledAndFailed"
 mutate "b2 stats counts nap: ? as sampled" Sources/Core/Stats.swift 's|$0.contains("nap: on") \|\| $0.contains("nap: off") }.count|$0.contains("nap: ") }.count|' \
   "$T/testStatsCountsNappedSampledAndFailed"
-mutate "c sample taken from postSeen instead of the probe" $E 's|record.heldProcess = probes.processState()|record.heldProcess = record.postSeen.map { ProcessState(napped: !$0, role: 0) }|' \
-  "$T/(testNapIsIndependentOfPostSeen|testNappedShowsNapOnAndTheRole)"
+mutate "c sample taken from the listener chain instead of the probe" $E 's|record.heldProcess = probes.processState()|record.heldProcess = record.ahead.map { ProcessState(napped: !$0.isEmpty, role: 0) }|' \
+  "$T/(testNapIsIndependentOfTheListenerChain|testNappedShowsNapOnAndTheRole)"
 mutate "d started line drops the nap suffix" $E 's|(after self-relaunch)" : "") + napNow())|(after self-relaunch)" : ""))|' \
   "$T/testStartedAndRelaunchLinesCarryNapFromAReadAtThatMoment"
 mutate "d2 relaunch line drops the nap suffix" $E 's|log("self-relaunch: \\(why)\\(napNow())")|log("self-relaunch: \\(why)")|' \
   "$T/testStartedAndRelaunchLinesCarryNapFromAReadAtThatMoment"
-mutate "e sample moved to every state (no hold-style gate)" $E 's|if record.postSeen == nil, plan.style == "hold" {|if record.postSeen == nil {|' \
+mutate "e sample moved to every state (no hold-style gate)" $E 's|if !record.sampled, plan.style == "hold" {|if !record.sampled {|' \
   "$T/testTapStyleHasNoSample"
 
 # Static check: LiveProbes reads flavor 3 (TASK_SUPPRESSION_POLICY) with 16 words, and never flavor 4 (TASK_POLICY_STATE, root-only).

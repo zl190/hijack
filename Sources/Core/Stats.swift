@@ -28,7 +28,10 @@ public struct DictationEntry: Equatable {
     public var textInMs: Int?  // release → voice window gone
     public var outcome: Outcome
     public var cause: Cause?
-    public var postSeen: Bool?  // W7: the system key state showed the talk key down 0.3 s after it was posted (nil: no field)
+    // W7, dropped on 2026-10-19 (older lines still carry it): the key state showed the talk key down (nil: no field).
+    public var postSeen: Bool?
+    public var echoSeen: Bool?  // our talk key came back through our own tap (nil: no echo field, or never sent)
+    public var listenersAhead: [String]?  // W10: other processes' filtering key listeners ahead of ours (nil: `?` or no field)
     public var tapDisabled: Bool
     public var secureInput: Bool
 
@@ -52,6 +55,7 @@ public struct DictationEntry: Equatable {
         let textIn = num(#"window closed (\d+)ms after release"#).map { Int($0) }
         let echo = line.contains("echo missing") ? false : line.contains("echo after") ? true : nil
         let post = line.contains("post: not seen") ? false : line.contains("post: seen") ? true : nil
+        let ahead: [String]? = word(#"ahead: ([^,|]+)"#).flatMap { $0 == "?" ? nil : $0 == "none" ? [] : $0.components(separatedBy: "+") }
         let mic = word(#"mic tool (on|off)"#).map { $0 == "on" }
         let outcome: Outcome
         if line.contains("input source never switched") {
@@ -78,7 +82,8 @@ public struct DictationEntry: Equatable {
         return DictationEntry(
             day: String(line.prefix(10)), tool: tool, toggle: line.contains("(toggle)"),
             heldMs: Int(held * 1000), sentMs: sent, textInMs: textIn, outcome: outcome, cause: cause,
-            postSeen: post, tapDisabled: line.contains("key tap disabled"), secureInput: line.contains("secure input on"))
+            postSeen: post, echoSeen: echo, listenersAhead: ahead, tapDisabled: line.contains("key tap disabled"),
+            secureInput: line.contains("secure input on"))
     }
 }
 
@@ -97,6 +102,8 @@ public struct DictationStats: Equatable {
     public var nappedSampled: Int = 0, napped: Int = 0, nappedFailed: Int = 0
     public var selfRelaunches: Int = 0  // W8: `self-relaunch:` lines (the suppressed ones are not counted)
     public var manualRestarts: Int = 0  // `restart: ` lines: the menu's Restart Hijack and `hijack restart`
+    // W10: dictations with an `ahead:` reading; of those, with another listener ahead; of those, `echo missing`.
+    public var aheadSampled: Int = 0, listenerAhead: Int = 0, listenerAheadFailed: Int = 0
 
     /// Share of judged dictations (text arrived or no window) where the text arrived; nil when none were judged.
     public var successRate: Double? {
@@ -146,6 +153,9 @@ public struct DictationStats: Equatable {
             napped: dictLines.filter { $0.contains("nap: on") }.count,
             nappedFailed: dictLines.filter { $0.contains("nap: on") && $0.contains("echo missing") }.count,
             selfRelaunches: kept.filter { $0.contains("self-relaunch: ") }.count,
-            manualRestarts: kept.filter { $0.dropFirst(23).hasPrefix(" restart: ") }.count)
+            manualRestarts: kept.filter { $0.dropFirst(23).hasPrefix(" restart: ") }.count,
+            aheadSampled: started.filter { $0.listenersAhead != nil }.count,
+            listenerAhead: started.filter { $0.listenersAhead?.isEmpty == false }.count,
+            listenerAheadFailed: started.filter { $0.listenersAhead?.isEmpty == false && $0.echoSeen == false }.count)
     }
 }

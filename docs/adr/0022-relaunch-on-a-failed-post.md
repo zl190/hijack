@@ -1,7 +1,7 @@
 # 0022. Relaunch on a failed post
 
 - Topic: Faults and reliability
-- Status: Accepted
+- Status: Accepted; signature narrowed by 0023 (no relaunch behind another key listener; the `post:` term is gone)
 - Date: 2026-10-07
 - Evidence: the `nap:` field on each dictation line (W9) records whether App Nap was engaged when the post failed; docs/incidents/2026-10-04-echo-missing.md, docs/sleep-wake-event-tap-prior-art.md section 4.3, `~/Library/Logs/Hijack.log` 2026-10-04 and 2026-10-06
 

@@ -50,7 +50,9 @@ public struct DictationRecord {
     public var heldWindow: WindowState?  // same sample
     public var sawWindow: Bool = false  // its voice window was on screen at some point after release
     public var windowGoneMs: Int?  // release → voice window gone (the text is in)
-    public var postSeen: Bool?  // 0.3 s after the talk key went out, the system key state shows it down (nil: not sampled)
+    public var sampled: Bool = false  // the 0.3 s sample after the talk key went out ran (hold style only)
+    // W10: other processes' filtering key listeners ahead of ours at that sample (nil: not sampled or unreadable).
+    public var ahead: [String]?
     public var heldProcess: ProcessState?  // W9: App Nap state at the same 0.3 s sample (nil: not sampled or unreadable)
     public var switchFailed: Bool = false  // the input source never switched: the talk key was not sent (FM-05)
 }
@@ -337,14 +339,14 @@ public final class Engine {
     public func sampleWhileHeld(gen: Int, after delay: Double) {
         clock.after(delay) { [self] in
             guard machine.state == .listening, gen == generation else { return }
-            // W7: did the system see our talk key go down? Only a held key can be read back: a tapped
-            // key is already up by now. A cheap state read, so it stays on the main thread.
-            if record.postSeen == nil, plan.style == "hold" {
-                // Unverified which state shows a posted Fn: read both, say which one did (trace).
-                let seen = tap.postedKeyVisible(plan.forwardKey)
-                record.postSeen = seen.hid || seen.session
-                record.heldProcess = probes.processState()  // W9: one cheap Mach call, like the key-state read
-                trace("post sample hid=\(seen.hid ? "on" : "off") session=\(seen.session ? "on" : "off")")
+            // W10: who sits ahead of our key listener at the moment the talk key is out? One read of the
+            // system's tap list, on the main thread (it is one call, not CoreAudio). It decides what a failed
+            // post means (ADR 0023). Only a held key has a sample at all: a tapped key is over by now.
+            if !record.sampled, plan.style == "hold" {
+                record.sampled = true
+                record.ahead = tap.listenersAhead()
+                record.heldProcess = probes.processState()  // W9: one cheap Mach call
+                trace("key listeners ahead of ours: \(self.aheadField(self.record.ahead))")
             }
             let pids = voicePIDs, watched = plan.switchesInput, probes = probes
             clock.offMain({ () -> ((Bool?, Bool?), WindowState) in
@@ -376,6 +378,11 @@ public final class Engine {
         }
     }
 
+    /// W10: `none`, the names ahead of ours joined by `+`, or `?`. Substrings the stats parser looks for.
+    func aheadField(_ a: [String]?) -> String {
+        guard let a else { return "?" }
+        return a.isEmpty ? "none" : a.joined(separator: "+")
+    }
     /// W9: `, nap: on|off|?` and, when it was read, `, role: N`. Substrings the stats parser looks for.
     func napField(_ s: ProcessState?) -> String {
         guard let s else { return ", nap: ?" }
@@ -400,7 +407,7 @@ public final class Engine {
             }
             line += ", \(end)"
             line +=
-                " | echo \(r.echoMs.map { "after \($0)ms" } ?? "missing"), post: \(r.postSeen.map { $0 ? "seen" : "not seen" } ?? "?")\(napField(r.heldProcess)), mic tool \(onOff(r.heldMic?.tool)) device \(onOff(r.heldMic?.device))"
+                " | echo \(r.echoMs.map { "after \($0)ms" } ?? "missing"), ahead: \(aheadField(r.ahead))\(napField(r.heldProcess)), mic tool \(onOff(r.heldMic?.tool)) device \(onOff(r.heldMic?.device))"
             if p.switchesInput { line += ", window while held: \(r.heldWindow?.text ?? "?")" }
         } else if r.switchFailed {
             line += ", \(end)"
@@ -414,16 +421,21 @@ public final class Engine {
         relaunchIfPostFailed(plan: p, record: r, held: held)
     }
 
-    // W8 (docs/adr/0022-relaunch-on-a-failed-post.md): the talk key did not go out of this process, by both
-    // measures (our tap never saw it come back; the system key state did not show it). The only known remedy is
-    // a fresh process. Runs once per dictation, after its summary line, off the tap callback.
-    // An unsampled probe (postSeen nil) counts as not seen; echo seen with the mic off is the voice tool's side
+    // W8 (docs/adr/0022-relaunch-on-a-failed-post.md): the talk key did not go out of this process: our tap never
+    // saw it come back. The only known remedy for a fault inside this process is a fresh one. Runs once per
+    // dictation, after its summary line, off the tap callback. Echo seen with the mic off is the voice tool's side
     // and never qualifies. Never while a session is active: that is a newer press that interrupted this summary.
+    // W10 (ADR 0023): behind another process's filtering key listener the key was swallowed there, not lost here,
+    // and a fresh process would sit behind it again: no relaunch, one line that says so. An unread chain (nil)
+    // does not block the one remedy left.
     func relaunchIfPostFailed(plan p: Plan, record r: DictationRecord, held: TimeInterval) {
-        guard p.style == "hold", held >= Engine.relaunchMinHold, r.keySentMs != nil, r.echoMs == nil, r.postSeen != true
-        else { return }
+        guard p.style == "hold", held >= Engine.relaunchMinHold, r.keySentMs != nil, r.echoMs == nil else { return }
         guard !machine.isActive else { trace("self-relaunch skipped: a session is active"); return }
-        let why = "talk key did not go out: echo missing, post not seen"
+        let why = "talk key did not go out: echo missing"
+        if let ahead = r.ahead, !ahead.isEmpty {
+            log("self-relaunch skipped: \(ahead.joined(separator: "+"))'s key listener sits ahead of ours (\(why))")
+            return
+        }
         let now = clock.now
         if let last = supervisor.lastRelaunchAt {
             let age = now.timeIntervalSince(last)

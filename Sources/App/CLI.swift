@@ -223,6 +223,18 @@ func cliDoctor() -> Int32 {
         check(
             st.tapActive, "key listener installed", st.trusted ? "macOS turned it off; quit and reopen Hijack" : "grant Accessibility first"
         )
+        // W10 (docs/adr/0023): a filtering key listener ahead of ours sees the talk key first and can swallow it.
+        if st.tapActive {
+            switch keyListenersAhead(of: st.pid) {
+            case nil: check(nil, "key listener chain", "couldn't read the system's event tap list")
+            case let ahead? where ahead.isEmpty: check(true, "no other key listener sits ahead of Hijack's")
+            case let ahead?:
+                check(
+                    nil, "\(ahead.joined(separator: ", ")) keep\(ahead.count == 1 ? "s" : "") a key listener ahead of Hijack's",
+                    "it sees the talk key first and can swallow it (WeType 3.0 does, in its voice-input exclusive mode): "
+                        + "turn that mode off in WeType, or set a talk key other than Fn; each dictation line says `ahead:`")
+            }
+        }
     }
     check(p.isInstalled, "voice source \(p.name) is installed", "install it, or `hijack set source <id>` (see `hijack sources`)")
     let found = p.detected().key
@@ -413,6 +425,7 @@ func cliStats(_ args: [String], json: Bool) -> Int32 {
             "tools": toolNames, "keyTapPaused": s.tapPaused, "slowKeyEvents": s.slowKeys, "triggerCaughtUp": s.caughtUp,
             "selfRelaunches": s.selfRelaunches, "manualRestarts": s.manualRestarts,
             "nappedSampled": s.nappedSampled, "napped": s.napped, "nappedFailed": s.nappedFailed,
+            "aheadSampled": s.aheadSampled, "listenerAhead": s.listenerAhead, "listenerAheadFailed": s.listenerAheadFailed,
             "system": systemJSON(metrics, hasPayloads: hasPayloads),
         ]
         if let r = s.successRate { d["successRate"] = (r * 1000).rounded() / 1000 }
@@ -463,6 +476,12 @@ func cliStats(_ args: [String], json: Bool) -> Int32 {
             print(
                 "App Nap".padding(toLength: 24, withPad: " ", startingAt: 0)
                     + "napped during \(s.napped) of \(s.nappedSampled) sampled dictations (\(s.nappedFailed) of those failed)")
+        }
+        if s.aheadSampled > 0 {
+            print(
+                "Key listener".padding(toLength: 24, withPad: " ", startingAt: 0)
+                    + "another app's listener sat ahead of ours during \(s.listenerAhead) of \(s.aheadSampled) sampled dictations "
+                    + "(\(s.listenerAheadFailed) of those failed)")
         }
         if toolNames.count > 1 {
             print(

@@ -131,13 +131,7 @@ final class LiveTap: TapControl {
     func enable() { if let tap { CGEvent.tapEnable(tap: tap, enable: true) } }
     func keyIsDown(_ code: Int) -> Bool { CGEventSource.keyState(.hidSystemState, key: CGKeyCode(code)) }
     func modifierIsDown(_ flag: CGEventFlags) -> Bool { CGEventSource.flagsState(.hidSystemState).contains(flag) }
-    func postedKeyVisible(_ key: KeySpec) -> (hid: Bool, session: Bool) {
-        func down(_ state: CGEventSourceStateID) -> Bool {
-            if key.modifierOnly, let flag = key.named?.flag { return CGEventSource.flagsState(state).contains(flag) }
-            return CGEventSource.keyState(state, key: CGKeyCode(key.code))
-        }
-        return (down(.hidSystemState), down(.combinedSessionState))
-    }
+    func listenersAhead() -> [String]? { keyListenersAhead(of: getpid()) }
     var secureInputOn: Bool { IsSecureEventInputEnabled() }
 
     func install(_ onEvent: @escaping (KeyInput) -> Bool) -> Bool {
@@ -176,6 +170,37 @@ final class LiveTap: TapControl {
         CFRunLoopAddSource(CFRunLoopGetMain(), CFMachPortCreateRunLoopSource(nil, tap, 0), .commonModes)
         return true
     }
+}
+
+/// W10 (docs/adr/0023): the processes whose enabled, filtering key-event taps at the HID level are listed before
+/// `pid`'s own tap in `CGGetEventTapList`, in that order, each name once. The list is kept newest-first for taps
+/// pushed to the head, and a tap created later runs earlier (measured 2026-10-19, docs/incidents): so a listener
+/// listed before ours sees every key, ours included, before we do, and can swallow it. nil when the list cannot
+/// be read or `pid` has no enabled key tap at that level. Limit: a tap appended at the tail is also listed before
+/// older head taps yet runs after them; the names tell a reader which case it is. One call, no I/O: fine on the
+/// main thread, never inside the tap callback.
+func keyListenersAhead(of pid: pid_t) -> [String]? {
+    let keyMask: CGEventMask =
+        1 << CGEventType.keyDown.rawValue | 1 << CGEventType.keyUp.rawValue | 1 << CGEventType.flagsChanged.rawValue
+    var count: UInt32 = 0
+    var taps = [CGEventTapInformation](repeating: CGEventTapInformation(), count: 128)
+    guard CGGetEventTapList(128, &taps, &count) == .success else { return nil }
+    let keyTaps = taps.prefix(Int(count)).filter {
+        $0.tapPoint == .cghidEventTap && $0.enabled && $0.eventsOfInterest & keyMask != 0
+    }
+    guard let ours = keyTaps.firstIndex(where: { $0.tappingProcess == pid }) else { return nil }
+    var names: [String] = []
+    for t in keyTaps.prefix(ours) where t.options == .defaultTap && t.tappingProcess != pid {
+        let name = processName(t.tappingProcess)
+        if !names.contains(name) { names.append(name) }
+    }
+    return names
+}
+
+private func processName(_ pid: pid_t) -> String {
+    var buf = [CChar](repeating: 0, count: Int(PATH_MAX) * 4)
+    guard proc_pidpath(pid, &buf, UInt32(buf.count)) > 0 else { return "pid \(pid)" }
+    return URL(fileURLWithPath: String(cString: buf)).lastPathComponent
 }
 
 struct LiveProbes: Probes {

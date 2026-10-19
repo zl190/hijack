@@ -4,15 +4,14 @@ import XCTest
 
 // W8 (docs/adr/0022-relaunch-on-a-failed-post.md): relaunch the app after a dictation whose talk key did not go out.
 final class SelfRelaunchTests: XCTestCase {
-    static let why = "talk key did not go out: echo missing, post not seen"
+    static let why = "talk key did not go out: echo missing"
 
     /// One dictation that ends with a summary line. `hold` is the time the shortcut stays down (the key goes out at 0.22 s).
-    private func dictate(_ r: Rig, hold: Double = 0.6, echo: Bool = false, postSeen: Bool = false) {
-        if postSeen { r.tap.flagsDown = [.maskSecondaryFn] }
+    private func dictate(_ r: Rig, hold: Double = 0.6, echo: Bool = false) {
         r.pressUntilListening(hold: hold, echo: echo); r.release(); r.clock.advance(2.6)
     }
 
-    // The signature: hold style, held >= 0.5 s, key sent, no echo, post not seen.
+    // The signature: hold style, held >= 0.5 s, key sent, no echo, no other key listener ahead of ours (ListenerChainTests).
     func testFailedPostRelaunchesOnceAfterTheSummaryLine() {
         let r = Rig()
         dictate(r)
@@ -25,14 +24,14 @@ final class SelfRelaunchTests: XCTestCase {
         XCTAssertEqual(lines[relaunch ?? 0], "self-relaunch: \(Self.why) nap=?")
         XCTAssertNotNil(r.supervisor.lastRelaunchAt, "the time is persisted through the supervisor")
     }
-    // An unsampled probe (released before the 0.3 s sample could run) counts as not seen.
-    func testUnsampledProbeCountsAsNotSeen() {
+    // An unsampled chain (released before the 0.3 s sample could run) does not block the relaunch.
+    func testUnsampledChainStillRelaunches() {
         let r = Rig()
-        r.press(); r.clock.advance(0.51)  // key sent at about 0.22 s; the probe samples 0.3 s later, at about 0.52 s
+        r.press(); r.clock.advance(0.51)  // key sent at about 0.22 s; the sample comes 0.3 s later, at about 0.52 s
         XCTAssertEqual(r.engine.machine.state, .listening)
         r.release(); r.clock.advance(2.6)
         let line = r.sink.summaries.last ?? ""
-        XCTAssertTrue(line.contains("echo missing, post: ?"), "setup: the probe was not sampled: \(line)")
+        XCTAssertTrue(line.contains("echo missing, ahead: ?"), "setup: the chain was not sampled: \(line)")
         XCTAssertEqual(r.supervisor.relaunches.count, 1, line)
     }
 
@@ -57,12 +56,6 @@ final class SelfRelaunchTests: XCTestCase {
         let r = Rig()
         r.probes.micTool = false; r.probes.micDevice = false
         dictate(r, echo: true)
-        XCTAssertEqual(r.supervisor.relaunches, [])
-    }
-    func testPostSeenDoesNotRelaunch() {
-        let r = Rig()
-        dictate(r, postSeen: true)
-        XCTAssertTrue(r.sink.summaries.last?.contains("echo missing, post: seen") ?? false, r.sink.summaries.last ?? "")
         XCTAssertEqual(r.supervisor.relaunches, [])
     }
     func testTapStyleDoesNotRelaunch() {
