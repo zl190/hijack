@@ -481,40 +481,40 @@ func cliStats(_ args: [String], json: Bool) -> Int32 {
         // (same choice as --json, which then omits "met" rather than printing a meaningless comparison).
         if let r = s.successRate, let met = s.met {
             print(
-                "Success rate".padding(toLength: 24, withPad: " ", startingAt: 0) + String(format: "%5.1f%%", r * 100)
+                "Success rate".padding(toLength: 48, withPad: " ", startingAt: 0) + String(format: "%5.1f%%", r * 100)
                     + "  (text arrived ÷ text arrived + no window + not switched back)")
             print(
-                "target".padding(toLength: 24, withPad: " ", startingAt: 0)
+                "target".padding(toLength: 48, withPad: " ", startingAt: 0)
                     + "success >= \(String(format: "%.1f", DictationStats.successTarget * 100))%  this period \(String(format: "%.1f", r * 100))%  "
                     + (met ? "met" : "not met"))
         }
         func ms(_ v: Int?) -> String { v.map { $0 < 1000 ? "\($0) ms" : String(format: "%.2f s", Double($0) / 1000) } ?? "–" }
-        print("Talk key sent after".padding(toLength: 24, withPad: " ", startingAt: 0) + "p50 \(ms(s.sentP50))   p95 \(ms(s.sentP95))")
+        print("Talk key sent after".padding(toLength: 48, withPad: " ", startingAt: 0) + "p50 \(ms(s.sentP50))   p95 \(ms(s.sentP95))")
         print(
-            "Text in after release".padding(toLength: 24, withPad: " ", startingAt: 0) + "p50 \(ms(s.textInP50))   p95 \(ms(s.textInP95))")
+            "Text in after release".padding(toLength: 48, withPad: " ", startingAt: 0) + "p50 \(ms(s.textInP50))   p95 \(ms(s.textInP95))")
         print(
-            "Incidents".padding(toLength: 24, withPad: " ", startingAt: 0)
+            "Incidents".padding(toLength: 48, withPad: " ", startingAt: 0)
                 + "key tap paused by macOS \(s.tapPaused) · slow key events \(s.slowKeys) · shortcut caught up \(s.caughtUp) · self-relaunches \(s.selfRelaunches) · manual restarts \(s.manualRestarts)"
         )
         if s.nappedSampled > 0 {
             print(
-                "App Nap".padding(toLength: 24, withPad: " ", startingAt: 0)
+                "App Nap".padding(toLength: 48, withPad: " ", startingAt: 0)
                     + "napped during \(s.napped) of \(s.nappedSampled) sampled dictations (\(s.nappedFailed) of those failed)")
         }
         if s.followed > 0 {  // W11: these lines have no sent/echo/ahead fields; the window alone judged them
             print(
-                "Follow mode".padding(toLength: 24, withPad: " ", startingAt: 0)
+                "Follow mode".padding(toLength: 48, withPad: " ", startingAt: 0)
                     + "\(s.followed) of \(s.dictations) dictations (nothing posted; judged on the voice window)")
         }
         if s.aheadSampled > 0 {
             print(
-                "Key listener".padding(toLength: 24, withPad: " ", startingAt: 0)
+                "Key listener".padding(toLength: 48, withPad: " ", startingAt: 0)
                     + "another app's listener sat ahead of ours during \(s.listenerAhead) of \(s.aheadSampled) sampled dictations "
                     + "(\(s.listenerAheadFailed) of those with the echo missing)")
         }
         if toolNames.count > 1 {
             print(
-                "By voice tool".padding(toLength: 24, withPad: " ", startingAt: 0)
+                "By voice tool".padding(toLength: 48, withPad: " ", startingAt: 0)
                     + toolNames.sorted { $0.value > $1.value }.map { "\($0.key) \($0.value)" }.joined(separator: " · "))
         }
     }
@@ -543,7 +543,7 @@ private func systemJSON(_ m: MetricsSummary, hasPayloads: Bool) -> [String: Any]
 /// than being silently absent, which would read as "Hijack has no data" instead of "Hijack could not read it".
 private func printSystemBlock(_ m: MetricsSummary, hasPayloads: Bool) {
     let unrecognized = "n/a (unrecognized format)"
-    func row(_ label: String, _ text: String) { print(label.padding(toLength: 24, withPad: " ", startingAt: 0) + text) }
+    func row(_ label: String, _ text: String) { print(label.padding(toLength: 48, withPad: " ", startingAt: 0) + text) }
     guard hasPayloads else {
         row("System (MetricKit)", "no payloads yet (macOS delivers them about once a day)")
         return
