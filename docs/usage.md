@@ -20,7 +20,9 @@ The source of truth is `~/.config/hijack/config.json`. Edits apply on the next k
 }
 ```
 
-`trigger: "follow"` follows the selected tool's voice key. `voiceKeys` stores overrides by source ID. `triggerMode` is `hold`, `toggle` or `follow`; `language` is `system`, `en` or `zh`. Logs are at `~/Library/Logs/Hijack.log`.
+`trigger: "follow"` follows the selected tool's voice key. `voiceKeys` stores overrides by source ID. `triggerMode` is `auto` (the default), `hold`, `toggle` or `follow`; `language` is `system`, `en` or `zh`. Logs are at `~/Library/Logs/Hijack.log`.
+
+`triggerMode: "auto"` picks the mode from the installed voice tool's version: a tool that takes its own talk key and ignores keys sent by other apps (WeType from 3.0.0) gets follow mode, every other tool gets hold. The menu's Auto entry, Settings and `hijack status` show what it resolved to and which version decided it. Pick a mode by hand to override it.
 
 `triggerMode: "follow"` is for a voice tool that starts itself on its own talk key (WeType 3.0 does, on a physical Fn, and ignores keys posted by another app). Hijack then never posts a key. It watches the system's input source: when it changes into the voice source and Hijack did not switch it, the tool has started, and Hijack goes back to the input source you came from once the tool's voice window closes or its microphone goes quiet. If the tool lets the talk key through, Hijack also sees the key; either way the trigger is the tool's talk key, and to use another physical key you remap it in a keyboard remapper such as Karabiner (`right_option → fn`). A switch to the voice source with no voice after it (⌃Space to type with it) is left alone.
 

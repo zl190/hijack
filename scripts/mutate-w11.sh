@@ -128,7 +128,7 @@ mutate "e2 stats counts a follow line as a too-short tap" $S 's~} else if line.c
 
 # Static checks: the app side carries the mode end to end, and the follow pid lookup runs off the tap callback.
 if grep -q 'follow: m.followMode' Sources/App/System.swift && grep -q 'followMode ? key : m.customTrigger ?? key' Sources/App/System.swift \
-  && grep -q '\["hold", "toggle", "follow"\].contains(value)' Sources/App/CLI.swift && grep -q '\["toggle", "follow"\].contains' Sources/App/Config.swift \
+  && grep -q 'DictationMode.all.contains(value)' Sources/App/CLI.swift && grep -q 'DictationMode.all.contains' Sources/App/Config.swift \
   && grep -q 'value: "follow"' Sources/App/Menu.swift && grep -q 'triggerMode = "follow"' Sources/App/Settings.swift \
   && awk '/case .rememberSource:/ { inb = 1 } inb && /clock.after\(0\)/ { after = 1 } inb && after && /voicePIDs = probes.processIDs/ { found = 1 } inb && /sampleWhileHeld\(gen: gen, after: 0.3\)/ { inb = 0 } END { exit !found }' $E; then
   echo "PASS static grep: follow reaches Plan, CLI, Config, menu and Settings; the pid lookup is off the tap callback"

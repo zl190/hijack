@@ -55,6 +55,15 @@ protocol VoiceProvider {
     func detected() -> (key: KeySpec?, style: String?)
     func processIDs() -> [pid_t]  // its running processes (for its windows and its microphone use)
     func windowState() -> WindowState  // is its voice UI on screen
+    /// The installed version, when its bundle can be found (ADR 0025: `triggerMode: "auto"` reads it).
+    var installedVersion: String? { get }
+    /// It starts on its own physical talk key and ignores a posted one (WeType from 3.0): auto mode then follows
+    /// instead of posting. Decided from `installedVersion`, never from the key event stream (docs/adr/0025).
+    var takesTalkKeyItself: Bool { get }
+}
+extension VoiceProvider {
+    var installedVersion: String? { nil }
+    var takesTalkKeyItself: Bool { false }
 }
 
 /// On-screen windows owned by these processes. Thread-safe (no input-source calls), for sampling off the main thread.
@@ -68,18 +77,62 @@ extension VoiceProvider {
     func isBusy() -> Bool? { windowState().busy }
 }
 
+/// Info.plist reads for `installedVersion`, keyed by plist path and invalidated by its modification date.
+struct VersionCacheEntry {
+    let modified: Date, bundleID: String, version: String?
+}
+final class VersionCache: @unchecked Sendable {
+    let lock = NSLock()
+    var entries: [String: VersionCacheEntry] = [:]
+}
+let versionCache = VersionCache()
+
 struct InputMethodProvider: VoiceProvider {
     let sourceID: String
     var label: (zh: String, en: String)? = nil  // our own names; the system often only registers a Chinese one
     var defaultKey: String? = nil  // when its settings can't be read
     var helpers: [String] = []  // apps that own its voice UI (Sogou: a separate voice assistant)
     var reader: (() -> (key: KeySpec, style: String)?)? = nil
+    var bundleID: String? = nil  // the input method app, for its version (Info.plist); nil = version unknown
+    var takesTalkKeyFrom: ((String?) -> Bool)? = nil  // version → takes its talk key itself (ADR 0025)
 
     var id: String { sourceID }
     var name: String { label.map { L($0.zh, $0.en) } ?? sourceName(sourceID) }
     var isInstalled: Bool { source(sourceID) != nil }
     var switchesInputSource: Bool { true }
     var readsSettings: Bool { reader != nil }
+    /// CFBundleShortVersionString of the input method's app bundle, off the tap path (Model is only consulted from
+    /// refresh(), the menu, Settings and the CLI). Review 0025 M2: not through `Bundle(url:)`, which caches the Info.plist
+    /// it first read for the process lifetime and would keep 2.2.3 across WeType's in-place upgrade to 3.0; the plist
+    /// is read straight from disk, once per modification date (`versionCache`), so a menu open costs one stat.
+    /// Found through LaunchServices first, then the two input method folders (a Mac whose LaunchServices database
+    /// lacks the input method would otherwise read "unknown" and auto would fall to hold).
+    var installedVersion: String? {
+        guard let bundleID else { return nil }
+        let folders = ["/Library/Input Methods", NSHomeDirectory() + "/Library/Input Methods"]
+        var candidates = [NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)].compactMap { $0 }
+        for folder in folders {
+            for name in (try? FileManager.default.contentsOfDirectory(atPath: folder)) ?? [] where name.hasSuffix(".app") {
+                candidates.append(URL(fileURLWithPath: folder).appendingPathComponent(name))
+            }
+        }
+        for url in candidates {
+            let plist = url.appendingPathComponent("Contents/Info.plist")
+            guard let modified = (try? FileManager.default.attributesOfItem(atPath: plist.path))?[.modificationDate] as? Date
+            else { continue }
+            if let hit = versionCache.lock.withLock({ versionCache.entries[plist.path] }), hit.modified == modified {
+                if hit.bundleID == bundleID { return hit.version } else { continue }
+            }
+            guard let info = NSDictionary(contentsOf: plist) else { continue }
+            let entry = VersionCacheEntry(
+                modified: modified, bundleID: info["CFBundleIdentifier"] as? String ?? "",
+                version: info["CFBundleShortVersionString"] as? String)
+            versionCache.lock.withLock { versionCache.entries[plist.path] = entry }
+            if entry.bundleID == bundleID { return entry.version }
+        }
+        return nil
+    }
+    var takesTalkKeyItself: Bool { takesTalkKeyFrom?(installedVersion) ?? false }
     func detected() -> (key: KeySpec?, style: String?) {
         if let reader { let r = reader(); return (r?.key, r?.style) }
         return (defaultKey.flatMap(KeySpec.named), nil)
@@ -131,7 +184,9 @@ func handyVoiceKey() -> KeySpec? {
 
 // The voice tools Hijack knows. Order = menu order. Adding one is adding a line here.
 let builtInProviders: [VoiceProvider] = [
-    InputMethodProvider(sourceID: weTypeID, label: ("微信输入法", "WeType"), reader: weTypeVoice),
+    InputMethodProvider(
+        sourceID: weTypeID, label: ("微信输入法", "WeType"), reader: weTypeVoice, bundleID: "com.tencent.inputmethod.wetype",
+        takesTalkKeyFrom: DictationMode.weTypeTakesTalkKey),
     InputMethodProvider(
         sourceID: "com.sogou.inputmethod.sogou.pinyin", label: ("搜狗输入法", "Sogou"), defaultKey: "left_option",
         helpers: ["com.sogou.voiceassistant"]),

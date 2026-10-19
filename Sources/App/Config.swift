@@ -15,8 +15,9 @@ final class Config {
     var voiceInput: String = weTypeID
     var voiceKeys: [String: KeySpec] = [:]  // per voice input; missing = "auto" (detected, or a known default)
     // "hold": hold to talk · "toggle": tap to start, tap again to stop · "follow" (W11, docs/adr/0024): the tool
-    // starts itself on its own talk key, Hijack only switches back.
-    var triggerMode: String = "hold"
+    // starts itself on its own talk key, Hijack only switches back · "auto" (docs/adr/0025): follow for a tool that
+    // takes its own key (WeType ≥ 3.0), else hold. Model.resolvedMode is what the engine runs.
+    var triggerMode: String = "auto"
     var stopOnAnyKey: Bool = true  // toggle: any key also stops (that key is swallowed, never typed)
     var voiceStyles: [String: String] = [:]  // per voice input: how it wants its key — "hold" | "tap" | "doubleTap"
     var showMenuBarIcon: Bool = true
@@ -65,7 +66,8 @@ final class Config {
         if let old = KeySpec(json: d["voiceKey"]), voiceKeys[voiceInput] == nil { voiceKeys[voiceInput] = old }  // older single "voiceKey"
         showMenuBarIcon = d["showMenuBarIcon"] as? Bool ?? true
         showDockIcon = d["showDockIcon"] as? Bool ?? false
-        triggerMode = ["toggle", "follow"].contains(d["triggerMode"] as? String ?? "") ? (d["triggerMode"] as? String ?? "hold") : "hold"
+        // ADR 0025: missing or unknown = auto, so a fresh install gets a mode that works with the installed voice tool.
+        triggerMode = DictationMode.all.contains(d["triggerMode"] as? String ?? "") ? (d["triggerMode"] as? String ?? "auto") : "auto"
         stopOnAnyKey = d["stopOnAnyKey"] as? Bool ?? true
         voiceStyles = (d["voiceStyles"] as? [String: String] ?? [:]).filter { ["hold", "tap", "doubleTap"].contains($0.value) }
         language = d["language"] as? String ?? "system"
@@ -138,8 +140,11 @@ final class Model {
     // always triggers on the talk key itself: the tool starts on that physical key, and Hijack only follows it.
     var customTrigger: KeySpec? { c.trigger }
     var trigger: KeySpec { followMode ? forwardKey : customTrigger ?? forwardKey }
-    var toggleMode: Bool { c.triggerMode == "toggle" }
-    var followMode: Bool { c.triggerMode == "follow" }
+    /// The mode the engine runs: the configured one, or what "auto" resolves to for this voice tool (ADR 0025).
+    var autoMode: Bool { DictationMode.isAuto(c.triggerMode) }
+    var resolvedMode: String { DictationMode.resolve(configured: c.triggerMode, toolTakesTalkKey: provider.takesTalkKeyItself) }
+    var toggleMode: Bool { resolvedMode == "toggle" }
+    var followMode: Bool { resolvedMode == "follow" }
     var detectedStyle: String? { provider.detected().style }
     var voiceStyle: String { c.voiceStyles[voiceID] ?? detectedStyle ?? "hold" }
 }

@@ -72,7 +72,7 @@ let cliHelp = """
       hijack version                  running version, and the update Sparkle found last
 
     Settings:
-      mode             hold | toggle | follow    (follow: the voice tool starts itself on its talk key; Hijack only switches back)
+      mode             auto | hold | toggle | follow    (auto: follow for a tool that takes its own talk key, WeType 3.0+; else hold)
       shortcut         follow | a key (right_option, fn, f18, ctrl+option+f18, …)
       any-key-stops    true | false              (toggle mode)
       source           a voice source id or name (see `hijack sources`)
@@ -183,7 +183,7 @@ func cliStatus(json: Bool) -> Int32 {
             "version": appVersion, "running": st != nil, "pid": st.map { Int($0.pid) } as Any,
             "accessibility": st.map { $0.trusted } as Any, "keyListener": st.map { $0.tapActive } as Any,
             "secureInput": st.map { $0.secureInput } as Any, "secureInputApp": st?.secureInputApp as Any,
-            "mode": c.triggerMode, "shortcut": m.trigger.name,
+            "mode": c.triggerMode, "effectiveMode": m.resolvedMode, "sourceVersion": p.installedVersion as Any, "shortcut": m.trigger.name,
             "source": ["id": p.id, "name": p.name, "installed": p.isInstalled],
             "talkKey": ["key": m.forwardKey.name, "origin": keyOrigin(p, user: m.userVoiceKey)],
             "style": m.voiceStyle, "configError": c.lastError as Any,
@@ -199,11 +199,15 @@ func cliStatus(json: Bool) -> Int32 {
                     ? "active" : st.trusted ? "OFF — macOS turned it off; quit and reopen Hijack" : "off — waiting for Accessibility"))
         if st.secureInput { print("  secure input    on" + (st.secureInputApp.map { " (\($0))" } ?? "")) }
     }
-    print(
-        "  mode            "
-            + (m.toggleMode
-                ? "toggle (tap to start, tap to stop)"
-                : m.followMode ? "follow (\(p.name) starts itself on its talk key; Hijack only switches back)" : "hold (hold to talk)"))
+    let modeText =
+        m.toggleMode
+        ? "toggle (tap to start, tap to stop)"
+        : m.followMode ? "follow (\(p.name) starts itself on its talk key; Hijack only switches back)" : "hold (hold to talk)"
+    // ADR 0025: auto says what it resolved to and why (the voice tool's version decides).
+    let why =
+        p.installedVersion.map { " — \(p.name) \($0)" + (p.takesTalkKeyItself ? " takes its talk key itself" : "") }
+        ?? " — \(p.name) version unknown, so hold is assumed"
+    print("  mode            " + (m.autoMode ? "auto → \(modeText)\(why)" : modeText))
     print(
         "  shortcut        \(m.trigger.name)"
             + (m.followMode ? "  (the talk key; follow mode ignores the shortcut setting)" : c.trigger == nil ? "  (same as talk key)" : "")
@@ -346,7 +350,7 @@ func cliSet(_ args: [String]) -> Int32 {
     func seconds(_ r: ClosedRange<Double>) -> Double? { Double(value).flatMap { r.contains($0) ? $0 : nil } }
     switch name {
     case "mode":
-        guard ["hold", "toggle", "follow"].contains(value) else { return fail("mode: hold | toggle | follow") }
+        guard DictationMode.all.contains(value) else { return fail("mode: auto | hold | toggle | follow") }
         c.triggerMode = value
     case "shortcut":
         if value == "follow" {

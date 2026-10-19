@@ -22,7 +22,7 @@ struct SourceRow: Identifiable {
 final class SettingsStore: ObservableObject {
     static let shared: SettingsStore = SettingsStore()
 
-    @Published var triggerMode: String = "hold"
+    @Published var triggerMode: String = "auto"
     @Published var stopOnAnyKey: Bool = true
     @Published var trigger: KeySpec?
     @Published var voiceInput: String = ""
@@ -101,6 +101,9 @@ final class SettingsStore: ObservableObject {
     var currentName: String { sources.first { $0.id == voiceInput }?.name ?? voiceInput }
     var voiceKeyForCurrent: KeySpec? { model.forwardKey }
     var effectiveTrigger: KeySpec { model.trigger }  // follow mode: the talk key, whatever `trigger` says (W11)
+    /// What the draft `triggerMode` runs as (ADR 0025): the rows that depend on follow mode key off this, not the raw value.
+    var effectiveMode: String { DictationMode.resolve(configured: triggerMode, toolTakesTalkKey: model.provider.takesTalkKeyItself) }
+    var modeIsAuto: Bool { DictationMode.isAuto(triggerMode) }
 
     // MARK: key recording — any key, any combo, or a modifier alone (left/right told apart)
 
@@ -293,13 +296,27 @@ struct DictationTab: View {
     var body: some View {
         Page(store: store) {
             Card(title: L("听写方式", "How You Dictate")) {
+                // ADR 0025: auto resolves by the voice tool's version (WeType 3.0+ takes its own key → follow).
+                let resolvedName =
+                    [
+                        "hold": L("按住说话", "Hold to Talk"), "follow": L("跟随\(store.currentName)", "Follow \(store.currentName)"),
+                        "toggle": L("点按开始，再点停止", "Tap to Start, Tap to Stop"),
+                    ][store.effectiveMode] ?? store.effectiveMode
+                let version = store.model.provider.installedVersion.map { " \($0)" } ?? L("，版本未知", ", version unknown")
+                ChoiceRow(
+                    icon: "wand.and.stars", title: L("自动", "Auto"),
+                    detail: L(
+                        "按\(store.currentName)的版本选：现在是「\(resolvedName)」（\(store.currentName)\(version)）",
+                        "Picked from \(store.currentName)'s version: now \(resolvedName) (\(store.currentName)\(version))"),
+                    selected: store.modeIsAuto
+                ) { store.edit { $0.triggerMode = "auto" } }
                 ChoiceRow(
                     icon: "hand.raised", title: L("按住说话", "Hold to Talk"), detail: L("按住说，松开停", "Hold the key while you speak"),
                     selected: store.triggerMode == "hold"
                 ) { store.edit { $0.triggerMode = "hold" } }
                 // W11 (docs/adr/0024): the tool starts itself on its own physical talk key; Hijack only switches back.
                 ChoiceRow(
-                    icon: "arrow.uturn.backward", title: L("跟随\(store.currentName)的说话键", "Follow \(store.currentName)'s Talk Key"),
+                    icon: "arrow.uturn.backward", title: L("跟随\(store.currentName)", "Follow \(store.currentName)"),
                     detail: L(
                         "\(store.currentName)自己开始听写，Hijack 只负责说完切回",
                         "\(store.currentName) starts on its own key; Hijack only switches back after"),
@@ -308,9 +325,9 @@ struct DictationTab: View {
                 ChoiceRow(
                     icon: "hand.tap", title: L("点按开始，再点停止（免按）", "Tap to Start, Tap to Stop"),
                     detail: L("点一下开始，再点一下停止", "Tap once to start, again to stop"),
-                    selected: store.triggerMode == "toggle", divider: store.triggerMode == "toggle"
+                    selected: store.triggerMode == "toggle", divider: store.effectiveMode == "toggle"
                 ) { store.edit { $0.triggerMode = "toggle" } }
-                if store.triggerMode == "toggle" {
+                if store.effectiveMode == "toggle" {
                     Row(title: L("按任意键也可停止", "Any Key Also Stops"), divider: false) {
                         Toggle("", isOn: Binding(get: { store.stopOnAnyKey }, set: { v in store.edit { $0.stopOnAnyKey = v } }))
                             .toggleStyle(.switch).labelsHidden()
@@ -319,7 +336,7 @@ struct DictationTab: View {
                 }
             }
             Card(title: L("快捷键", "Shortcut")) {
-                if store.triggerMode == "follow" {  // W11: the talk key is the trigger; the shortcut setting is not used
+                if store.effectiveMode == "follow" {  // W11: the talk key is the trigger; the shortcut setting is not used
                     Row(
                         title: L("按这个键听写", "Key you press"),
                         hint: L(
@@ -338,13 +355,13 @@ struct DictationTab: View {
                         KeyRecorder(store: store, target: .trigger, key: store.effectiveTrigger)
                     }
                 }
-                if store.trigger != nil, store.triggerMode != "follow" {
+                if store.trigger != nil, store.effectiveMode != "follow" {
                     Row(title: L("改回同说话键（\(store.model.forwardKey.name)）", "Use Talk Key (\(store.model.forwardKey.name))"), divider: false)
                     {
                         Button(L("改回", "Reset")) { store.edit { $0.trigger = nil } }
                     }
                 }
-                if let t = store.trigger, store.triggerMode != "follow", !t.modifierOnly, t.mods.isEmpty, t.code < 96 {
+                if let t = store.trigger, store.effectiveMode != "follow", !t.modifierOnly, t.mods.isEmpty, t.code < 96 {
                     Label(
                         L("单独一个普通键当快捷键，平时打字按到它也会触发", "A plain key alone also triggers while you type"),
                         systemImage: "exclamationmark.triangle"
