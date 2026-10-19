@@ -21,6 +21,10 @@ mutate() { # name file sed-expression test-filter
   if cmp -s "$file" "$file.w8orig"; then
     echo "FAIL $name: the sed expression changed nothing"; fail=1; mv "$file.w8orig" "$file"; current=""; return
   fi
+  if ! swift build --build-tests >/dev/null 2>&1; then
+    echo "FAIL $name: the mutant does not compile (a build error is not a RED test)"; fail=1
+    mv "$file.w8orig" "$file"; current=""; return
+  fi
   if red "$filter"; then echo "PASS $name: broken -> tests RED"; else echo "FAIL $name: broken -> tests stayed GREEN"; fail=1; fi
   mv "$file.w8orig" "$file"; current=""
   if green "$filter"; then echo "PASS $name: restored -> tests GREEN"; else echo "FAIL $name: restored -> tests not green"; fail=1; fi
@@ -34,19 +38,18 @@ mutate "b hold threshold 0.5 s -> 0.0 s" $E 's|relaunchMinHold: TimeInterval = 0
   "$T/testHeldUnderHalfASecondDoesNotRelaunch"
 mutate "b2 hold threshold 0.5 s -> 0.6 s" $E 's|relaunchMinHold: TimeInterval = 0.5|relaunchMinHold: TimeInterval = 0.6|' \
   "$T/testHeldJustOverHalfASecondRelaunches"
-mutate "c postSeen == false instead of != true" $E 's|r.postSeen != true|r.postSeen == false|' \
-  "$T/testUnsampledProbeCountsAsNotSeen"
-mutate "c2 postSeen condition dropped" $E 's|, r.postSeen != true||' \
-  "$T/testPostSeenDoesNotRelaunch"
+# c, c2 (the `post:` condition) were removed on 2026-10-19 with the probe; the listener-chain guard that replaced it is in scripts/mutate-w10.sh.
+mutate "c unsampled chain blocks the relaunch" $E 's|if let ahead = r.ahead, !ahead.isEmpty {|if let ahead = r.ahead ?? Optional(["?"]), !ahead.isEmpty {|' \
+  "$T/testUnsampledChainStillRelaunches"
 mutate "d rate limit 10 min -> 0" $E 's|relaunchGap: TimeInterval = 600|relaunchGap: TimeInterval = 0|' \
   "$T/(testSecondFailureNineMinutesLaterIsSuppressed|testPersistedDateSuppressesInAFreshProcess)"
 mutate "d2 rate limit 10 min -> 20 min" $E 's|relaunchGap: TimeInterval = 600|relaunchGap: TimeInterval = 1200|' \
   "$T/(testSecondFailureElevenMinutesLaterRelaunches|testPersistedDateOlderThanTheGapRelaunches)"
 mutate "d3 relaunch time not persisted" $E 's|supervisor.lastRelaunchAt = clock.now|_ = clock.now|' \
   "$T/(testFailedPostRelaunchesOnceAfterTheSummaryLine|testSecondFailureNineMinutesLaterIsSuppressed)"
-mutate "g echo condition dropped" $E 's|, r.echoMs == nil, r.postSeen|, r.postSeen|' \
+mutate "g echo condition dropped" $E 's|r.keySentMs != nil, r.echoMs == nil else|r.keySentMs != nil else|' \
   "$T/(testEchoSeenDoesNotRelaunch|testEchoSeenWithMicOffDoesNotRelaunch)"
-mutate "h key-sent condition dropped" $E 's|r.keySentMs != nil, r.echoMs|r.echoMs|' \
+mutate "h key-sent condition dropped" $E 's|relaunchMinHold, r.keySentMs != nil, r.echoMs|relaunchMinHold, r.echoMs|' \
   "$T/testKeyNeverSentDoesNotRelaunch"
 mutate "i hold-style condition dropped" $E 's|guard p.style == "hold", held|guard held|' \
   "$T/testTapStyleDoesNotRelaunch"

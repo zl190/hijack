@@ -41,15 +41,15 @@ final class AppNapTests: XCTestCase {
         XCTAssertTrue(l.contains("sent after"), "setup: the key went out: \(l)")
         XCTAssertTrue(l.contains("nap: ?"), l)
     }
-    // The sample comes from the probe, not from the post-seen read.
-    func testNapIsIndependentOfPostSeen() {
+    // The sample comes from the probe, not from the listener-chain read next to it.
+    func testNapIsIndependentOfTheListenerChain() {
         let r = Rig(); r.probes.process = ProcessState(napped: true, role: 7)
-        r.tap.flagsDown = [.maskSecondaryFn]  // post: seen
+        r.tap.ahead = ["WeType"]
         let l = line(r)
-        XCTAssertTrue(l.contains("post: seen, nap: on"), l)
-        let r2 = Rig(); r2.probes.process = ProcessState(napped: false, role: 7)  // post not seen
+        XCTAssertTrue(l.contains("ahead: WeType, nap: on"), l)
+        let r2 = Rig(); r2.probes.process = ProcessState(napped: false, role: 7)  // nobody ahead
         let l2 = line(r2)
-        XCTAssertTrue(l2.contains("post: not seen, nap: off"), l2)
+        XCTAssertTrue(l2.contains("ahead: none, nap: off"), l2)
     }
 
     func testStartedAndRelaunchLinesCarryNapFromAReadAtThatMoment() {

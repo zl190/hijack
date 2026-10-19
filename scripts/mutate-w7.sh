@@ -21,6 +21,10 @@ mutate() { # name file sed-expression test-filter
   if cmp -s "$file" "$file.w7orig"; then
     echo "FAIL $name: the sed expression changed nothing"; fail=1; mv "$file.w7orig" "$file"; current=""; return
   fi
+  if ! swift build --build-tests >/dev/null 2>&1; then
+    echo "FAIL $name: the mutant does not compile (a build error is not a RED test)"; fail=1
+    mv "$file.w7orig" "$file"; current=""; return
+  fi
   if red "$filter"; then echo "PASS $name: broken -> tests RED"; else echo "FAIL $name: broken -> tests stayed GREEN"; fail=1; fi
   mv "$file.w7orig" "$file"; current=""
   if green "$filter"; then echo "PASS $name: restored -> tests GREEN"; else echo "FAIL $name: restored -> tests not green"; fail=1; fi
@@ -35,10 +39,7 @@ mutate "b per-dictation rebuild dropped" $E 's|keys.rebuild(reason: "dictation")
   'EventSourceTests/(testEveryDictationRebuildsOnceBeforeItsPress|testWakeThenDictationRebuildsTwice)'
 mutate "b2 rebuild moved after the press post" $E 's|keys.rebuild(reason: "dictation")|_ = 0|; s|        startVoice()$|        startVoice(); keys.rebuild(reason: "dictation")|' \
   'EventSourceTests/testEveryDictationRebuildsOnceBeforeItsPress'
-mutate "c summary always prints post: seen" $E 's|r.postSeen.map { $0 ? "seen" : "not seen" } ?? "?"|"seen"|' \
-  'EventSourceTests/testSummaryHasPostNotSeenWhenTheKeyStateIsUp'
-mutate "c2 post sample reads hid only" $E 's|record.postSeen = seen.hid \|\| seen.session|record.postSeen = seen.hid|' \
-  'EventSourceTests/testSessionStateAloneCountsAsSeen'
+# c, c2 (the `post:` probe) were removed on 2026-10-19 with the probe itself: scripts/mutate-w10.sh covers the field that replaced it.
 mutate "d stats ignores post: not seen" Sources/Core/Stats.swift 's|line.contains("post: not seen")|line.contains("post: NOT-SEEN")|' \
   'StatsTests/(testPostFieldDoesNotBreakParsingAndIsRead|testPostNotSeenWithoutAnEchoFieldIsKeyNotSent)'
 

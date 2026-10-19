@@ -72,9 +72,9 @@ final class FakeTap: TapControl {
     var enableFails = 0  // the next N enables do nothing (FM-02)
     var keysDown: Set<Int> = []
     var flagsDown: CGEventFlags = []
-    var sessionKeysDown: Set<Int> = []  // the combined session state (W7 probe reads both)
-    var sessionFlagsDown: CGEventFlags = []
     var secureInputOn = false
+    var ahead: [String]? = []  // W10: other processes' filtering key listeners ahead of ours (nil: unreadable)
+    var aheadReads = 0
     var onEvent: ((KeyInput) -> Bool)?
     func install(_ onEvent: @escaping (KeyInput) -> Bool) -> Bool {
         guard installResult else { return false }
@@ -84,10 +84,8 @@ final class FakeTap: TapControl {
     func enable() { if enableFails > 0 { enableFails -= 1 } else { enabled = true } }
     func keyIsDown(_ code: Int) -> Bool { keysDown.contains(code) }
     func modifierIsDown(_ flag: CGEventFlags) -> Bool { flagsDown.contains(flag) }
-    func postedKeyVisible(_ key: KeySpec) -> (hid: Bool, session: Bool) {
-        if key.modifierOnly, let flag = key.named?.flag { return (flagsDown.contains(flag), sessionFlagsDown.contains(flag)) }
-        return (keysDown.contains(key.code), sessionKeysDown.contains(key.code))
-    }
+    var aheadKeys: [KeySpec] = []  // which talk key each read asked about
+    func listenersAhead(for key: KeySpec) -> [String]? { aheadReads += 1; aheadKeys.append(key); return ahead }
 }
 
 final class FakeProbes: Probes {
