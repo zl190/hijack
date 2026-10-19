@@ -137,7 +137,7 @@ dictation.
 
 ## Verification
 
-`swift test`: 270 tests, 0 failures (236 before W11). `scripts/mutate-w11.sh` breaks one line of shipped code at a
+`swift test`: 271 tests, 0 failures (236 before W11). `scripts/mutate-w11.sh` breaks one line of shipped code at a
 time; the named tests must go RED, then GREEN once the line is restored, and a mutant that does not compile is a FAIL.
 Output of the run on 2026-10-19:
 
@@ -190,6 +190,8 @@ PASS b18 a window seen does not take over from the mic: broken -> tests RED
 PASS b18 a window seen does not take over from the mic: restored -> tests GREEN
 PASS b19 the watch never gives up: broken -> tests RED
 PASS b19 the watch never gives up: restored -> tests GREEN
+PASS b20 a start inside the voice source forgets the persisted source: broken -> tests RED
+PASS b20 a start inside the voice source forgets the persisted source: restored -> tests GREEN
 PASS c no mic or window sample while following: broken -> tests RED
 PASS c no mic or window sample while following: restored -> tests GREEN
 PASS c2 the key-listener chain is read for a key that was never posted: broken -> tests RED
