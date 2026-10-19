@@ -89,6 +89,8 @@ mutate "b18 a window seen does not take over from the mic" $E 's~let live = byWi
   "$F/testAWindowSeenEndsTheWatchEvenWhileTheMicIsOn"
 mutate "b19 the watch never gives up" $E 's~let gaveUp = liveSince == nil ? waited >= p.fallbackDelay : waited >= Engine.maxToolDictation~let gaveUp = liveSince == nil ? waited >= p.fallbackDelay : false~' \
   "$F/testAStuckLiveReadingGivesUpAtTheCap"
+mutate "b20 a start inside the voice source forgets the persisted source" $E 's~lastOtherSource = supervisor.lastOtherSource~lastOtherSource = nil~' \
+  "$F/testAStartInsideTheVoiceSourceTakesThePersistedSourceAndTrackingPersistsIt"
 mutate "c no mic or window sample while following" $E 's~guard machine.state == .listening || machine.state == .following, gen == generation else { return }~guard machine.state == .listening, gen == generation else { return }~' \
   "$F/testSamplesWhileHeldReadMicAndWindowOnly"
 mutate "c2 the key-listener chain is read for a key that was never posted" $E 's|let readChain = !record.sampled \&\& plan.style == "hold" \&\& machine.state == .listening|let readChain = !record.sampled \&\& plan.style == "hold"|' \

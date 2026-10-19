@@ -361,6 +361,31 @@ final class FollowModeTests: XCTestCase {
         r.probes.window = .none("no window (pid 100)"); r.clock.advance(0.5)
         XCTAssertEqual(r.sources.selected, [Rig.english])
     }
+    // A process that starts inside the voice source (field, 20:14:57 → 20:15:43: `nothing to switch back to`) takes the
+    // persisted last other source, and the tracking writes it for the next process.
+    func testAStartInsideTheVoiceSourceTakesThePersistedSourceAndTrackingPersistsIt() {
+        let r = Rig(follow: true, current: Rig.voice, start: false)
+        r.supervisor.lastOtherSource = "im.rime.inputmethod.Squirrel.Hans"
+        r.probes.micTool = false
+        r.engine.start()
+        XCTAssertEqual(r.engine.lastOtherSource, "im.rime.inputmethod.Squirrel.Hans")
+        switchIn(r)  // WeType re-selects itself when its voice starts (the 20:15:43 line came with no other source)
+        r.probes.window = .visible(1); r.clock.advance(1.0); r.probes.window = .none("no window (pid 100)"); r.clock.advance(0.4)
+        XCTAssertEqual(r.sources.selected, ["im.rime.inputmethod.Squirrel.Hans"])
+        XCTAssertTrue((r.sink.summaries.last ?? "").contains("window closed 1"), r.sink.summaries.last ?? "")
+        // Tracking writes through: the restore's own notification, and any later change.
+        r.engine.inputSourceChanged()
+        XCTAssertEqual(r.supervisor.lastOtherSource, "im.rime.inputmethod.Squirrel.Hans")
+        r.sources.currentID = Rig.english; r.engine.inputSourceChanged()
+        XCTAssertEqual(r.supervisor.lastOtherSource, Rig.english)
+        // Nothing persisted and nothing seen: the line says so and nothing is switched.
+        let bare = Rig(follow: true, current: Rig.voice); bare.probes.micTool = false
+        switchIn(bare); bare.probes.window = .visible(1); bare.clock.advance(1.0); bare.probes.window = .none("x"); bare.clock.advance(0.4)
+        XCTAssertEqual(bare.sources.selected, [])
+        XCTAssertTrue(
+            (bare.sink.summaries.last ?? "").contains("no other input source known yet, nothing to switch back to"),
+            bare.sink.summaries.last ?? "")
+    }
     // The source read at the press is the truth for that press; the tracked one is only for a press with no other
     // source in it (inside the voice source) or no press at all. A notification can lag or be missed.
     func testTheSourceReadAtThePressWinsOverTheTrackedOne() {

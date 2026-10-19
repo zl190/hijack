@@ -358,6 +358,11 @@ final class LiveSupervisor: Supervisor {
         get { UserDefaults.standard.object(forKey: LiveSupervisor.atKey) as? Date }
         set { UserDefaults.standard.set(newValue, forKey: LiveSupervisor.atKey) }
     }
+    static let otherSourceKey = "lastOtherSource"
+    var lastOtherSource: String? {
+        get { UserDefaults.standard.string(forKey: LiveSupervisor.otherSourceKey) }
+        set { UserDefaults.standard.set(newValue, forKey: LiveSupervisor.otherSourceKey) }
+    }
     /// main.swift reads and clears the UserDefaults mark right after the CLI dispatch (a process that dies before
     /// `start()` must not leave it behind) and keeps the answer here until the `started:` line asks once.
     static var consumedMark = false

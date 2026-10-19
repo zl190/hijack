@@ -81,7 +81,10 @@ So the mode has a second entry, and it is the main one for WeType 3.0:
    the engine on the main queue (never from the tap callback). The engine keeps `lastOtherSource`, the most recent
    current source that is not the voice source (seeded at start). In follow mode a change INTO the voice source is
    `toolStarted` (we never select the voice source in that mode, so it is never ours): a dictation begins with no
-   key seen, goes back to `lastOtherSource`, and is watched on the tool's signals. A burst of notifications for one
+   key seen, goes back to `lastOtherSource`, and is watched on the tool's signals. `lastOtherSource` is persisted
+   (UserDefaults, through the Supervisor seam): a process that starts inside the voice source still has a way back.
+   The first tool-path line on the installed build (20:15:43) ended `nothing to switch back to` for that reason, with
+   WeType's window seen and closed 968 ms after the start: the window signal works; the per-process mic read off. A burst of notifications for one
    switch starts one dictation. Hold and toggle mode ignore the event (they select the voice source themselves) and
    still track the other sources.
 8. **The tool's window, else its microphone, ends the watch** (`watchTool`, used for the key path's release too in

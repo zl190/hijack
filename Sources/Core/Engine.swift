@@ -375,7 +375,7 @@ public final class Engine {
             // is passthrough and never finishes); hold mode when the dictation started inside the voice source.
             summary(
                 end: record.follow
-                    ? "input source unreadable at the press, nothing to switch back to"
+                    ? "no other input source known yet, nothing to switch back to"
                     : "started inside \(p.voiceName), nothing to switch back to")
             report("done", p.voiceName); return
         }
@@ -465,7 +465,7 @@ public final class Engine {
         let p = plan
         guard let id = sources.current() else { return }
         if id != p.voiceID {
-            if lastOtherSource != id { trace("input source now \(id)") }
+            if lastOtherSource != id { trace("input source now \(id)"); supervisor.lastOtherSource = id }
             lastOtherSource = id; return
         }
         guard p.follow, !p.toggle, p.switchesInput else { return }
@@ -815,7 +815,13 @@ public final class Engine {
         sink.state(trusted: true, tapActive: on)
         if !on { log("event tap installed but not enabled") }
         forwardKeyEdgeSeen = false
-        if let cur = sources.current(), cur != plan.voiceID { lastOtherSource = cur }  // W11: where a follow dictation goes back to
+        // W11: where a follow dictation goes back to. A start inside the voice source (the last process quit there)
+        // takes the persisted one, so the next dictation still has a way back.
+        if let cur = sources.current(), cur != plan.voiceID {
+            lastOtherSource = cur; supervisor.lastOtherSource = cur
+        } else {
+            lastOtherSource = supervisor.lastOtherSource
+        }
         clock.after(1) { [self] in clearStuckModifier() }
         log(
             "started: trigger \(plan.trigger.name), forward \(plan.forwardKey.name), voice \(plan.voiceID)"

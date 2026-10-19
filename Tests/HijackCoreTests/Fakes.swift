@@ -123,6 +123,7 @@ final class FakeSink: Sink {
 final class FakeSupervisor: Supervisor {
     var relaunches: [String] = []
     var lastRelaunchAt: Date?
+    var lastOtherSource: String?  // W11: persisted across restarts
     var mark = false
     var relaunchResult = true  // false: the relauncher could not be spawned
     func relaunch(reason: String) -> Bool { relaunches.append(reason); return relaunchResult }
