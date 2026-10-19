@@ -1,6 +1,6 @@
 # Incident 2026-10-04: the talk key did not go out (echo missing)
 
-Status: cause since 2026-10-17 found on 2026-10-19 (WeType 3.0's exclusive-mode key listener; section at the end). Hijack side: W10 (docs/adr/0023). W7 to W9 below are history. Source: `~/Library/Logs/Hijack.log`, build 1.1.4 (signed, installed 2026-10-03 23:27).
+Status: cause since 2026-10-17 found on 2026-10-19 (WeType 3.0's exclusive-mode key listener; section at the end). Hijack side: W10 (docs/adr/0023) names the listener; W11 (docs/adr/0024, follow mode) stops posting the key and only switches back, since the field tests at the end show WeType 3.0 acts on a physical Fn and on nothing Hijack can post. W7 to W9 below are history. Source: `~/Library/Logs/Hijack.log`, build 1.1.4 (signed, installed 2026-10-03 23:27).
 
 ## What the log shows
 
@@ -314,6 +314,15 @@ system stamps every posted event with the poster's pid, which no CGEvent post ca
 counter-example is the 00:10:38 success. If that reading holds, no CGEvent post from Hijack can start WeType 3.0's
 voice input, and the ways out are a key that looks physical (Option B, Karabiner's virtual keyboard, a dependency on
 the running Karabiner-DriverKit-VirtualHIDDevice daemon), another voice tool, or WeType 2.x.
+
+### Owner test about 17:10 and the way out (W11)
+
+With「快捷键全局生效」on, a physical Fn in Squirrel makes WeType switch itself in and listen; after the release the
+input source stays WeType (owner: 停在微信输入法). So WeType 3.0 does the front half (switch in, listen) on a physical
+key and rejects posted ones; the back half (switch back, ADR 0003) is what is left for Hijack. Option B is closed for a
+user app: Karabiner's virtual-keyboard daemon socket is root-only, and an own DriverKit HID device needs an Apple
+entitlement. W11 adds follow mode (docs/adr/0024): the trigger is the talk key, nothing is posted, Hijack remembers the
+source at the press, watches the window after the release, and switches back.
 
 ### Next, for the owner
 

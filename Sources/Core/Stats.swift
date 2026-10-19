@@ -24,6 +24,7 @@ public struct DictationEntry: Equatable {
     public var day: String  // yyyy-MM-dd
     public var tool: String
     public var toggle: Bool
+    public var follow: Bool = false  // W11: the tool took its own physical key; nothing was posted (no sent/echo/ahead fields)
     public var heldMs: Int
     public var sentMs: Int?
     public var textInMs: Int?  // release → voice window gone
@@ -51,7 +52,8 @@ public struct DictationEntry: Equatable {
             guard let r = try? Regex(pattern), let m = line.firstMatch(of: r), m.count > 1, let s = m[1].substring else { return nil }
             return String(s)
         }
-        guard let tool = word(#"dictation (.+?) \((?:hold|toggle)\):"#), let held = num(#"held ([\d.]+)s"#) else { return nil }
+        guard let tool = word(#"dictation (.+?) \((?:hold|toggle|follow)\):"#), let held = num(#"held ([\d.]+)s"#) else { return nil }
+        let follow = line.contains("(follow)")
         let sent = num(#"sent after (\d+)ms"#).map { Int($0) }
         let textIn = num(#"window closed (\d+)ms after release"#).map { Int($0) }
         let echo = line.contains("echo missing") ? false : line.contains("echo after") ? true : nil
@@ -61,7 +63,7 @@ public struct DictationEntry: Equatable {
         let outcome: Outcome
         if line.contains("input source never switched") {
             outcome = .noWindow
-        } else if sent == nil {
+        } else if sent == nil && !follow {  // W11: a follow line never has `sent`; it is judged on its window
             outcome = .tooShort
         } else if line.contains("interrupted by the next press") {
             outcome = .interrupted
@@ -83,7 +85,7 @@ public struct DictationEntry: Equatable {
                         ? .keyNotSent : mic == false ? .toolDidntListen : mic == true ? .windowNotSeen : .unknown
         }
         return DictationEntry(
-            day: String(line.prefix(10)), tool: tool, toggle: line.contains("(toggle)"),
+            day: String(line.prefix(10)), tool: tool, toggle: line.contains("(toggle)"), follow: follow,
             heldMs: Int(held * 1000), sentMs: sent, textInMs: textIn, outcome: outcome, cause: cause,
             postSeen: post, echoSeen: echo, listenersAhead: ahead, tapDisabled: line.contains("key tap disabled"),
             secureInput: line.contains("secure input on"))

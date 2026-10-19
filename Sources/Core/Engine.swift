@@ -22,6 +22,8 @@ public struct Plan: Equatable {
     public var forwardKey: KeySpec
     public var style: String  // how the voice tool wants its key: "hold" | "tap" | "doubleTap"
     public var toggle: Bool
+    /// W11 (docs/adr/0024): the tool starts itself on its own physical talk key (the trigger); Hijack only switches back.
+    public var follow: Bool
     public var stopOnAnyKey: Bool
     public var holdDelay: Double
     public var restoreTimeout: Double
@@ -30,12 +32,12 @@ public struct Plan: Equatable {
     // A public struct has no public memberwise init; this one keeps the same argument order.
     public init(
         trigger: KeySpec, providerID: String, switchesInput: Bool, voiceID: String, voiceName: String,
-        forwardKey: KeySpec, style: String, toggle: Bool, stopOnAnyKey: Bool, holdDelay: Double,
+        forwardKey: KeySpec, style: String, toggle: Bool, follow: Bool = false, stopOnAnyKey: Bool, holdDelay: Double,
         restoreTimeout: Double, fallbackDelay: Double
     ) {
         self.trigger = trigger; self.providerID = providerID; self.switchesInput = switchesInput
         self.voiceID = voiceID; self.voiceName = voiceName; self.forwardKey = forwardKey; self.style = style
-        self.toggle = toggle; self.stopOnAnyKey = stopOnAnyKey; self.holdDelay = holdDelay
+        self.toggle = toggle; self.follow = follow; self.stopOnAnyKey = stopOnAnyKey; self.holdDelay = holdDelay
         self.restoreTimeout = restoreTimeout; self.fallbackDelay = fallbackDelay
     }
 }
@@ -55,6 +57,7 @@ public struct DictationRecord {
     public var ahead: [String]?
     public var heldProcess: ProcessState?  // W9: App Nap state at the same 0.3 s sample (nil: not sampled or unreadable)
     public var switchFailed: Bool = false  // the input source never switched: the talk key was not sent (FM-05)
+    public var follow: Bool = false  // W11: the tool took the physical key itself; nothing was switched in or posted
 }
 
 public final class Engine {
@@ -213,15 +216,21 @@ public final class Engine {
         if event == .press {
             // The shortcut is the tool's own key and the tool is already in front: it gets the real key.
             let sameKey = p.trigger == p.forwardKey && !p.toggle && p.style == "hold"
+            let follow = p.follow && !p.toggle
+            let inVoice = !p.switchesInput || sources.current() == p.voiceID
+            // W11: in follow mode a press inside the voice source is passthrough only when no restore is pending;
+            // with one pending (a press while waiting for the previous text) the dictation chains and keeps `previous`.
             mode = SessionMode(
                 toggle: p.toggle, switchesInput: p.switchesInput,
-                passthrough: sameKey && (!p.switchesInput || sources.current() == p.voiceID))
+                passthrough: follow ? inVoice && previous == nil : sameKey && inVoice, follow: follow)
         }
         let before = machine.state
         let effects = machine.handle(event, mode)
         let after = machine.state
         trace("\(event.rawValue): \(before.rawValue) → \(after.rawValue) \(effects.map { "\($0)" })")
-        if (before == .starting || before == .listening) && (machine.state == .waitingForText || machine.state == .idle) {
+        if (before == .starting || before == .listening || before == .following)
+            && (machine.state == .waitingForText || machine.state == .idle)
+        {
             record.releasedAt = clock.now; enterPhase("waiting for text")
         }
         // Settings changed mid-dictation apply now. refresh() rebuilds the Plan, which can read a voice
@@ -237,6 +246,20 @@ public final class Engine {
             case .finishPrevious: summary(end: "interrupted by the next press")  // the retry after a failure must not erase it
             case .begin:
                 generation += 1; record = DictationRecord(pressedAt: clock.now); voicePIDs = []; micOffSince = nil; beginDictation()
+                record.follow = mode.follow
+            case .rememberSource:
+                // W11: the tool switches itself in on the physical key; we only keep where to come back to. The mic
+                // and window samples still run (off-main), so the line can say whether the tool took the key.
+                if let cur = sources.current(), cur != p.voiceID { previous = cur }
+                enterPhase("following"); report("listening", p.voiceName)
+                // The tool's processes, for the samples: listing running apps asks other processes, so after the
+                // tap returns (ADR 0011), as sendKey() does from its scheduled turn.
+                let gen = generation
+                clock.after(0) { [self] in
+                    guard gen == generation, voicePIDs.isEmpty else { return }
+                    voicePIDs = probes.processIDs(ofProvider: p.providerID)
+                }
+                sampleWhileHeld(gen: gen, after: 0.3)
             case .switchToVoice:
                 let cur = sources.current()
                 if let cur, cur != p.voiceID { previous = cur }
@@ -318,7 +341,10 @@ public final class Engine {
             summary(end: "started inside \(p.voiceName), nothing to switch back to"); report("done", p.voiceName); return
         }
         guard sources.current() == p.voiceID else {
-            summary(end: "input source already changed, not switched back"); report("done", ""); return
+            // W11: in follow mode the tool may simply not have taken the key: then nothing changed and nothing is switched.
+            let stayed = record.follow && sources.current() == prev
+            summary(end: stayed ? "input source stayed, nothing to switch back" : "input source already changed, not switched back")
+            report("done", ""); return
         }
         summary(end: "back after \(String(format: "%.2f", waited))s")
         let name = sink.sourceName(prev), voiceName = p.voiceName, waitedText = waited
@@ -338,12 +364,13 @@ public final class Engine {
     /// second off the main thread (CoreAudio and the window list are slow for a key tap); release keeps the last.
     public func sampleWhileHeld(gen: Int, after delay: Double) {
         clock.after(delay) { [self] in
-            guard machine.state == .listening, gen == generation else { return }
+            guard machine.state == .listening || machine.state == .following, gen == generation else { return }
             // The first sample of a held key also reads App Nap (W9, one Mach call, here) and the key-listener chain
             // (W10, ADR 0023: a window-server call, 2 ms p50 / 12 ms max measured at load 30, so in the off-main
             // block below: the main run loop hosts our tap, and a slow window server must not hold it). Only a held
-            // key has a sample at all: a tapped key is over by now.
-            let readChain = !record.sampled && plan.style == "hold"
+            // key has a sample at all: a tapped key is over by now. W11: both readings are about a posted key; a
+            // follow dictation (`.following`) posted none and reads neither.
+            let readChain = !record.sampled && plan.style == "hold" && machine.state == .listening
             if readChain {
                 record.sampled = true
                 record.heldProcess = probes.processState()
@@ -363,7 +390,7 @@ public final class Engine {
                 record.heldMic = mic; record.heldWindow = window
                 // A sample started before the release can complete after it (review-4 S1): the dictation
                 // is already over, so its reading is stale and must not overwrite the UI's post-release text.
-                if machine.state == .listening {
+                if machine.state == .listening || machine.state == .following {
                     // FM-09: the tool's own mic reads off. Say so once it's held for 1s (a blip isn't a fault);
                     // an "unknown" (nil) reading never overrides "正在听…" (FM-12: the probe itself can be wrong).
                     if mic.0 == false {
@@ -406,9 +433,15 @@ public final class Engine {
         let held = (r.releasedAt ?? clock.now).timeIntervalSince(r.pressedAt)
         // review-5 #17: the tool and the key are logged by their stable id, not `.name`/`.voiceName` (both
         // run through `localize`), so a language change does not split one tool into two in `hijack stats`.
-        var line = "dictation \(p.providerID) (\(p.toggle ? "toggle" : "hold")): held \(String(format: "%.2f", held))s"
-        if let sent = r.keySentMs {
-            func onOff(_ b: Bool?) -> String { b.map { $0 ? "on" : "off" } ?? "?" }
+        func onOff(_ b: Bool?) -> String { b.map { $0 ? "on" : "off" } ?? "?" }
+        var line =
+            "dictation \(p.providerID) (\(r.follow ? "follow" : p.toggle ? "toggle" : "hold")): held \(String(format: "%.2f", held))s"
+        if r.follow {
+            // W11: nothing was posted, so no `sent`, `echo`, `ahead:` or `nap:`; the window and mic say whether the tool took its key.
+            line += r.windowGoneMs.map { ", window closed \($0)ms after release" } ?? ", window never closed after release"
+            line +=
+                ", \(end) | mic tool \(onOff(r.heldMic?.tool)) device \(onOff(r.heldMic?.device)), window while held: \(r.heldWindow?.text ?? "?")"
+        } else if let sent = r.keySentMs {
             line += ", \(p.forwardKey.logID) sent after \(sent)ms"
             if p.switchesInput {
                 line += r.windowGoneMs.map { ", window closed \($0)ms after release" } ?? ", window never closed after release"
@@ -626,7 +659,7 @@ public final class Engine {
         // A release whose press we never saw (the tap was off): not ours to swallow, or the key stays down for everyone.
         if !down && !physicalDown { return true }
         // A repeat while held: the tool's own key keeps its repeats, ours are swallowed.
-        if down == physicalDown { return machine.state == .passthrough }
+        if down == physicalDown { return machine.passesKeyThrough }
         physicalDown = down
         return run(down ? .press : .release)
     }

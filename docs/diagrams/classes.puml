@@ -7,7 +7,8 @@ set namespaceSeparator none
 
 
 class "KeyPoster" as KeyPoster << (P, GoldenRod) protocol >> { 
-  +post(_:down:) 
+  +post(_:down:)
+  +rebuild(reason:) 
 }
 class "InputSources" as InputSources << (P, GoldenRod) protocol >> { 
   +current()
@@ -20,13 +21,15 @@ class "TapControl" as TapControl << (P, GoldenRod) protocol >> {
   +enable()
   +keyIsDown(_:)
   +modifierIsDown(_:)
+  +listenersAhead(for:)
   +secureInputOn : Bool 
 }
 class "Probes" as Probes << (P, GoldenRod) protocol >> { 
   +processIDs(ofProvider:)
   +windows(of:)
   +micInUse(by:)
-  +frontApp() 
+  +frontApp()
+  +processState() 
 }
 class "Scheduler" as Scheduler << (P, GoldenRod) protocol >> { 
   +now : Date
@@ -39,6 +42,11 @@ class "Sink" as Sink << (P, GoldenRod) protocol >> {
   +report(_:_:)
   +state(trusted:tapActive:)
   +sourceName(_:) 
+}
+class "Supervisor" as Supervisor << (P, GoldenRod) protocol >> { 
+  +relaunch(reason:)
+  +lastRelaunchAt : Date?
+  +takeSelfRelaunchMark() 
 }
 class "FolderEvents" as FolderEvents << (P, GoldenRod) protocol >> { 
   +start(roots:latency:onChange:) 
@@ -97,11 +105,12 @@ class "Plan" as Plan << (S, SkyBlue) struct >> {
   +forwardKey : KeySpec
   +style : String
   +toggle : Bool
+  +follow : Bool
   +stopOnAnyKey : Bool
   +holdDelay : Double
   +restoreTimeout : Double
   +fallbackDelay : Double
-  +init(trigger:providerID:switchesInput:voiceID:voiceName:forwardKey:style:toggle:stopOnAnyKey:holdDelay:restoreTimeout:fallbackDelay:)
+  +init(trigger:providerID:switchesInput:voiceID:voiceName:forwardKey:style:toggle:follow:stopOnAnyKey:holdDelay:restoreTimeout:fallbackDelay:)
   ~init(_:) <&bolt> 
 }
 class "DictationRecord" as DictationRecord << (S, SkyBlue) struct >> { 
@@ -113,7 +122,11 @@ class "DictationRecord" as DictationRecord << (S, SkyBlue) struct >> {
   +heldWindow : WindowState?
   +sawWindow : Bool
   +windowGoneMs : Int?
-  +switchFailed : Bool 
+  +sampled : Bool
+  +ahead : [String]?
+  +heldProcess : ProcessState?
+  +switchFailed : Bool
+  +follow : Bool 
 }
 class "Engine" as Engine << (C, DarkSeaGreen) >> { 
   +makePlan : () -> Plan
@@ -123,6 +136,9 @@ class "Engine" as Engine << (C, DarkSeaGreen) >> {
   +probes : Probes
   +clock : Scheduler
   +sink : Sink
+  +supervisor : Supervisor
+  +{static} relaunchMinHold : TimeInterval
+  +{static} relaunchGap : TimeInterval
   +plan : Plan
   +previous : String?
   +generation : Int
@@ -137,6 +153,7 @@ class "Engine" as Engine << (C, DarkSeaGreen) >> {
   +swallowUp : Int?
   +quitting : Bool
   +paused : Bool
+  +recordingToken : Int
   +forwardKeyEdgeSeen : Bool
   +waitingReported : Bool
   +micOffSince : Date?
@@ -162,7 +179,11 @@ class "Engine" as Engine << (C, DarkSeaGreen) >> {
   +waitForText()
   +finish()
   +sampleWhileHeld(gen:after:)
+  ~aheadField(_:)
+  ~napField(_:)
+  ~napNow()
   +summary(end:)
+  ~relaunchIfPostFailed(plan:record:held:)
   +reconcile()
   +sleptAt : Date?
   +lockedAt : Date?
@@ -170,6 +191,10 @@ class "Engine" as Engine << (C, DarkSeaGreen) >> {
   +screenLocked()
   +reconcileAfterWake(_:)
   +clearStuckModifier()
+  +{static} recordingPauseTimeout
+  +onKeyRecordingTimeout : (() -> Void)?
+  +pauseForKeyRecording()
+  +resumeFromKeyRecording()
   +stopStuckSession()
   +stopForQuit()
   +reenableTap(_:)
@@ -178,8 +203,47 @@ class "Engine" as Engine << (C, DarkSeaGreen) >> {
   +start()
   ~{static} live() <&bolt> 
 }
+class "ChainRead" as Engine.ChainRead << (S, SkyBlue) struct >> { 
+  ~ahead : [String]? 
+}
 class "Wake" as Engine.Wake << (E, LightSteelBlue) enum >> { 
   +systemWake 
+}
+class "MetricsSummary" as MetricsSummary << (S, SkyBlue) struct >> { 
+  +hangCount
+  +longestHangSeconds : Double?
+  +crashCount
+  +lastCrashDate : Date?
+  +cpuSecondsByDay : [String: Double]
+  +peakMemoryBytes : Double?
+  +longestHangUnparsed
+  +cpuTimeUnparsed
+  +peakMemoryUnparsed
+  +parseWarnings
+  +init()
+  +init(hangCount:longestHangSeconds:crashCount:lastCrashDate:cpuSecondsByDay:peakMemoryBytes:longestHangUnparsed:cpuTimeUnparsed:peakMemoryUnparsed:parseWarnings:)
+  +totalCPUSeconds : Double
+  +{static} crashIsNewerThanStart(lastCrash:startedAt:)
+  +{static} summarize(folder:fileManager:)
+  ~{static} measurement(_:units:)
+  ~{static} durationSeconds : [String: Double]
+  ~{static} infoStorageBytes : [String: Double]
+  ~{static} date(_:)
+  ~{static} day(_:) 
+}
+class "TapRow" as TapRow << (S, SkyBlue) struct >> { 
+  +pid : pid_t
+  +hidLevel : Bool
+  +enabled : Bool
+  +filtering : Bool
+  +watchesFlags : Bool
+  +watchesKeys : Bool
+  +init(pid:hidLevel:enabled:filtering:watchesFlags:watchesKeys:) 
+}
+class "KeyListenerChain" as KeyListenerChain << (E, LightSteelBlue) enum >> { 
+  +unreadable
+  +notListed
+  +ahead(_:) 
 }
 class "UpdateFound" as UpdateFound << (S, SkyBlue) struct >> { 
   +display : String
@@ -199,12 +263,13 @@ class "IconState" as IconState << (E, LightSteelBlue) enum >> {
   +{static} of(trusted:tapActive:tapInstalled:) 
 }
 class "MenuFault" as MenuFault << (E, LightSteelBlue) enum >> { 
+  +recordingPaused
   +keyListenerOff
   +stillHolding(talkKey:)
   +secureInput(app:) 
 }
 class "MenuFaults" as MenuFaults << (E, LightSteelBlue) enum >> { 
-  +{static} firstLine(tapActive:stillHoldingTalkKey:secureInputApp:)
+  +{static} firstLine(tapActive:stillHoldingTalkKey:secureInputApp:recordingPaused:)
   +{static} stillHoldingTalkKey(toggle:isActive:keyIsPhysicallyDown:talkKeyName:) 
 }
 class "KeyInput" as KeyInput << (S, SkyBlue) struct >> { 
@@ -225,6 +290,11 @@ class "WindowState" as WindowState << (E, LightSteelBlue) enum >> {
   +busy : Bool?
   +text : String 
 }
+class "ProcessState" as ProcessState << (S, SkyBlue) struct >> { 
+  +napped : Bool
+  +role : Int?
+  +init(napped:role:) 
+}
 class "Deps" as Deps << (S, SkyBlue) struct >> { 
   +keys : KeyPoster
   +sources : InputSources
@@ -232,17 +302,22 @@ class "Deps" as Deps << (S, SkyBlue) struct >> {
   +probes : Probes
   +clock : Scheduler
   +sink : Sink
-  +init(keys:sources:tap:probes:clock:sink:) 
+  +supervisor : Supervisor
+  +init(keys:sources:tap:probes:clock:sink:supervisor:) 
 }
 class "DictationEntry" as DictationEntry << (S, SkyBlue) struct >> { 
   +day : String
   +tool : String
   +toggle : Bool
+  +follow : Bool
   +heldMs : Int
   +sentMs : Int?
   +textInMs : Int?
   +outcome : Outcome
   +cause : Cause?
+  +postSeen : Bool?
+  +echoSeen : Bool?
+  +listenersAhead : [String]?
   +tapDisabled : Bool
   +secureInput : Bool
   +{static} parse(_:) 
@@ -256,6 +331,7 @@ class "Outcome" as DictationEntry.Outcome << (E, LightSteelBlue) enum >> {
 }
 class "Cause" as DictationEntry.Cause << (E, LightSteelBlue) enum >> { 
   +keyNotSent
+  +takenAhead
   +toolDidntListen
   +windowNotSeen
   +unknown
@@ -276,12 +352,23 @@ class "DictationStats" as DictationStats << (S, SkyBlue) struct >> {
   +tools : [String: Int]
   +firstDay : String?
   +lastDay : String?
+  +nappedSampled : Int
+  +napped : Int
+  +nappedFailed : Int
+  +selfRelaunches : Int
+  +manualRestarts : Int
+  +aheadSampled : Int
+  +listenerAhead : Int
+  +listenerAheadFailed : Int
   +successRate : Double?
+  +{static} successTarget
+  +met : Bool?
   +{static} compute(lines:days:today:) 
 }
 class "SessionState" as SessionState << (E, LightSteelBlue) enum >> { 
   +idle
   +passthrough
+  +following
   +starting
   +listening
   +waitingForText 
@@ -298,7 +385,9 @@ class "SessionEvent" as SessionEvent << (E, LightSteelBlue) enum >> {
 class "SessionMode" as SessionMode << (S, SkyBlue) struct >> { 
   +toggle : Bool
   +switchesInput : Bool
-  +passthrough : Bool 
+  +passthrough : Bool
+  +follow : Bool
+  +init(toggle:switchesInput:passthrough:follow:) 
 }
 class "SessionEffect" as SessionEffect << (E, LightSteelBlue) enum >> { 
   +passKey
@@ -307,6 +396,7 @@ class "SessionEffect" as SessionEffect << (E, LightSteelBlue) enum >> {
   +finishPrevious
   +begin
   +switchToVoice
+  +rememberSource
   +scheduleTalkKey
   +sendTalkKey
   +releaseTalkKey
@@ -316,6 +406,7 @@ class "SessionEffect" as SessionEffect << (E, LightSteelBlue) enum >> {
 class "SessionMachine" as SessionMachine << (S, SkyBlue) struct >> { 
   +state : SessionState
   +isActive : Bool
+  +passesKeyThrough : Bool
   +handle(_:_:)
   +{static} transition(_:_:_:) 
 }
@@ -335,8 +426,9 @@ class "AppState" as AppState << (S, SkyBlue) struct >> {
   ~tapActive : Bool
   ~secureInput : Bool
   ~secureInputApp : String?
+  ~startedAt : Date
   ~updated : Date
-  ~init(pid:trusted:tapActive:secureInput:secureInputApp:updated:)
+  ~init(pid:trusted:tapActive:secureInput:secureInputApp:startedAt:updated:)
   ~init(from:)
   ~{static} write(trusted:tapActive:secureInput:secureInputApp:)
   ~{static} read() 
@@ -373,10 +465,12 @@ class "Model" as Model << (C, DarkSeaGreen) >> {
   ~customTrigger : KeySpec?
   ~trigger : KeySpec
   ~toggleMode : Bool
+  ~followMode : Bool
   ~detectedStyle : String?
   ~voiceStyle : String 
 }
-class "LiveKeyPoster" as LiveKeyPoster << (S, SkyBlue) struct >> { 
+class "LiveKeyPoster" as LiveKeyPoster << (C, DarkSeaGreen) >> { 
+  ~rebuild(reason:)
   ~post(_:down:)
   ~postModifier(_:down:held:) 
 }
@@ -393,6 +487,7 @@ class "LiveTap" as LiveTap << (C, DarkSeaGreen) >> {
   ~enable()
   ~keyIsDown(_:)
   ~modifierIsDown(_:)
+  ~listenersAhead(for:)
   ~secureInputOn : Bool
   ~install(_:) 
 }
@@ -400,7 +495,8 @@ class "LiveProbes" as LiveProbes << (S, SkyBlue) struct >> {
   ~processIDs(ofProvider:)
   ~windows(of:)
   ~micInUse(by:)
-  ~frontApp() 
+  ~frontApp()
+  ~processState() 
 }
 class "LiveScheduler" as LiveScheduler << (S, SkyBlue) struct >> { 
   ~now : Date
@@ -413,6 +509,15 @@ class "LiveSink" as LiveSink << (S, SkyBlue) struct >> {
   ~report(_:_:)
   ~state(trusted:tapActive:)
   ~sourceName(_:) 
+}
+class "LiveSupervisor" as LiveSupervisor << (C, DarkSeaGreen) >> { 
+  ~{static} markKey
+  ~{static} atKey
+  ~relaunch(reason:)
+  ~lastRelaunchAt : Date?
+  ~{static} consumedMark
+  ~{static} consumeMarkFromDefaults()
+  ~takeSelfRelaunchMark() 
 }
 class "RecordTarget" as RecordTarget << (E, LightSteelBlue) enum >> { 
   ~trigger
@@ -428,6 +533,7 @@ class "SettingsStore" as SettingsStore << (C, DarkSeaGreen) >> {
   ~showMenuBarIcon : Bool
   ~showDockIcon : Bool
   ~launchAtLogin : Bool
+  ~loginItemStatus : SMAppService.Status
   ~language : String
   ~holdDelay : Double
   ~restoreTimeout : Double
@@ -457,7 +563,9 @@ class "SettingsWindowController" as SettingsWindowController << (C, DarkSeaGreen
   ~{static} shared : SettingsWindowController?
   ~{static} show(tab:)
   ~init()
-  ~windowWillClose(_:) 
+  ~relocalizeChrome()
+  ~windowWillClose(_:)
+  ~deinit 
 }
 class "InputMethodProvider" as InputMethodProvider << (S, SkyBlue) struct >> { 
   ~sourceID : String
@@ -500,6 +608,7 @@ class "AppDelegate" as AppDelegate << (C, DarkSeaGreen) >> {
   ~{static} hasUpdateKey
   ~updateRecorder
   ~updater : SPUStandardUpdaterController?
+  ~metricsRecorder
   ~applicationDidFinishLaunching(_:)
   ~applicationShouldHandleReopen(_:hasVisibleWindows:)
   ~applicationWillTerminate(_:)
@@ -516,16 +625,17 @@ class "AppDelegate" as AppDelegate << (C, DarkSeaGreen) >> {
   ~setTrigger(_:)
   ~setVoiceKey(_:)
   ~setTriggerMode(_:)
-  ~toggleStopOnAnyKey()
   ~setVoiceStyle(_:)
   ~setVoiceSource(_:)
-  ~setLanguage(_:)
-  ~toggleIcon()
-  ~toggleLogin()
   ~openConfig()
   ~openAccessibility()
   ~relaunchApp()
+  ~restartApp()
   ~releaseStuckSession() 
+}
+class "MetricsRecorder" as MetricsRecorder << (C, DarkSeaGreen) >> { 
+  ~didReceive(_:)
+  ~didReceive(_:) 
 }
 class "Name" as Notification.Name << (X, Orchid) extension >> { 
   ~{static} hijackActivity
@@ -533,6 +643,7 @@ class "Name" as Notification.Name << (X, Orchid) extension >> {
   ~{static} hijackStateChanged 
 }
 AnyObject <|.. TapControl
+AnyObject <|.. Supervisor
 AnyObject <|.. FolderEvents
 FolderEvents <|.. LiveFolderEvents
 KeyPoster <|.. LiveKeyPoster
@@ -541,9 +652,12 @@ TapControl <|.. LiveTap
 Probes <|.. LiveProbes
 Scheduler <|.. LiveScheduler
 Sink <|.. LiveSink
+Supervisor <|.. LiveSupervisor
 VoiceProvider <|.. InputMethodProvider
 VoiceProvider <|.. AppProvider
 SPUUpdaterDelegate <|-- UpdateRecorder
+MXMetricManagerSubscriber <|-- MetricsRecorder
+Engine +-- Engine.ChainRead
 Engine +-- Engine.Wake
 KeyInput +-- KeyInput.Kind
 DictationEntry +-- DictationEntry.Outcome
@@ -560,7 +674,9 @@ Deps --> KeyPoster : keys
 Deps --> Probes : probes
 Deps --> Scheduler : clock
 Deps --> Sink : sink
+Deps --> Supervisor : supervisor
 Deps --> TapControl : tap
+DictationRecord --> ProcessState : heldProcess
 DictationRecord --> WindowState : heldWindow
 DictationStats --> DictationEntry : causes, outcomes
 Engine --> DictationRecord : record
@@ -572,6 +688,7 @@ Engine --> Scheduler : clock
 Engine --> SessionMachine : machine
 Engine --> SessionMode : mode
 Engine --> Sink : sink
+Engine --> Supervisor : supervisor
 Engine --> TapControl : tap
 InputMethodProvider --> KeySpec : reader
 KeySpec --> Mod : mods

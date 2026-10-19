@@ -300,8 +300,16 @@ struct DictationTab: View {
                 ChoiceRow(
                     icon: "hand.tap", title: L("点按开始，再点停止（免按）", "Tap to Start, Tap to Stop"),
                     detail: L("点一下开始，再点一下停止", "Tap once to start, again to stop"),
-                    selected: store.triggerMode == "toggle", divider: store.triggerMode == "toggle"
+                    selected: store.triggerMode == "toggle", divider: true
                 ) { store.edit { $0.triggerMode = "toggle" } }
+                // W11 (docs/adr/0024): the tool starts itself on its own physical talk key; Hijack only switches back.
+                ChoiceRow(
+                    icon: "arrow.uturn.backward", title: L("跟随\(store.currentName)的说话键", "Follow \(store.currentName)'s Talk Key"),
+                    detail: L(
+                        "\(store.currentName)自己开始听写，Hijack 只负责说完切回",
+                        "\(store.currentName) starts on its own key; Hijack only switches back after"),
+                    selected: store.triggerMode == "follow", divider: store.triggerMode == "toggle"
+                ) { store.edit { $0.triggerMode = "follow" } }
                 if store.triggerMode == "toggle" {
                     Row(title: L("按任意键也可停止", "Any Key Also Stops"), divider: false) {
                         Toggle("", isOn: Binding(get: { store.stopOnAnyKey }, set: { v in store.edit { $0.stopOnAnyKey = v } }))

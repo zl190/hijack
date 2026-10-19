@@ -4,6 +4,7 @@
 public enum SessionState: String, CaseIterable {
     case idle
     case passthrough
+    case following  // W11: the tool's own talk key is held and the tool is starting itself; we only remember where to switch back
     case starting
     case listening
     case waitingForText
@@ -24,6 +25,13 @@ public struct SessionMode: Equatable {
     public var toggle: Bool = false  // tap to start, tap to stop
     public var switchesInput: Bool = true  // an input method (switch to it and back); false: an app with its own hotkey
     public var passthrough: Bool = false  // the shortcut is the tool's own key and the tool is already active
+    /// W11 (docs/adr/0024): the shortcut is the tool's own talk key and the tool switches itself in on it. Hijack
+    /// passes the key, remembers the input source, and switches back after the text. Never posts. Toggle wins over it.
+    public var follow: Bool = false
+
+    public init(toggle: Bool = false, switchesInput: Bool = true, passthrough: Bool = false, follow: Bool = false) {
+        self.toggle = toggle; self.switchesInput = switchesInput; self.passthrough = passthrough; self.follow = follow
+    }
 }
 
 public enum SessionEffect: Equatable {
@@ -33,6 +41,7 @@ public enum SessionEffect: Equatable {
     case finishPrevious  // the previous dictation is still waiting for its text: write it up now
     case begin  // a new dictation
     case switchToVoice  // select the voice input method
+    case rememberSource  // W11: keep the current input source as the one to switch back to, without switching
     case scheduleTalkKey  // send the talk key once the switch is ready (and the hold delay is over)
     case sendTalkKey
     case releaseTalkKey
@@ -43,7 +52,9 @@ public enum SessionEffect: Equatable {
 public struct SessionMachine {
     public private(set) var state: SessionState = .idle
 
-    public var isActive: Bool { state == .passthrough || state == .starting || state == .listening }
+    public var isActive: Bool { state == .passthrough || state == .following || state == .starting || state == .listening }
+    /// The held key belongs to the tool: its repeats pass too (the engine filters repeats before the machine).
+    public var passesKeyThrough: Bool { state == .passthrough || state == .following }
 
     public mutating func handle(_ event: SessionEvent, _ mode: SessionMode) -> [SessionEffect] {
         let (next, effects) = SessionMachine.transition(state, event, mode)
@@ -55,6 +66,7 @@ public struct SessionMachine {
     public static func transition(_ s: SessionState, _ e: SessionEvent, _ mode: SessionMode) -> (SessionState, [SessionEffect]) {
         func start(_ prefix: [SessionEffect] = []) -> (SessionState, [SessionEffect]) {
             if mode.passthrough && !mode.toggle { return (.passthrough, prefix + [.passKey]) }
+            if mode.follow && !mode.toggle { return (.following, prefix + [.passKey, .begin, .rememberSource]) }
             return (.starting, prefix + [.swallowKey, .begin] + (mode.switchesInput ? [.switchToVoice] : []) + [.scheduleTalkKey])
         }
         // Stop a running session. `keyEffect` is what happens to the key event that stopped it.
@@ -68,6 +80,9 @@ public struct SessionMachine {
         case (.idle, .press): return start()
         case (.waitingForText, .press): return start([.finishPrevious])
         case (.passthrough, .release): return (.idle, [.passKey])
+        // W11: the tool got the physical key; now wait for its text, then switch back (an app: nothing to switch).
+        case (.following, .release):
+            return mode.switchesInput ? (.waitingForText, [.passKey, .waitForText]) : (.idle, [.passKey, .finish])
         case (.starting, .keySent): return (.listening, [.sendTalkKey])
         case (.starting, .release), (.listening, .release):
             return mode.toggle ? (s, [.swallowKey]) : stop(.swallowKey)
@@ -83,7 +98,7 @@ public struct SessionMachine {
         case (_, .quit): return (s, [])  // idle/waitingForText/passthrough: nothing to release
         case (.idle, .release), (.waitingForText, .release):
             return (s, [.swallowKey])  // toggle: the tap that stopped it
-        case (.passthrough, .press): return (s, [.passKey])
+        case (.passthrough, .press), (.following, .press): return (s, [.passKey])  // the tool's key keeps its repeats
         case (_, .otherKey): return (s, [.passKey])
         case (_, .keySent), (_, .textDone), (_, .switchFailed):
             return (s, [])  // stale: from an earlier dictation

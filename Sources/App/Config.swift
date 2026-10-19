@@ -14,7 +14,9 @@ final class Config {
     var trigger: KeySpec?  // nil = "follow" the voice key
     var voiceInput: String = weTypeID
     var voiceKeys: [String: KeySpec] = [:]  // per voice input; missing = "auto" (detected, or a known default)
-    var triggerMode: String = "hold"  // "hold": hold to talk · "toggle": tap to start, tap again to stop
+    // "hold": hold to talk · "toggle": tap to start, tap again to stop · "follow" (W11, docs/adr/0024): the tool
+    // starts itself on its own talk key, Hijack only switches back.
+    var triggerMode: String = "hold"
     var stopOnAnyKey: Bool = true  // toggle: any key also stops (that key is swallowed, never typed)
     var voiceStyles: [String: String] = [:]  // per voice input: how it wants its key — "hold" | "tap" | "doubleTap"
     var showMenuBarIcon: Bool = true
@@ -63,7 +65,7 @@ final class Config {
         if let old = KeySpec(json: d["voiceKey"]), voiceKeys[voiceInput] == nil { voiceKeys[voiceInput] = old }  // older single "voiceKey"
         showMenuBarIcon = d["showMenuBarIcon"] as? Bool ?? true
         showDockIcon = d["showDockIcon"] as? Bool ?? false
-        triggerMode = (d["triggerMode"] as? String) == "toggle" ? "toggle" : "hold"
+        triggerMode = ["toggle", "follow"].contains(d["triggerMode"] as? String ?? "") ? (d["triggerMode"] as? String ?? "hold") : "hold"
         stopOnAnyKey = d["stopOnAnyKey"] as? Bool ?? true
         voiceStyles = (d["voiceStyles"] as? [String: String] ?? [:]).filter { ["hold", "tap", "doubleTap"].contains($0.value) }
         language = d["language"] as? String ?? "system"
@@ -132,10 +134,12 @@ final class Model {
     // "right_option" is a literal id in namedKeys (quickKeys); see KeysTests.testW5_QuickKeysAlwaysResolveToANamedKey.
     // swift-format-ignore: NeverForceUnwrap
     var forwardKey: KeySpec { userVoiceKey ?? detectedVoiceKey ?? KeySpec.named("right_option")! }
-    // Trigger precedence: the user's explicit choice, else follow the voice key.
+    // Trigger precedence: the user's explicit choice, else follow the voice key. Follow mode (W11, docs/adr/0024)
+    // always triggers on the talk key itself: the tool starts on that physical key, and Hijack only follows it.
     var customTrigger: KeySpec? { c.trigger }
-    var trigger: KeySpec { customTrigger ?? forwardKey }
+    var trigger: KeySpec { followMode ? forwardKey : customTrigger ?? forwardKey }
     var toggleMode: Bool { c.triggerMode == "toggle" }
+    var followMode: Bool { c.triggerMode == "follow" }
     var detectedStyle: String? { provider.detected().style }
     var voiceStyle: String { c.voiceStyles[voiceID] ?? detectedStyle ?? "hold" }
 }

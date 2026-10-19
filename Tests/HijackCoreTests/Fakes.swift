@@ -161,10 +161,13 @@ final class Rig {
     let supervisor = FakeSupervisor()
     private(set) var engine: Engine!
 
-    init(toggle: Bool = false, switchesInput: Bool = true, trigger: KeySpec = Rig.fn, current: String? = Rig.english, start: Bool = true) {
+    init(
+        toggle: Bool = false, follow: Bool = false, switchesInput: Bool = true, trigger: KeySpec = Rig.fn, current: String? = Rig.english,
+        start: Bool = true
+    ) {
         plan = Plan(
             trigger: trigger, providerID: Rig.voice, switchesInput: switchesInput, voiceID: Rig.voice, voiceName: "WeType",
-            forwardKey: Rig.fn, style: "hold", toggle: toggle, stopOnAnyKey: true,
+            forwardKey: Rig.fn, style: "hold", toggle: toggle, follow: follow, stopOnAnyKey: true,
             holdDelay: 0.2, restoreTimeout: 5.0, fallbackDelay: 2.5)
         sources = FakeSources(current)
         engine = Engine(

@@ -11,6 +11,7 @@ text, write the summary). `docs/diagrams/states.mmd` is generated from the same 
 |---|---|
 | `idle` | Nothing running |
 | `passthrough` | The shortcut is the voice tool's own key and the tool is already active: the key goes to it untouched |
+| `following` | Follow mode (ADR 0024): the tool's own talk key is held and the tool is switching itself in; the key passes, nothing is posted, the previous input source is remembered |
 | `starting` | Shortcut pressed, waiting for the input source switch (and the hold delay) before sending the talk key |
 | `listening` | Talk key sent, the voice tool is listening |
 | `waitingForText` | Talk key released, waiting for the voice window to go before switching back (input methods only) |
@@ -22,6 +23,10 @@ before the machine). `otherKey` — another key while a toggle session runs and 
 `keySent` — the switch is ready, send the talk key. `textDone` — the voice window went (or the wait timed out).
 `switchFailed` — the input source did not switch within `maxSwitchWait`: the talk key stays unsent (FM-05).
 `quit` — the app is quitting: stop now and release the talk key if it was sent, skipping `waitingForText` (FM-10).
+
+Modes (fixed per press): `toggle`, `switchesInput`, `passthrough` (the tool is already active, so its own key goes to
+it), `follow` (ADR 0024: the tool starts itself on its own talk key; Hijack only switches back). Toggle wins over
+follow; passthrough wins over both.
 
 ## Acceptance (EARS)
 
@@ -37,3 +42,6 @@ before the machine). `otherKey` — another key while a toggle session runs and 
 10. Every state shall have an outcome for every event (no undefined transitions).
 11. When `switchFailed` arrives in `starting`, it shall go to `idle` and finish without sending the talk key; elsewhere `switchFailed` shall change nothing.
 12. When `quit` arrives in `starting` or `listening`, it shall go to `idle` and release the talk key only if it was sent (`listening`), without waiting for text; elsewhere `quit` shall change nothing.
+13. When the shortcut is pressed in `idle` (or in `waitingForText`, after finishing the previous dictation) in follow mode and passthrough does not apply, the machine shall go to `following`, pass the key, begin a dictation and remember the current input source; it shall neither switch the input source nor schedule or send the talk key. A repeat press in `following` shall pass. `keySent`, `textDone`, `switchFailed` and `quit` in `following` shall change nothing.
+14. When the shortcut is released in `following`, it shall pass the key and, for an input method, go to `waitingForText`; for an app, go to `idle` and finish. Nothing is released: nothing was sent.
+15. In follow mode, when the voice source is already active at the press and no restore is pending, the press shall pass through as in 1 (the engine decides this per press; a press while the previous text is still awaited chains as 13 and keeps the remembered source).

@@ -35,6 +35,8 @@ The install script checks the download's checksum and signature before it touche
 
 Prefer hands-free dictation? Choose toggle mode to tap once to start and again to stop.
 
+Does your voice tool start itself on its own key and ignore keys sent by other apps (WeType 3.0 does)? Choose follow mode: you press the tool's own talk key, the tool starts, and Hijack only switches your input method back afterwards.
+
 ## Voice tools
 
 | Tool | Integration | Status |

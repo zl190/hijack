@@ -12,8 +12,8 @@ extension Plan {
     init(_ m: Model) {
         let c = m.c, key = m.forwardKey
         self.init(
-            trigger: m.customTrigger ?? key, providerID: m.provider.id, switchesInput: m.provider.switchesInputSource,
-            voiceID: m.voiceID, voiceName: m.voiceName, forwardKey: key, style: m.voiceStyle, toggle: m.toggleMode,
+            trigger: m.followMode ? key : m.customTrigger ?? key, providerID: m.provider.id, switchesInput: m.provider.switchesInputSource,
+            voiceID: m.voiceID, voiceName: m.voiceName, forwardKey: key, style: m.voiceStyle, toggle: m.toggleMode, follow: m.followMode,
             stopOnAnyKey: c.stopOnAnyKey, holdDelay: c.holdDelay, restoreTimeout: c.restoreTimeout, fallbackDelay: c.fallbackDelay)
     }
 }

@@ -72,7 +72,7 @@ let cliHelp = """
       hijack version                  running version, and the update Sparkle found last
 
     Settings:
-      mode             hold | toggle
+      mode             hold | toggle | follow    (follow: the voice tool starts itself on its talk key; Hijack only switches back)
       shortcut         follow | a key (right_option, fn, f18, ctrl+option+f18, …)
       any-key-stops    true | false              (toggle mode)
       source           a voice source id or name (see `hijack sources`)
@@ -199,8 +199,15 @@ func cliStatus(json: Bool) -> Int32 {
                     ? "active" : st.trusted ? "OFF — macOS turned it off; quit and reopen Hijack" : "off — waiting for Accessibility"))
         if st.secureInput { print("  secure input    on" + (st.secureInputApp.map { " (\($0))" } ?? "")) }
     }
-    print("  mode            " + (m.toggleMode ? "toggle (tap to start, tap to stop)" : "hold (hold to talk)"))
-    print("  shortcut        \(m.trigger.name)" + (c.trigger == nil ? "  (same as talk key)" : ""))
+    print(
+        "  mode            "
+            + (m.toggleMode
+                ? "toggle (tap to start, tap to stop)"
+                : m.followMode ? "follow (\(p.name) starts itself on its talk key; Hijack only switches back)" : "hold (hold to talk)"))
+    print(
+        "  shortcut        \(m.trigger.name)"
+            + (m.followMode ? "  (the talk key; follow mode ignores the shortcut setting)" : c.trigger == nil ? "  (same as talk key)" : "")
+    )
     print("  voice source    \(p.name)  [\(p.id)]" + (p.isInstalled ? "" : "  NOT INSTALLED"))
     print("  talk key        \(m.forwardKey.name)  (\(keyOrigin(p, user: m.userVoiceKey)))")
     print("  starts with     \(m.voiceStyle)")
@@ -232,10 +239,16 @@ func cliDoctor() -> Int32 {
                     nil, "Hijack's key listener is not in the system's list",
                     "the app is restarting, or macOS turned the listener off; run `hijack doctor` again in a few seconds")
             case .ahead(let ahead) where ahead.isEmpty: check(true, "no other key listener sits ahead of Hijack's")
+            case .ahead(let ahead) where m.followMode:
+                // W11: nothing is posted in follow mode, so a listener ahead of ours cannot swallow anything of ours.
+                check(
+                    true,
+                    "\(ahead.joined(separator: ", ")) keep\(ahead.count == 1 ? "s" : "") a key listener ahead of Hijack's (harmless in follow mode: Hijack posts no key)"
+                )
             case .ahead(let ahead):
                 let advice =
                     ahead.contains("WeType")
-                    ? " (WeType 3.0 does, in its voice-input exclusive mode): turn that mode off in WeType, or set a talk key other than Fn"
+                    ? " (WeType 3.0 does, in its voice-input exclusive mode): `hijack set mode follow` (WeType starts itself on the physical Fn, Hijack only switches back), or turn that mode off in WeType"
                     : "; quit it, change its shortcut, or set a different talk key"
                 check(
                     nil, "\(ahead.joined(separator: ", ")) keep\(ahead.count == 1 ? "s" : "") a key listener ahead of Hijack's",
@@ -333,7 +346,7 @@ func cliSet(_ args: [String]) -> Int32 {
     func seconds(_ r: ClosedRange<Double>) -> Double? { Double(value).flatMap { r.contains($0) ? $0 : nil } }
     switch name {
     case "mode":
-        guard ["hold", "toggle"].contains(value) else { return fail("mode: hold | toggle") }
+        guard ["hold", "toggle", "follow"].contains(value) else { return fail("mode: hold | toggle | follow") }
         c.triggerMode = value
     case "shortcut":
         if value == "follow" {

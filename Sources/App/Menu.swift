@@ -288,6 +288,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         } else if m.toggleMode {
             add(L("点按\(key)用\(name)听写", "Tap \(key) to dictate with \(name)"))
+        } else if m.followMode {
+            add(L("按住\(key)说话，\(name)自己接手，说完 Hijack 切回", "Hold \(key): \(name) takes over, Hijack switches back after"))
         } else {
             add(L("按住\(key)用\(name)听写", "Hold \(key) to dictate with \(name)"))
         }
@@ -306,8 +308,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         // How you dictate
         header(L("听写方式", "How You Dictate"))
-        add(L("按住说话", "Hold to Talk"), #selector(setTriggerMode(_:)), on: !m.toggleMode, value: "hold")
+        add(L("按住说话", "Hold to Talk"), #selector(setTriggerMode(_:)), on: c.triggerMode == "hold", value: "hold")
         add(L("点按开始，再点停止（免按）", "Tap to Start, Tap to Stop"), #selector(setTriggerMode(_:)), on: m.toggleMode, value: "toggle")
+        add(
+            L("跟随\(name)的说话键（\(name)自己开始，Hijack 只切回）", "Follow \(name)'s Talk Key (\(name) starts itself, Hijack only switches back)"),
+            #selector(setTriggerMode(_:)), on: m.followMode, value: "follow")
         if m.toggleMode {  // how to stop, as a plain description (the switch itself lives in Settings → Dictation)
             let hint = add(c.stopOnAnyKey ? L("再点一下，或按任意键停止", "Tap again or press any key to stop") : L("再点一下停止", "Tap again to stop"))
             hint.attributedTitle = NSAttributedString(
