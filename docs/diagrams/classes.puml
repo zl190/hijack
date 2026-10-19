@@ -127,7 +127,12 @@ class "DictationRecord" as DictationRecord << (S, SkyBlue) struct >> {
   +heldProcess : ProcessState?
   +switchFailed : Bool
   +follow : Bool
-  +chained : Bool 
+  +chained : Bool
+  +toolStarted : Bool
+  +sawMic : Bool
+  +toolDoneMs : Int?
+  +toolDoneBy : String
+  +toolGaveUp : Bool 
 }
 class "Engine" as Engine << (C, DarkSeaGreen) >> { 
   +makePlan : () -> Plan
@@ -142,6 +147,7 @@ class "Engine" as Engine << (C, DarkSeaGreen) >> {
   +{static} relaunchGap : TimeInterval
   +plan : Plan
   +previous : String?
+  +lastOtherSource : String?
   +generation : Int
   +physicalDown : Bool
   +machine : SessionMachine
@@ -179,6 +185,10 @@ class "Engine" as Engine << (C, DarkSeaGreen) >> {
   +scheduleTalkKey()
   +waitForText()
   +finish()
+  +{static} micGrace
+  +{static} maxToolDictation
+  +watchTool()
+  +inputSourceChanged()
   +sampleWhileHeld(gen:after:)
   ~aheadField(_:)
   ~napField(_:)
@@ -382,7 +392,8 @@ class "SessionEvent" as SessionEvent << (E, LightSteelBlue) enum >> {
   +keySent
   +textDone
   +switchFailed
-  +quit 
+  +quit
+  +toolStarted 
 }
 class "SessionMode" as SessionMode << (S, SkyBlue) struct >> { 
   +toggle : Bool
@@ -403,6 +414,7 @@ class "SessionEffect" as SessionEffect << (E, LightSteelBlue) enum >> {
   +sendTalkKey
   +releaseTalkKey
   +waitForText
+  +watchTool
   +finish 
 }
 class "SessionMachine" as SessionMachine << (S, SkyBlue) struct >> { 

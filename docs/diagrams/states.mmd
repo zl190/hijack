@@ -4,8 +4,9 @@ stateDiagram-v2
   idle --> passthrough: press [按住·同键 / 跟随]
   idle --> starting: press [按住·app / 免按·app]<br/>begin, scheduleTalkKey
   idle --> following: press [跟随]<br/>begin, rememberSource
+  idle --> waitingForText: toolStarted [跟随]<br/>begin, rememberSource, watchTool
   passthrough --> idle: release
-  following --> waitingForText: release<br/>waitForText
+  following --> waitingForText: release<br/>watchTool
   starting --> waitingForText: press [免按]<br/>waitForText
   starting --> idle: press [免按·app]<br/>finish
   starting --> waitingForText: release [按住 / 按住·同键]<br/>waitForText

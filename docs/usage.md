@@ -22,7 +22,7 @@ The source of truth is `~/.config/hijack/config.json`. Edits apply on the next k
 
 `trigger: "follow"` follows the selected tool's voice key. `voiceKeys` stores overrides by source ID. `triggerMode` is `hold`, `toggle` or `follow`; `language` is `system`, `en` or `zh`. Logs are at `~/Library/Logs/Hijack.log`.
 
-`triggerMode: "follow"` is for a voice tool that starts itself on its own talk key (WeType 3.0 does, on a physical Fn, and ignores keys posted by another app). Hijack then never posts a key: it lets the talk key through, remembers your input source, and switches back after the text lands. The trigger is the tool's talk key; to use another physical key, remap it to the talk key in a keyboard remapper such as Karabiner (`right_option → fn`).
+`triggerMode: "follow"` is for a voice tool that starts itself on its own talk key (WeType 3.0 does, on a physical Fn, and ignores keys posted by another app). Hijack then never posts a key. It watches the system's input source: when it changes into the voice source and Hijack did not switch it, the tool has started, and Hijack goes back to the input source you came from once the tool's voice window closes or its microphone goes quiet. If the tool lets the talk key through, Hijack also sees the key; either way the trigger is the tool's talk key, and to use another physical key you remap it in a keyboard remapper such as Karabiner (`right_option → fn`). A switch to the voice source with no voice after it (⌃Space to type with it) is left alone.
 
 ## Command line
 
@@ -41,7 +41,7 @@ hijack restart           # quit the running app and open it again
 
 `status`, `sources`, `get`, and `stats` take `--json`.
 
-In follow mode (`triggerMode: "follow"`) a dictation line reads `dictation … (follow): held 2.9s, window closed 1627ms after release, back after 1.82s | mic tool on device on, window while held: 1 window`: no `sent`, `echo` or `ahead:` field, since nothing was posted. A press shorter than `holdDelay` (a tap or a chord on the talk key) reads `released before fn was held for 0.20s` and is not judged. `hijack stats` adds a `Follow mode` line (`followed` in `--json`) once any such line is in the period.
+In follow mode (`triggerMode: "follow"`) a dictation line reads `dictation … (follow): switched in by the tool, mic off 3200ms after start, back after 4.21s | mic tool on device on, window seen: …` (the tool started itself; `window closed … after start` when it showed a window) or, when the tool let the talk key through, `dictation … (follow): held 2.9s, window closed 1627ms after release, back after 1.82s | …`: no `sent`, `echo` or `ahead:` field, since nothing was posted. `nothing live within 2.50s, input source left alone` is a switch to the voice source with no voice after it; a press shorter than `holdDelay` (a tap or a chord on the talk key) reads `released before fn was held for 0.20s`. Neither is judged. `hijack stats` adds a `Follow mode` line (`followed` in `--json`) once any such line is in the period.
 
 `hijack stats` prints a `target` line under the success rate: `success >= 99.0%` is the current
 reliability bar (`Sources/Core/Stats.swift`'s `successTarget`, provisional until 7 days of 1.2.x data),

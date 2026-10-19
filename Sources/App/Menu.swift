@@ -82,6 +82,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 if text == "screen unlocked" { self?.engine.reconcileAfterWake(.screenUnlock) }
             }
         }
+        // W11 (docs/adr/0024): the system's input-source change. In follow mode a switch into the voice source that
+        // Hijack did not make is the tool starting itself: the one signal left when its key listener swallows the
+        // physical talk key before our tap sees it (field, 2026-10-19 19:50). Main queue, never the tap callback.
+        DistributedNotificationCenter.default().addObserver(
+            forName: .init(kTISNotifySelectedKeyboardInputSourceChanged as String), object: nil, queue: .main
+        ) { [weak self] _ in self?.engine.inputSourceChanged() }
         // Secure Input can only be read live (Accessibility's own); keep state.json fresh at the one other
         // natural moment besides a menu open — the end of a dictation (docs/hci-review-faults.md §5 item 4).
         NotificationCenter.default.addObserver(forName: .hijackActivity, object: nil, queue: .main) { [weak self] n in

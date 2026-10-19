@@ -97,16 +97,24 @@ final class SessionMachineTests: XCTestCase {
                     if fx.contains(.sendTalkKey) { XCTAssertEqual(next, .listening) }
                     if fx.contains(.releaseTalkKey) { XCTAssertEqual(s, .listening, "only a sent key is released") }
                     if fx.contains(.waitForText) { XCTAssertTrue(m.switchesInput) }
-                    if next == .waitingForText && s != .waitingForText { XCTAssertTrue(fx.contains(.waitForText)) }
-                    // W11: following is entered only by a follow-mode press, never with a switch or a talk key.
+                    if next == .waitingForText && s != .waitingForText {
+                        XCTAssertTrue(fx.contains(.waitForText) || fx.contains(.watchTool))
+                    }
+                    // W11: following is entered only by a follow-mode press; the tool's own switch-in goes straight to the watch.
                     if fx.contains(.rememberSource) {
-                        XCTAssertEqual(next, .following, "\(s) \(e) \(m)")
-                        XCTAssertTrue(m.follow && !m.toggle && !m.passthrough, "\(s) \(e) \(m)")
+                        XCTAssertTrue(m.follow && !m.toggle, "\(s) \(e) \(m)")
+                        XCTAssertEqual(next, e == .toolStarted ? .waitingForText : .following, "\(s) \(e) \(m)")
+                        if e == .press { XCTAssertFalse(m.passthrough, "\(s) \(e) \(m)") }
                         XCTAssertFalse(
                             fx.contains(.switchToVoice) || fx.contains(.scheduleTalkKey) || fx.contains(.sendTalkKey), "\(s) \(e) \(m)")
                     }
                     if next == .following && s != .following {
                         XCTAssertTrue(fx.contains(.rememberSource) && fx.contains(.begin), "\(s) \(e) \(m)")
+                    }
+                    if fx.contains(.watchTool) { XCTAssertTrue(m.switchesInput, "\(s) \(e) \(m)") }
+                    if e == .toolStarted && fx.contains(.watchTool) { XCTAssertTrue(m.follow && !m.toggle, "\(s) \(m)") }
+                    if e == .toolStarted && !(m.follow && !m.toggle && m.switchesInput) {
+                        XCTAssertEqual(fx, [], "\(s) \(m)"); XCTAssertEqual(next, s)
                     }
                     // Follow never posts: a press can only lead to following or passthrough, never to starting (where the key is sent).
                     if m.follow && !m.toggle && e == .press && (s == .idle || s == .waitingForText) {
@@ -175,13 +183,15 @@ final class SessionMachineTests: XCTestCase {
     // 14 (W11): the release passes the key and waits for the text; an app has nothing to switch back.
     func testFollowReleaseWaitsForTheTextThenFinishes() {
         XCTAssertEqual(t(.following, .release, follow).0, .waitingForText)
-        XCTAssertEqual(t(.following, .release, follow).1, [.passKey, .waitForText])
+        XCTAssertEqual(
+            t(.following, .release, follow).1, [.passKey, .watchTool], "the tool's own signals end it, not the key path's window-only watch"
+        )
         XCTAssertEqual(t(.following, .release, followApp).0, .idle)
         XCTAssertEqual(t(.following, .release, followApp).1, [.passKey, .finish])
         XCTAssertEqual(t(.waitingForText, .textDone, follow).0, .idle)
         XCTAssertEqual(t(.waitingForText, .textDone, follow).1, [.finish])
         // Out of range: nothing posted, so nothing to release or to send; stale events change nothing.
-        for e: SessionEvent in [.keySent, .textDone, .switchFailed, .quit] {
+        for e: SessionEvent in [.keySent, .textDone, .switchFailed, .quit, .toolStarted] {
             XCTAssertEqual(t(.following, e, follow).0, .following, "\(e)")
             XCTAssertEqual(t(.following, e, follow).1, [], "\(e)")
         }
@@ -199,12 +209,39 @@ final class SessionMachineTests: XCTestCase {
         XCTAssertEqual(t(.passthrough, .release, followOwn).1, [.passKey])
         XCTAssertEqual(t(.waitingForText, .press, followOwn).1, [.finishPrevious, .passKey])
     }
+    // 16 (W11): the tool switched itself in. Idle: a dictation with no key seen. Waiting for a key-path dictation's
+    // text: that one is written up and the watch restarts on the tool's signals. Anywhere else, and outside follow
+    // mode for an input method: nothing.
+    func testToolSwitchInStartsADictationOnlyInFollowModeFromIdleOrWaiting() {
+        XCTAssertEqual(t(.idle, .toolStarted, follow).0, .waitingForText)
+        XCTAssertEqual(t(.idle, .toolStarted, follow).1, [.begin, .rememberSource, .watchTool])
+        XCTAssertEqual(t(.waitingForText, .toolStarted, follow).0, .waitingForText)
+        XCTAssertEqual(t(.waitingForText, .toolStarted, follow).1, [.finishPrevious, .begin, .rememberSource, .watchTool])
+        XCTAssertEqual(
+            t(.idle, .toolStarted, followOwn).1, [.begin, .rememberSource, .watchTool], "passthrough is about a key; there is none")
+        // Out of range: an app (nothing to switch), the other modes, and the states where a key or a post is in flight.
+        XCTAssertEqual(t(.idle, .toolStarted, followApp).1, [])
+        for m in [hold, holdApp, toggle, toggleApp, own, SessionMode(toggle: true, switchesInput: true, passthrough: false, follow: true)] {
+            XCTAssertEqual(t(.idle, .toolStarted, m).0, .idle, "\(m)")
+            XCTAssertEqual(t(.idle, .toolStarted, m).1, [], "\(m)")
+            XCTAssertEqual(t(.waitingForText, .toolStarted, m).1, [], "\(m)")
+        }
+        for s: SessionState in [.following, .passthrough, .starting, .listening] {
+            XCTAssertEqual(t(s, .toolStarted, follow).0, s, "\(s)")
+            XCTAssertEqual(t(s, .toolStarted, follow).1, [], "\(s)")
+        }
+    }
     func testFollowDictationEndToEnd() {
         var machine = SessionMachine()
         var all: [SessionEffect] = []
         for e: SessionEvent in [.press, .release, .textDone] { all += machine.handle(e, follow) }
         XCTAssertEqual(machine.state, .idle)
-        XCTAssertEqual(all, [.passKey, .begin, .rememberSource, .passKey, .waitForText, .finish])
+        XCTAssertEqual(all, [.passKey, .begin, .rememberSource, .passKey, .watchTool, .finish])
+        var tool = SessionMachine()
+        var fx: [SessionEffect] = []
+        for e: SessionEvent in [.toolStarted, .textDone] { fx += tool.handle(e, follow) }
+        XCTAssertEqual(tool.state, .idle)
+        XCTAssertEqual(fx, [.begin, .rememberSource, .watchTool, .finish])
         XCTAssertTrue(SessionMachine().passesKeyThrough == false)
         var m2 = SessionMachine(); _ = m2.handle(.press, follow)
         XCTAssertTrue(m2.isActive); XCTAssertTrue(m2.passesKeyThrough)

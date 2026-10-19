@@ -40,18 +40,23 @@ SM=SessionMachineTests
 mutate "a follow press starts a posted dictation" $M 's|if mode.follow \&\& !mode.toggle { return (.following|if mode.follow \&\& mode.toggle { return (.following|' \
   "$SM/testFollowPressPassesTheKeyAndRemembersTheSource"
 mutate "a2 following release finishes without the window watch" $M \
-  's|return mode.switchesInput ? (.waitingForText, \[.passKey, .waitForText\]) : (.idle, \[.passKey, .finish\])|return (.idle, [.passKey, .finish])|' \
+  's|return mode.switchesInput ? (.waitingForText, \[.passKey, .watchTool\]) : (.idle, \[.passKey, .finish\])|return (.idle, [.passKey, .finish])|' \
   "$SM/testFollowReleaseWaitsForTheTextThenFinishes"
 mutate "a3 following is not active" $M 's~state == .passthrough || state == .following || state == .starting~state == .passthrough || state == .starting~' \
   "$F/testWakeDuringFollowStopsAndRestores"
 
+mutate "a4 the tool's switch-in starts a dictation in every mode" $M 's~case (.idle, .toolStarted) where mode.follow \&\& !mode.toggle \&\& mode.switchesInput:~case (.idle, .toolStarted) where !mode.toggle \&\& mode.switchesInput:~' \
+  "$SM/testToolSwitchInStartsADictationOnlyInFollowModeFromIdleOrWaiting"
+mutate "a5 a late switch-in while waiting is ignored" $M 's~case (.waitingForText, .toolStarted) where mode.follow \&\& !mode.toggle \&\& mode.switchesInput:~case (.waitingForText, .toolStarted) where false:~' \
+  "$SM/testToolSwitchInStartsADictationOnlyInFollowModeFromIdleOrWaiting"
+
 # The engine
-mutate "b follow mode is never handed to the machine" $E 's|passthrough: follow ? inVoice \&\& previous == nil : sameKey \&\& inVoice, follow: follow)|passthrough: follow ? inVoice \&\& previous == nil : sameKey \&\& inVoice, follow: false)|' \
+mutate "b follow mode is never handed to the machine" $E 's|passthrough: follow ? inVoice \&\& !restorable : sameKey \&\& inVoice, follow: follow)|passthrough: follow ? inVoice \&\& !restorable : sameKey \&\& inVoice, follow: false)|' \
   "$F/testRestoresThePreviousSourceAfterTheToolsWindowCloses"
-mutate "b2 a press inside the voice source is passthrough even with a restore pending" $E 's|passthrough: follow ? inVoice \&\& previous == nil : sameKey|passthrough: follow ? inVoice : sameKey|' \
+mutate "b2 a press inside the voice source is passthrough even with a restore pending" $E 's|passthrough: follow ? inVoice \&\& !restorable : sameKey|passthrough: follow ? inVoice : sameKey|' \
   "$F/testChainedPressKeepsThePreviousSourceUntilTheChainEnds"
-mutate "b3 the previous source is never remembered" $E 's|if let cur = sourceAtPress, cur != p.voiceID { previous = cur }|if let cur = sourceAtPress, cur == p.voiceID { previous = cur }|' \
-  "$F/testRestoresThePreviousSourceAfterTheToolsWindowCloses"
+mutate "b3 the source read at the press is never remembered (the tracked one masks it)" $E 's~if let cur = sourceAtPress, cur != p.voiceID {~if let cur = sourceAtPress, cur == p.voiceID {~' \
+  "$F/testTheSourceReadAtThePressWinsOverTheTrackedOne"
 mutate "b4 repeats while following are swallowed" $E 's|if down == physicalDown { return machine.passesKeyThrough }|if down == physicalDown { return machine.state == .passthrough }|' \
   "$F/testRepeatsWhileFollowingPass"
 mutate "b5 toggle no longer wins over follow" $E 's~let follow = p.follow \&\& !p.toggle~let follow = p.follow~' \
@@ -62,12 +67,28 @@ mutate "b7 a stale remembered source survives a passthrough release" $E 's~if ma
   "$F/testStalePreviousFromAPassthroughReleaseIsDropped"
 mutate "b8 the source is read at every press" $E 's~if (sameKey || follow) \&\& p.switchesInput { sourceAtPress = sources.current() }~if p.switchesInput { sourceAtPress = sources.current() }~' \
   "$F/testPressesReadTheInputSourceOnlyWhenTheAnswerIsNeeded"
-mutate "b9 a too-short follow press is judged like a dictation" $E 's~if r.follow, held < p.holdDelay {~if r.follow, held < 0 {~' \
+mutate "b9 a too-short follow press is judged like a dictation" $E 's~if r.follow, r.toolStarted || held >= p.holdDelay {~if r.follow {~' \
   "$F/testPressShorterThanTheHoldDelayIsTooShort"
-mutate "b10 a too-short follow press undoes the user's own source switch" $E 's~if record.follow, held < p.holdDelay, !record.sawWindow, !record.chained {~if record.follow, held < 0, !record.sawWindow, !record.chained {~' \
+mutate "b10 a too-short follow press undoes the user's own source switch" $E 's~held < p.holdDelay || record.toolStarted, !record.sawWindow, !record.sawMic~held < 0 || record.toolStarted, !record.sawWindow, !record.sawMic~' \
   "$F/testTooShortPressThatSwitchedTheSourceItselfIsLeftAlone"
-mutate "b11 a chained too-short press drops the pending restore" $E 's~record.chained = previous != nil \&\& sourceAtPress == p.voiceID~record.chained = false~' \
+mutate "b11 a chained too-short press drops the pending restore" $E 's~record.chained = previous != nil \&\& (sourceAtPress == nil || sourceAtPress == p.voiceID)~record.chained = false~' \
   "$F/testTooShortPressWhileWaitingStillRestores"
+mutate "b12 the switch-in notification starts a dictation in hold mode too" $E 's~guard p.follow, !p.toggle, p.switchesInput else { return }~guard !p.toggle, p.switchesInput else { return }~' \
+  "$F/testHoldModeIgnoresItsOwnSwitchInAndTracksTheOtherSources"
+mutate "b13 a burst of notifications starts a dictation each" $E 's~if machine.state == .waitingForText, record.toolStarted { return }~if false { return }~' \
+  "$F/testABurstOfNotificationsForOneSwitchInStartsOneDictation"
+mutate "b14 the other sources are not tracked" $E 's~lastOtherSource = id; return~return~' \
+  "$F/testHoldModeIgnoresItsOwnSwitchInAndTracksTheOtherSources"
+mutate "b15 the tracked source is never used as the one to go back to" $E 's~} else if previous == nil, let last = lastOtherSource {~} else if previous == nil, let last = lastOtherSource, false {~' \
+  "$F/testToolSwitchInWithNoKeySeenIsADictationEndedByItsMic"
+mutate "b16 a switch-in with nothing live still switches back" $E 's~if record.follow, held < p.holdDelay || record.toolStarted, !record.sawWindow, !record.sawMic, !record.chained {~if record.follow, held < p.holdDelay, !record.sawWindow, !record.sawMic, !record.chained {~' \
+  "$F/testManualSwitchWithNothingLiveIsLeftAlone"
+mutate "b17 the mic does not keep the dictation live" $E 's~let live = byWindow ? window.busy == true : window.busy == true || micTool == true~let live = window.busy == true~' \
+  "$F/testToolSwitchInWithNoKeySeenIsADictationEndedByItsMic"
+mutate "b18 a window seen does not take over from the mic" $E 's~let live = byWindow ? window.busy == true : window.busy == true || micTool == true~let live = window.busy == true || micTool == true~' \
+  "$F/testAWindowSeenEndsTheWatchEvenWhileTheMicIsOn"
+mutate "b19 the watch never gives up" $E 's~let gaveUp = liveSince == nil ? waited >= p.fallbackDelay : waited >= Engine.maxToolDictation~let gaveUp = liveSince == nil ? waited >= p.fallbackDelay : false~' \
+  "$F/testAStuckLiveReadingGivesUpAtTheCap"
 mutate "c no mic or window sample while following" $E 's~guard machine.state == .listening || machine.state == .following, gen == generation else { return }~guard machine.state == .listening, gen == generation else { return }~' \
   "$F/testSamplesWhileHeldReadMicAndWindowOnly"
 mutate "c2 the key-listener chain is read for a key that was never posted" $E 's|let readChain = !record.sampled \&\& plan.style == "hold" \&\& machine.state == .listening|let readChain = !record.sampled \&\& plan.style == "hold"|' \
@@ -82,7 +103,7 @@ mutate "e stats does not read a follow line" $S 's~(?:hold|toggle|follow)\\):~(?
   "$F/testStatsParsesFollowLines"
 mutate "e3 stats reads the mode word anywhere on the line" $S 's~let follow = modeWord == "follow"~let follow = line.contains("(follow)")~' \
   "$F/testStatsParsesFollowLines"
-mutate "e2 stats counts a follow line as a too-short tap" $S 's~} else if line.contains("released before") || (sent == nil \&\& !follow) {~} else if sent == nil {~' \
+mutate "e2 stats counts a follow line as a too-short tap" $S 's~} else if line.contains("released before") || line.contains("left alone") || (sent == nil \&\& !follow) {~} else if sent == nil {~' \
   "$F/testStatsParsesFollowLines"
 
 # Static checks: the app side carries the mode end to end, and the follow pid lookup runs off the tap callback.

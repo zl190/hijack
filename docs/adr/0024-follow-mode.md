@@ -60,15 +60,60 @@ In `Sources/Core/SessionMachine.swift` this is one new state, `following`, one m
 `rememberSource`. `docs/state-machine.md` lines 13 to 15 are its acceptance; `docs/diagrams/states.mmd` carries the
 new profile 跟随.
 
+## Field result on the first install, and the second half of the design (2026-10-19 evening)
+
+Two owner dictations on the installed build (609ecdd, follow mode, WeType's「快捷键全局生效」on) worked as voice and
+never switched back. The artifacts:
+
+1. `18:36:23 dictation … (follow): held 2.40s, window never closed after release, input source stayed, nothing to switch back | mic tool off device off, window while held: no window (pid 94224)`:
+   Hijack saw the key; at the check after the release the source was still Squirrel, and WeType switched itself in
+   only later (a TIS read at 18:40:40 said WeType). The press had decided too early, with one read.
+2. About 19:50: no dictation line at all. A 50 ms poll of the selected input source (run by the coordinating session)
+   shows `19:49:09 im.rime.inputmethod.Squirrel.Hans`, then `19:50:29.896 com.tencent.inputmethod.wetype.pinyin` with
+   four `TISNotifySelectedKeyboardInputSourceChanged` posts within 30 ms, while `hijack log --live` captured nothing
+   for that press. WeType 3.0's filtering tap, ahead of ours (ADR 0023), swallows the PHYSICAL Fn too when it acts on
+   it. The premise of the key path ("let the talk key through, remember the source at the press") does not hold for
+   WeType 3.0; the one signal Hijack reliably gets is the input-source change itself.
+
+So the mode has a second entry, and it is the main one for WeType 3.0:
+
+7. **The tool's own switch-in starts the dictation.** The app forwards TIS's selected-input-source notification to
+   the engine on the main queue (never from the tap callback). The engine keeps `lastOtherSource`, the most recent
+   current source that is not the voice source (seeded at start). In follow mode a change INTO the voice source is
+   `toolStarted` (we never select the voice source in that mode, so it is never ours): a dictation begins with no
+   key seen, goes back to `lastOtherSource`, and is watched on the tool's signals. A burst of notifications for one
+   switch starts one dictation. Hold and toggle mode ignore the event (they select the voice source themselves) and
+   still track the other sources.
+8. **The tool's window, else its microphone, ends the watch** (`watchTool`, used for the key path's release too in
+   follow mode). The voice window, when the tool shows one, says when the text is in (ADR 0003, `capsuleGrace`
+   after it closes). When no window is seen, the tool's own microphone (CoreAudio, per process) keeps the dictation
+   live, and `micGrace` (1 s, field value pending) after it goes off is the end. A window seen once takes over from
+   the mic. Nothing live within `fallbackDelay` from the start is a manual switch to the voice source (⌃Space to type
+   with it): left alone, no restore, not judged. A live reading that never ends (another app holding the mic, a
+   window that never closes) gives up at `maxToolDictation` (60 s) and still switches back; the line says so.
+   Probes run off the main thread, every 0.1 s.
+9. **A key path that the tool overtakes.** A switch-in while the key-path record waits for its text (the 18:36 shape)
+   writes that record up as `the tool switched itself in, followed from here` (counted as interrupted) and restarts
+   the watch on the tool's signals, keeping the source remembered at the press. A switch-in after that record ended
+   starts a new dictation that goes back to the tracked source. A press inside the voice source with a tracked
+   source (a missed restore left the user there) is a dictation that goes back to it, not passthrough.
+
+The line for the tool path keeps the shape with `switched in by the tool` where `held` was:
+`dictation com.tencent.inputmethod.wetype.pinyin (follow): switched in by the tool, mic off 3200ms after start, back after 4.21s | mic tool on device on, window seen: no window (pid 94224) | front=…`
+`hijack stats` reads `held` as 0 for it, `mic off … after start` as the text having arrived, `left alone` as not a
+dictation.
+
 ## Why not
 
 - **Keep posting and fight for the first place in the tap chain.** ADR 0023's "why not": WeType re-creates its
   listener a few seconds after ours appears, and the key would still be judged by WeType.
 - **A key that looks physical** (Karabiner's virtual keyboard, Option B of the ledger): closed by the evidence above
   (root-only socket, entitlement). The remapper still has a place: as the user's own `right_option → fn` rule.
-- **Switch back from a watcher on the input source instead of a key.** It would need a poll or a TIS notification
-  and could not tell a dictation from the user's own switch to WeType. The key edges we already see give the boundaries
-  for free, and the mode reuses the existing window watch unchanged.
+- **Only the key.** The first design (items 1 to 6) watched the key alone; the field showed WeType 3.0 swallows the
+  physical key when it acts on it (item 7's artifacts). The notification was the way out, with the tool's microphone
+  and `fallbackDelay` telling a dictation from the user's own switch to the voice source.
+- **A poll of the selected source instead of the notification.** The notification arrives within milliseconds and
+  costs nothing between switches; a poll would read TIS on a timer for the life of the process.
 
 ## Consequences
 
@@ -78,8 +123,14 @@ new profile 跟随.
   longer Hijack's to fix. `hijack doctor`'s key-listener warning is reported as harmless in follow mode.
 - The `starting` and `listening` states, the hold delay and the switch-in path are untouched and still serve the
   other tools and WeType 2.x.
-- Field check still open at the time of writing: one dictation on the installed build in follow mode (see the
-  incident doc for its line once it is in).
+- A manual switch to the voice source for typing is bounced back only if the tool reads live (window or mic) within
+  `fallbackDelay`; a manual switch followed by voice is treated as a dictation and switched back after it. Follow
+  mode is for a voice tool used for voice only.
+- `micGrace` and the per-process mic reading for WeType are field values still to confirm: the first tool-path lines
+  on the installed build will say `mic off … after start` or `nothing live` (then the window or mic probe does not
+  see WeType's voice, and the line's `mic tool` / `window seen` fields show which).
+- Field check still open at the time of writing: one dictation on the installed build in follow mode that shows
+  `switched in by the tool, … back after …` and the input source back to the previous one.
 
 ## Verification
 

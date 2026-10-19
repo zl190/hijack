@@ -59,6 +59,11 @@ public struct DictationRecord {
     public var switchFailed: Bool = false  // the input source never switched: the talk key was not sent (FM-05)
     public var follow: Bool = false  // W11: the tool took the physical key itself; nothing was switched in or posted
     public var chained: Bool = false  // W11: pressed while the previous dictation's restore was still pending (FM-17)
+    public var toolStarted: Bool = false  // W11: began on the tool's own switch-in, no key of ours seen
+    public var sawMic: Bool = false  // W11: the tool's microphone read "on" at some point during the watch
+    public var toolDoneMs: Int?  // W11: watch start → the tool's last live signal went (window closed, or mic off)
+    public var toolDoneBy: String = "window"  // W11: which signal ended the watch: "window" | "mic"
+    public var toolGaveUp: Bool = false  // W11: the tool still read live at maxToolDictation
 }
 
 public final class Engine {
@@ -78,6 +83,10 @@ public final class Engine {
 
     public private(set) var plan: Plan
     public var previous: String?  // the input source to restore after this dictation
+    /// W11: the most recent current input source that is not the voice source, kept from the system's change
+    /// notifications (and the start). Follow mode restores to it when the dictation began inside the voice source
+    /// or on the tool's own switch-in, where no press told us where the user came from.
+    public var lastOtherSource: String?
     public var generation: Int = 0
     public var physicalDown: Bool = false  // the shortcut as the keyboard has it (edges go to the machine)
     public var machine: SessionMachine = SessionMachine()  // what a press does: Sources/Core/SessionMachine.swift
@@ -225,9 +234,13 @@ public final class Engine {
             let inVoice = !p.switchesInput || sourceAtPress == p.voiceID
             // W11: in follow mode a press inside the voice source is passthrough only when no restore is pending;
             // with one pending (a press while waiting for the previous text) the dictation chains and keeps `previous`.
+            // Inside the voice source with a source to go back to (pending from the previous dictation, or the tracked
+            // last other source), a follow press is a dictation that restores to it: the user is in the voice source
+            // because a restore was missed, or because the tool switched in by itself. An app has no source at all.
+            let restorable = p.switchesInput && (previous != nil || lastOtherSource != nil)
             mode = SessionMode(
                 toggle: p.toggle, switchesInput: p.switchesInput,
-                passthrough: follow ? inVoice && previous == nil : sameKey && inVoice, follow: follow)
+                passthrough: follow ? inVoice && !restorable : sameKey && inVoice, follow: follow)
         }
         let before = machine.state
         let effects = machine.handle(event, mode)
@@ -248,15 +261,21 @@ public final class Engine {
             case .passKey: pass = true
             case .swallowKey: pass = false
             case .swallowKeyAndItsRelease: pass = false; swallowUp = keyCode
-            case .finishPrevious: summary(end: "interrupted by the next press")  // the retry after a failure must not erase it
+            case .finishPrevious:  // the retry after a failure must not erase it
+                summary(end: event == .toolStarted ? "the tool switched itself in, followed from here" : "interrupted by the next press")
             case .begin:
                 generation += 1; record = DictationRecord(pressedAt: clock.now); voicePIDs = []; micOffSince = nil; beginDictation()
-                record.follow = mode.follow
+                record.follow = mode.follow; record.toolStarted = event == .toolStarted
             case .rememberSource:
-                // W11: the tool switches itself in on the physical key; we only keep where to come back to. The mic
-                // and window samples still run (off-main), so the line can say whether the tool took the key.
-                record.chained = previous != nil && sourceAtPress == p.voiceID
-                if let cur = sourceAtPress, cur != p.voiceID { previous = cur }
+                // W11: the tool switches itself in; we only keep where to come back to: the source at the press when it
+                // was another one, else the tracked last other source (a press inside the voice source, or no press at
+                // all). The mic and window samples still run (off-main), so the line can say whether the tool took the key.
+                record.chained = previous != nil && (sourceAtPress == nil || sourceAtPress == p.voiceID)
+                if let cur = sourceAtPress, cur != p.voiceID {
+                    previous = cur
+                } else if previous == nil, let last = lastOtherSource {
+                    previous = last
+                }
                 enterPhase("following"); report("listening", p.voiceName)
                 // The tool's processes, for the samples: listing running apps asks other processes, so after the
                 // tap returns (ADR 0011), as sendKey() does from its scheduled turn.
@@ -276,6 +295,7 @@ public final class Engine {
             case .sendTalkKey: sendKey()
             case .releaseTalkKey: endVoice()
             case .waitForText: report("finishing", p.voiceName); waitForText()
+            case .watchTool: report("finishing", p.voiceName); watchTool()
             case .finish: finish()
             }
         }
@@ -362,8 +382,9 @@ public final class Engine {
         // W11 (review round 2): a tap or a chord on the talk key is the Globe key too. If it switched the input source
         // (macOS "Change Input Source" on Fn) and no voice window was seen, that switch is the user's own: leave it.
         // Hijack switched nothing in, so there is nothing of ours to undo. A chained press keeps the pending restore.
+        // The same for the tool's own switch-in with nothing live after it: a manual switch to the voice source.
         let held = (record.releasedAt ?? clock.now).timeIntervalSince(record.pressedAt)
-        if record.follow, held < p.holdDelay, !record.sawWindow, !record.chained {
+        if record.follow, held < p.holdDelay || record.toolStarted, !record.sawWindow, !record.sawMic, !record.chained {
             summary(end: "input source left alone"); report("done", ""); return
         }
         guard sources.current() == p.voiceID else {
@@ -384,6 +405,73 @@ public final class Engine {
                         "waited \(String(format: "%.1f", waitedText))s for the text, back to \(name)")
                     : localize("没切回，输入源仍是\(voiceName)", "Didn't switch back; the input source is still \(voiceName)"))
         }
+    }
+
+    /// W11: after the tool's microphone goes off, wait this long for its final text (its window, when it shows one,
+    /// closes after the final text; the mic can stop before recognition ends). Field value pending.
+    public static let micGrace = 1.0
+    /// W11: the longest a tool-driven follow dictation is watched. A stuck live reading (another app holding the mic,
+    /// a window that never closes) ends here, and the line says `gave up`.
+    public static let maxToolDictation = 60.0
+
+    /// W11: follow mode's end signal, in place of the key-path window watch. The tool's voice window, when it shows
+    /// one, says when the text is in (ADR 0003); when it shows none, its microphone does, with `micGrace`. Nothing
+    /// live within `fallbackDelay` from the start is a manual switch to the voice source (finish leaves it alone).
+    /// The probes (window list, CoreAudio) run off the main thread, every 0.1 s.
+    public func watchTool() {
+        let p = plan, gen = generation, began = record.releasedAt ?? clock.now
+        var liveSince: Date?, liveGone: Date?, byWindow = false
+        func poll() {
+            guard gen == generation, machine.state == .waitingForText else { return }
+            if voicePIDs.isEmpty { voicePIDs = probes.processIDs(ofProvider: p.providerID) }
+            let pids = voicePIDs, probes = probes
+            clock.offMain({ () -> (WindowState, Bool?, Bool?) in
+                (probes.windows(of: pids), probes.micInUse(by: pids), probes.micInUse(by: nil))
+            }) {
+                [self] window, micTool, micDevice in
+                guard gen == generation, machine.state == .waitingForText else { return }
+                let now = clock.now, waited = now.timeIntervalSince(began)
+                if window.busy == true { record.sawWindow = true; byWindow = true }
+                if micTool == true { record.sawMic = true }
+                if record.toolStarted {  // no held samples ran: the line's mic and window fields come from the watch, best reading kept
+                    record.heldMic = (record.sawMic || micTool == true ? true : micTool, micDevice)
+                    if window.busy == true || record.heldWindow?.busy != true { record.heldWindow = window }
+                }
+                // A window seen once is the better signal: from then on the mic no longer keeps the dictation live.
+                let live = byWindow ? window.busy == true : window.busy == true || micTool == true
+                if live {
+                    liveSince = liveSince ?? now; liveGone = nil
+                } else if liveSince != nil, liveGone == nil {
+                    liveGone = now; record.toolDoneMs = ms(since: began); record.toolDoneBy = byWindow ? "window" : "mic"
+                    mark("tool done")
+                }
+                let grace = byWindow ? capsuleGrace : Engine.micGrace
+                let done = liveGone.map { now.timeIntervalSince($0) >= grace } ?? false
+                let gaveUp = liveSince == nil ? waited >= p.fallbackDelay : waited >= Engine.maxToolDictation
+                guard done || gaveUp else { clock.after(0.1) { poll() }; return }
+                if gaveUp, liveSince != nil, liveGone == nil { record.toolGaveUp = true }
+                self.waited = waited
+                run(.textDone)
+            }
+        }
+        clock.after(0.05) { poll() }
+    }
+
+    /// W11: the system's selected input source changed; the app forwards TIS's notification on the main queue, never
+    /// from the tap callback. Keeps the last source that is not the voice one. In follow mode a switch INTO the voice
+    /// source is the tool starting itself (we never select it in that mode): the one signal left when its key
+    /// listener swallows the physical talk key. A burst of notifications for one switch starts one dictation.
+    public func inputSourceChanged() {
+        let p = plan
+        guard let id = sources.current() else { return }
+        if id != p.voiceID {
+            if lastOtherSource != id { trace("input source now \(id)") }
+            lastOtherSource = id; return
+        }
+        guard p.follow, !p.toggle, p.switchesInput else { return }
+        if machine.state == .waitingForText, record.toolStarted { return }  // the same switch-in, reported again
+        mode = SessionMode(toggle: false, switchesInput: true, passthrough: false, follow: true)
+        run(.toolStarted)
     }
 
     /// While the talk key is held: is the voice tool listening, and is its window up? Sampled every half
@@ -460,18 +548,28 @@ public final class Engine {
         // review-5 #17: the tool and the key are logged by their stable id, not `.name`/`.voiceName` (both
         // run through `localize`), so a language change does not split one tool into two in `hijack stats`.
         func onOff(_ b: Bool?) -> String { b.map { $0 ? "on" : "off" } ?? "?" }
-        var line =
-            "dictation \(p.providerID) (\(r.follow ? "follow" : p.toggle ? "toggle" : "hold")): held \(String(format: "%.2f", held))s"
-        if r.follow, held < p.holdDelay {
+        var line = "dictation \(p.providerID) (\(r.follow ? "follow" : p.toggle ? "toggle" : "hold")): "
+        line += r.toolStarted ? "switched in by the tool" : "held \(String(format: "%.2f", held))s"
+        if r.follow, r.toolStarted || held >= p.holdDelay {
+            // W11: nothing was posted, so no `sent`, `echo`, `ahead:` or `nap:`; the window and mic say whether the tool
+            // took its key, and which of the two said the text was in.
+            let since = r.toolStarted ? "start" : "release"
+            if let done = r.toolDoneMs {
+                line += ", \(r.toolDoneBy == "mic" ? "mic off" : "window closed") \(done)ms after \(since)"
+            } else if r.toolGaveUp {
+                line += ", still live \(String(format: "%.0f", Engine.maxToolDictation))s after \(since), gave up"
+            } else {
+                line +=
+                    r.toolStarted
+                    ? ", nothing live within \(String(format: "%.2f", p.fallbackDelay))s" : ", window never closed after release"
+            }
+            line +=
+                ", \(end) | mic tool \(onOff(r.heldMic?.tool)) device \(onOff(r.heldMic?.device)), window \(r.toolStarted ? "seen" : "while held"): \(r.heldWindow?.text ?? "?")"
+        } else if r.follow {
             // W11: a tap or a chord on the talk key (Fn+Delete, the Globe key) is not a dictation, as a hold-mode press
             // released before the hold delay is not: the line says so and `hijack stats` leaves it unjudged. The
             // window watch and the restore still ran, as they do for a too-short hold-mode press.
             line += ", released before \(p.forwardKey.logID) was held for \(String(format: "%.2f", p.holdDelay))s, \(end)"
-        } else if r.follow {
-            // W11: nothing was posted, so no `sent`, `echo`, `ahead:` or `nap:`; the window and mic say whether the tool took its key.
-            line += r.windowGoneMs.map { ", window closed \($0)ms after release" } ?? ", window never closed after release"
-            line +=
-                ", \(end) | mic tool \(onOff(r.heldMic?.tool)) device \(onOff(r.heldMic?.device)), window while held: \(r.heldWindow?.text ?? "?")"
         } else if let sent = r.keySentMs {
             line += ", \(p.forwardKey.logID) sent after \(sent)ms"
             if p.switchesInput {
@@ -717,6 +815,7 @@ public final class Engine {
         sink.state(trusted: true, tapActive: on)
         if !on { log("event tap installed but not enabled") }
         forwardKeyEdgeSeen = false
+        if let cur = sources.current(), cur != plan.voiceID { lastOtherSource = cur }  // W11: where a follow dictation goes back to
         clock.after(1) { [self] in clearStuckModifier() }
         log(
             "started: trigger \(plan.trigger.name), forward \(plan.forwardKey.name), voice \(plan.voiceID)"

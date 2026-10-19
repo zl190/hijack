@@ -18,6 +18,9 @@ public enum SessionEvent: String, CaseIterable {
     case textDone  // the voice window went, or the wait timed out
     case switchFailed  // the input source did not switch within maxSwitchWait: end without the talk key
     case quit  // the app is quitting: stop now, release the talk key, skip waitingForText (FM-10)
+    // W11: the voice tool switched itself in (an input-source change Hijack did not make). Follow mode's one reliable
+    // signal when the tool's own key listener swallows the physical talk key before our tap sees it.
+    case toolStarted
 }
 
 /// What the current press is: fixed for the press, read by the engine before it hands the event over.
@@ -46,6 +49,7 @@ public enum SessionEffect: Equatable {
     case sendTalkKey
     case releaseTalkKey
     case waitForText  // watch the voice window, then report textDone
+    case watchTool  // W11: watch the tool's voice window and microphone (nothing of ours to wait for), then report textDone
     case finish  // summary line; an input method also switches back
 }
 
@@ -80,9 +84,16 @@ public struct SessionMachine {
         case (.idle, .press): return start()
         case (.waitingForText, .press): return start([.finishPrevious])
         case (.passthrough, .release): return (.idle, [.passKey])
-        // W11: the tool got the physical key; now wait for its text, then switch back (an app: nothing to switch).
+        // W11: the tool got the physical key; now watch it for its text, then switch back (an app: nothing to switch).
         case (.following, .release):
-            return mode.switchesInput ? (.waitingForText, [.passKey, .waitForText]) : (.idle, [.passKey, .finish])
+            return mode.switchesInput ? (.waitingForText, [.passKey, .watchTool]) : (.idle, [.passKey, .finish])
+        // W11: the tool switched itself in. Idle: a dictation we never saw a key for. Waiting for a key-path dictation's
+        // text: the tool took over late, so that record is written up and the watch restarts on the tool's signals.
+        case (.idle, .toolStarted) where mode.follow && !mode.toggle && mode.switchesInput:
+            return (.waitingForText, [.begin, .rememberSource, .watchTool])
+        case (.waitingForText, .toolStarted) where mode.follow && !mode.toggle && mode.switchesInput:
+            return (.waitingForText, [.finishPrevious, .begin, .rememberSource, .watchTool])
+        case (_, .toolStarted): return (s, [])  // held (the release will watch), a posted dictation, or not follow mode
         case (.starting, .keySent): return (.listening, [.sendTalkKey])
         case (.starting, .release), (.listening, .release):
             return mode.toggle ? (s, [.swallowKey]) : stop(.swallowKey)

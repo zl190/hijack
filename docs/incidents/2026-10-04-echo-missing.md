@@ -324,6 +324,26 @@ user app: Karabiner's virtual-keyboard daemon socket is root-only, and an own Dr
 entitlement. W11 adds follow mode (docs/adr/0024): the trigger is the talk key, nothing is posted, Hijack remembers the
 source at the press, watches the window after the release, and switches back.
 
+### Field result on the first follow-mode install (2026-10-19 18:29 to 19:50)
+
+Build 609ecdd (W11 key path only), `hijack set mode follow`, WeType's「快捷键全局生效」on. Two dictations, voice worked
+both times, the input source was never switched back:
+
+```
+2026-10-19 18:36:23.995 dictation com.tencent.inputmethod.wetype.pinyin (follow): held 2.40s, window never closed after release, input source stayed, nothing to switch back | mic tool off device off, window while held: no window (pid 94224) | front=com.anthropic.claudefordesktop
+```
+
+At the check after the release the source was still Squirrel (so "stayed"); a TIS read at 18:40:40 and every one after
+said WeType: it switched itself in later than the check. The second dictation (about 19:50) left no line at all. A 50 ms
+poll of the selected input source (coordinating session, `ismon.swift`, a process with a run loop: without one
+`TISCopyCurrentKeyboardInputSource` returns a stale value) shows `19:49:09 im.rime.inputmethod.Squirrel.Hans` and
+`19:50:29.896 com.tencent.inputmethod.wetype.pinyin` with four `TISNotifySelectedKeyboardInputSourceChanged` posts
+within 30 ms, while `hijack log --live` captured nothing for the press: WeType 3.0's tap, ahead of ours, swallows the
+physical Fn too when it acts on it. Hijack never sees the key; the one signal it gets is the input-source change. The
+owner was inside WeType from the first dictation on, so the second press was inside the voice source: passthrough,
+nothing remembered, nothing restored. ADR 0024 items 7 to 9 (the tool's own switch-in starts the dictation, its
+window or microphone ends it, the last other source is tracked) are the answer; build and field line pending.
+
 ### Next, for the owner
 
 1. `settingfunction_voiceInputExclusiveMode` has no stored value in any of WeType's settings files and no label in its

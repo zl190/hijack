@@ -52,11 +52,13 @@ public struct DictationEntry: Equatable {
             guard let r = try? Regex(pattern), let m = line.firstMatch(of: r), m.count > 1, let s = m[1].substring else { return nil }
             return String(s)
         }
-        guard let tool = word(#"dictation (.+?) \((?:hold|toggle|follow)\):"#), let held = num(#"held ([\d.]+)s"#) else { return nil }
-        let modeWord = word(#"\((hold|toggle|follow)\): held "#)  // the mode word in its slot, not anywhere on the line
+        guard let tool = word(#"dictation (.+?) \((?:hold|toggle|follow)\):"#) else { return nil }
+        let modeWord = word(#"\((hold|toggle|follow)\): (?:held |switched in)"#)  // the mode word in its slot, not anywhere on the line
         let follow = modeWord == "follow"
+        // W11: a follow dictation that began on the tool's own switch-in has no hold at all.
+        guard let held = num(#"held ([\d.]+)s"#) ?? (follow && line.contains("switched in by the tool") ? 0 : nil) else { return nil }
         let sent = num(#"sent after (\d+)ms"#).map { Int($0) }
-        let textIn = num(#"window closed (\d+)ms after release"#).map { Int($0) }
+        let textIn = num(#"(?:window closed|mic off) (\d+)ms after (?:release|start)"#).map { Int($0) }
         let echo = line.contains("echo missing") ? false : line.contains("echo after") ? true : nil
         let post = line.contains("post: not seen") ? false : line.contains("post: seen") ? true : nil
         let ahead: [String]? = word(#"ahead: ([^,|]+)"#).flatMap { $0 == "?" ? nil : $0 == "none" ? [] : $0.components(separatedBy: "+") }
@@ -64,10 +66,11 @@ public struct DictationEntry: Equatable {
         let outcome: Outcome
         if line.contains("input source never switched") {
             outcome = .noWindow
-        } else if line.contains("released before") || (sent == nil && !follow) {
-            // W11: a follow line never has `sent`; it is judged on its window unless it says `released before`.
+        } else if line.contains("released before") || line.contains("left alone") || (sent == nil && !follow) {
+            // W11: a follow line never has `sent`; it is judged on its window and mic unless it was no dictation
+            // (`released before`, or a switch into the voice source with nothing live after it: `left alone`).
             outcome = .tooShort
-        } else if line.contains("interrupted by the next press") {
+        } else if line.contains("interrupted by the next press") || line.contains("the tool switched itself in") {
             outcome = .interrupted
         } else if textIn != nil {
             outcome = .textArrived
