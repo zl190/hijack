@@ -342,7 +342,18 @@ within 30 ms, while `hijack log --live` captured nothing for the press: WeType 3
 physical Fn too when it acts on it. Hijack never sees the key; the one signal it gets is the input-source change. The
 owner was inside WeType from the first dictation on, so the second press was inside the voice source: passthrough,
 nothing remembered, nothing restored. ADR 0024 items 7 to 9 (the tool's own switch-in starts the dictation, its
-window or microphone ends it, the last other source is tracked) are the answer; build and field line pending.
+window or microphone ends it, the last other source is tracked) are the answer. Field lines on the builds that carry it:
+
+```
+2026-10-19 20:15:43.212 dictation com.tencent.inputmethod.wetype.pinyin (follow): switched in by the tool, window closed 968ms after start, input source unreadable at the press, nothing to switch back to | mic tool off device off, window seen: 1 window | front=com.anthropic.claudefordesktop
+2026-10-19 20:37:30.168 dictation com.tencent.inputmethod.wetype.pinyin (follow): switched in by the tool, window closed 4337ms after start, back after 4.61s | mic tool on device off, window seen: 1 window | front=com.anthropic.claudefordesktop
+```
+
+The first (7ab277d) fired with the process started inside WeType and no other source seen since: WeType's window was
+seen and closed 968 ms after the switch-in, nothing to go back to. The second (8901461, the tracked source persisted;
+the owner had switched to Squirrel once before): the window closed 4.34 s after the switch-in, Hijack switched back to
+Squirrel 4.61 s after it (owner: 切回来了; a TIS read afterwards said `im.rime.inputmethod.Squirrel.Hans`). The
+per-process mic read on this time. Status: resolved for WeType 3.0 by follow mode; the hold path stays for the other tools.
 
 ### Next, for the owner
 

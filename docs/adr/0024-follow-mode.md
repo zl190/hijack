@@ -132,8 +132,9 @@ dictation.
 - `micGrace` and the per-process mic reading for WeType are field values still to confirm: the first tool-path lines
   on the installed build will say `mic off … after start` or `nothing live` (then the window or mic probe does not
   see WeType's voice, and the line's `mic tool` / `window seen` fields show which).
-- Field check still open at the time of writing: one dictation on the installed build in follow mode that shows
-  `switched in by the tool, … back after …` and the input source back to the previous one.
+- Field check closed on 2026-10-19 20:37:30 (build 8901461): `switched in by the tool, window closed 4337ms after
+  start, back after 4.61s | mic tool on device off, window seen: 1 window`, input source back to Squirrel (owner
+  confirmed; TIS read `im.rime.inputmethod.Squirrel.Hans`).
 
 ## Verification
 
