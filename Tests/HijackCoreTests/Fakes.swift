@@ -54,12 +54,14 @@ final class FakeSources: InputSources {
     var refuse: Set<String> = []  // select returns false for these (FM-16)
     var selected: [String] = []
     var reads = 0
+    var onSelect: ((String) -> Void)?  // W11: what the system does after our select (a notification, the tool re-selecting itself)
     init(_ current: String?) { currentID = current }
     func current() -> String? { reads += 1; return currentID }
     func select(_ id: String) -> Bool {
         selected.append(id)
         if refuse.contains(id) { return false }
         if applies { currentID = id }
+        onSelect?(id)
         return true
     }
 }

@@ -92,19 +92,21 @@ So the mode has a second entry, and it is the main one for WeType 3.0:
    after it closes). When no window is seen, the tool's own microphone (CoreAudio, per process) keeps the dictation
    live, and `micGrace` (1 s, field value pending) after it goes off is the end. A window seen once takes over from
    the mic. Nothing live within `fallbackDelay` from the start is a manual switch to the voice source (⌃Space to type
-   with it): left alone, no restore, not judged. A live reading that never ends (another app holding the mic, a
-   window that never closes) gives up at `maxToolDictation` (60 s) and still switches back; the line says so.
+   with it): left alone, no restore, not judged. A live reading that never ends on the tool path (the tool keeping its
+   own mic open, a window that never closes) gives up at `maxToolDictation` (60 s) and leaves the source where it is: a
+   switch mid-dictation would lose the text; the line says `gave up, input source left in …` and `hijack stats` scores
+   it as not switched back. The key path counts `restoreTimeout` from the release instead, as hold mode does (FM-14).
    Probes run off the main thread, every 0.1 s.
 9. **A key path that the tool overtakes.** A switch-in while the key-path record waits for its text (the 18:36 shape)
    writes that record up as `the tool switched itself in, followed from here` (counted as interrupted) and restarts
-   the watch on the tool's signals, keeping the source remembered at the press. A switch-in after that record ended
-   starts a new dictation that goes back to the tracked source. A press inside the voice source with a tracked
+   the watch on the tool's signals, keeping the source remembered at the press. A switch-in within `restoreTimeout` after that record ended with `input source stayed` belongs to it (the tool switched in at the text commit): it goes back to that record's source, live or not. Later than that, it
+   is a new dictation that goes back to the tracked source. A switch-in seen while the key was held marks the record, so a re-select of the tool after the release does not split one dictation in two; a re-select within 0.5 s of our restore is logged as such. A press inside the voice source with a tracked
    source (a missed restore left the user there) is a dictation that goes back to it, not passthrough.
 
 The line for the tool path keeps the shape with `switched in by the tool` where `held` was:
 `dictation com.tencent.inputmethod.wetype.pinyin (follow): switched in by the tool, mic off 3200ms after start, back after 4.21s | mic tool on device on, window seen: no window (pid 94224) | front=…`
 `hijack stats` reads `held` as 0 for it, `mic off … after start` as the text having arrived, `left alone` as not a
-dictation.
+dictation (counted apart, `leftAlone`), and a follow line whose text arrived without `back after` as `text arrived, input source not switched back`: in follow mode the restore is the deliverable, and the success rate counts it as a failure.
 
 ## Why not
 

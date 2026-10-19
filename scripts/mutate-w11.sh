@@ -91,6 +91,24 @@ mutate "b19 the watch never gives up" $E 's~let gaveUp = liveSince == nil ? wait
   "$F/testAStuckLiveReadingGivesUpAtTheCap"
 mutate "b20 a start inside the voice source forgets the persisted source" $E 's~lastOtherSource = supervisor.lastOtherSource~lastOtherSource = nil~' \
   "$F/testAStartInsideTheVoiceSourceTakesThePersistedSourceAndTrackingPersistsIt"
+mutate "b21 a late switch-in after the key record ended is not chained to it" $E 's~if stayed, !record.toolStarted, held >= p.holdDelay { lateSwitchWindow = (clock.now.addingTimeInterval(p.restoreTimeout), prev) }~if stayed, !record.toolStarted, held >= p.holdDelay, false { lateSwitchWindow = (clock.now.addingTimeInterval(p.restoreTimeout), prev) }~' \
+  "$F/testLateSwitchInAfterTheKeyRecordEndedRestoresEvenWithNothingLive"
+mutate "b22 the late window never closes" $E 's~if clock.now <= w.until {~if true {~' \
+  "$F/testLateSwitchInBeyondRestoreTimeoutIsLeftAlone"
+mutate "b23 a switch-in seen while held does not stop a later takeover" $E 's~if machine.state == .waitingForText, record.toolStarted || record.sawSwitchIn { return }~if machine.state == .waitingForText, record.toolStarted { return }~' \
+  "$F/testSwitchInWhileTheKeyIsHeldIsAbsorbedAndALaterReselectDoesNotSplit"
+mutate "b24 the key path waits the tool-path cap for a window that never closes" $E 's~let cap = record.toolStarted ? Engine.maxToolDictation : p.restoreTimeout~let cap = Engine.maxToolDictation~' \
+  "$F/testKeyPathWindowThatNeverClosesRestoresAtRestoreTimeout"
+mutate "b25 the tool path restores mid-dictation at the cap" $E 's~if record.toolStarted, record.toolGaveUp {~if record.toolStarted, record.toolGaveUp, false {~' \
+  "$F/testAStuckLiveReadingOnTheToolPathGivesUpAndLeavesTheSource"
+mutate "b26 a chained press is never recognised" $E 's~record.chained = previous != nil \&\& (sourceAtPress == nil || sourceAtPress == p.voiceID)~record.chained = previous != nil \&\& sourceAtPress == p.voiceID~' \
+  "$F/testLateSwitchInAfterTheKeyRecordEndedRestoresEvenWithNothingLive"
+mutate "b27 the mic end uses the window grace" $E 's~let grace = byWindow ? capsuleGrace : Engine.micGrace~let grace = capsuleGrace~' \
+  "$F/testToolSwitchInWithNoKeySeenIsADictationEndedByItsMic"
+mutate "b28 the stale watch completion ends the new dictation" $E '/\[self\] window, micTool, micDevice in/,/let now = clock.now/ s~guard gen == generation, machine.state == .waitingForText else { return }~_ = gen~' \
+  "$F/testAStaleWatchCompletionAfterANewPressIsDropped"
+mutate "e4 stats scores a follow line without a restore as text arrived" $S 's~outcome = follow \&\& !line.contains("back after") ? .notRestored : .textArrived~outcome = .textArrived~' \
+  "$F/testStatsParsesFollowLines"
 mutate "c no mic or window sample while following" $E 's~guard machine.state == .listening || machine.state == .following, gen == generation else { return }~guard machine.state == .listening, gen == generation else { return }~' \
   "$F/testSamplesWhileHeldReadMicAndWindowOnly"
 mutate "c2 the key-listener chain is read for a key that was never posted" $E 's|let readChain = !record.sampled \&\& plan.style == "hold" \&\& machine.state == .listening|let readChain = !record.sampled \&\& plan.style == "hold"|' \

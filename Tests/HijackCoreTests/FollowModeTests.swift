@@ -275,6 +275,8 @@ final class FollowModeTests: XCTestCase {
     /// The system's input source changed to `id`: what the app forwards from TIS's notification.
     private func switchIn(_ r: Rig, to id: String = Rig.voice) { r.sources.currentID = id; r.engine.inputSourceChanged() }
 
+    // A design test, not a field reproduction: the field lines of 20:15 and 20:37 ended by the window (`window seen: 1
+    // window`); the per-process mic read off once and on once. This one exercises the mic-only end.
     func testToolSwitchInWithNoKeySeenIsADictationEndedByItsMic() {
         let r = rig()
         XCTAssertEqual(r.engine.lastOtherSource, Rig.english, "tracked from the start")
@@ -324,17 +326,34 @@ final class FollowModeTests: XCTestCase {
         XCTAssertEqual(r.sources.selected, [Rig.english])
         XCTAssertEqual(r.sink.summaries.count, 2)
     }
-    // 18:36 shape, later: the key record had already ended (`input source stayed`), then the tool switched in.
-    func testLateSwitchInAfterTheKeyRecordEndedRestoresToTheTrackedSource() {
+    // 18:36 shape, later: the key record had already ended (`input source stayed`), then the tool switched in, at the
+    // text commit, with nothing live after it (the field readings: no window, mic off). Within restoreTimeout of that
+    // end the switch-in belongs to that dictation and goes back, live or not (review round 3, M1).
+    func testLateSwitchInAfterTheKeyRecordEndedRestoresEvenWithNothingLive() {
         let r = rig()
+        r.sources.currentID = "com.apple.keylayout.US"; r.engine.inputSourceChanged()  // the tracked source differs from the press's
+        r.sources.currentID = Rig.english
         r.press(); r.clock.advance(2.4); r.release(); r.clock.advance(2.6)
         XCTAssertEqual(r.engine.machine.state, .idle, "setup")
         XCTAssertTrue((r.sink.summaries.last ?? "").contains("input source stayed"), "setup")
         XCTAssertNil(r.engine.previous)
-        switchIn(r)
-        XCTAssertEqual(r.engine.previous, Rig.english, "the tracked source, not the consumed one")
-        r.probes.micTool = true; r.clock.advance(2.0); r.probes.micTool = false; r.clock.advance(1.5)
-        XCTAssertEqual(r.sources.selected, [Rig.english])
+        r.clock.advance(1.0)
+        switchIn(r)  // nothing live follows: no window, mic off
+        XCTAssertEqual(r.engine.previous, Rig.english, "the source of the dictation that just ended, not the tracked one")
+        XCTAssertTrue(r.sink.has("the tool switched in"), r.sink.lines.joined(separator: "\n"))
+        r.clock.advance(2.6)
+        XCTAssertEqual(r.sources.selected, [Rig.english], "restored, live or not")
+        XCTAssertTrue(
+            (r.sink.summaries.last ?? "").contains("switched in by the tool, nothing live within 2.50s, back after"),
+            r.sink.summaries.last ?? "")
+    }
+    func testLateSwitchInBeyondRestoreTimeoutIsLeftAlone() {
+        let r = rig()
+        r.press(); r.clock.advance(2.4); r.release(); r.clock.advance(2.6)
+        r.clock.advance(5.1)  // past restoreTimeout since the line
+        switchIn(r); r.clock.advance(2.6)
+        XCTAssertEqual(r.sources.selected, [])
+        XCTAssertTrue((r.sink.summaries.last ?? "").contains("input source left alone"), r.sink.summaries.last ?? "")
     }
     // A manual switch to the voice source (⌃Space) with no voice after it is the user's: nothing is switched back.
     func testManualSwitchWithNothingLiveIsLeftAlone() {
@@ -373,9 +392,10 @@ final class FollowModeTests: XCTestCase {
         r.probes.window = .visible(1); r.clock.advance(1.0); r.probes.window = .none("no window (pid 100)"); r.clock.advance(0.4)
         XCTAssertEqual(r.sources.selected, ["im.rime.inputmethod.Squirrel.Hans"])
         XCTAssertTrue((r.sink.summaries.last ?? "").contains("window closed 1"), r.sink.summaries.last ?? "")
-        // Tracking writes through: the restore's own notification, and any later change.
+        // Tracking writes through on every change of the tracked source (not on a repeat of the same one).
+        r.supervisor.lastOtherSource = nil
         r.engine.inputSourceChanged()
-        XCTAssertEqual(r.supervisor.lastOtherSource, "im.rime.inputmethod.Squirrel.Hans")
+        XCTAssertNil(r.supervisor.lastOtherSource, "the same source again: nothing to write")
         r.sources.currentID = Rig.english; r.engine.inputSourceChanged()
         XCTAssertEqual(r.supervisor.lastOtherSource, Rig.english)
         // Nothing persisted and nothing seen: the line says so and nothing is switched.
@@ -430,8 +450,9 @@ final class FollowModeTests: XCTestCase {
         XCTAssertTrue((r.sink.summaries.last ?? "").contains("window closed 2"), r.sink.summaries.last ?? "")
         XCTAssertEqual(r.sources.selected, [Rig.english])
     }
-    // A live reading that never ends (another app holds the mic): the watch gives up at maxToolDictation and still switches back.
-    func testAStuckLiveReadingGivesUpAtTheCap() {
+    // A live reading that never ends on the tool path (the tool keeps its mic open, a window that never closes): the
+    // watch gives up at maxToolDictation and leaves the source where it is: a switch mid-dictation would lose the text.
+    func testAStuckLiveReadingOnTheToolPathGivesUpAndLeavesTheSource() {
         let r = rig()
         switchIn(r); r.probes.micTool = true
         r.clock.advance(Engine.maxToolDictation - 1)
@@ -439,19 +460,66 @@ final class FollowModeTests: XCTestCase {
         r.clock.advance(1.2)
         XCTAssertEqual(r.engine.machine.state, .idle)
         let l = r.sink.summaries.last ?? ""
-        XCTAssertTrue(l.contains("still live 60s after start, gave up, back after 60."), l)
-        XCTAssertEqual(r.sources.selected, [Rig.english])
+        XCTAssertTrue(l.contains("still live 60s after start, gave up, input source left in \(Rig.voice)"), l)
+        XCTAssertEqual(r.sources.selected, [])
+        XCTAssertEqual(r.lastEntry()?.outcome, .notRestored)
     }
-    // A switch-in while the key is held changes nothing: the release starts the watch.
-    func testSwitchInWhileTheKeyIsHeldIsAbsorbed() {
+    // The key path counts restoreTimeout from the release, as hold mode does (FM-14): a window that never closes
+    // restores 5 s after the release, not 60 s later.
+    func testKeyPathWindowThatNeverClosesRestoresAtRestoreTimeout() {
+        let r = rig()
+        r.press(); r.sources.currentID = Rig.voice; r.probes.window = .visible(1); r.clock.advance(1.0); r.release()
+        r.clock.advance(4.9)
+        XCTAssertEqual(r.engine.machine.state, .waitingForText)
+        r.clock.advance(0.3)
+        XCTAssertEqual(r.engine.machine.state, .idle)
+        XCTAssertEqual(r.sources.selected, [Rig.english])
+        XCTAssertTrue(
+            (r.sink.summaries.last ?? "").contains("still live 5s after release, gave up, back after 5."), r.sink.summaries.last ?? "")
+    }
+    // The tool re-selecting itself right after our restore is logged by name (the W11 symptom would otherwise have no line).
+    func testAReselectRightAfterTheRestoreIsLogged() {
+        let r = rig()
+        r.sources.onSelect = { id in
+            r.sources.currentID = id; r.engine.inputSourceChanged()  // the system's notification for our restore
+            if id == Rig.english { r.sources.currentID = Rig.voice; r.engine.inputSourceChanged() }  // then the tool takes it back
+        }
+        switchIn(r); r.probes.micTool = true; r.clock.advance(1.0); r.probes.micTool = false; r.clock.advance(1.5)
+        XCTAssertEqual(r.sources.selected.first, Rig.english)
+        XCTAssertTrue(r.sink.has("the tool re-selected itself 0ms after the restore"), r.sink.lines.joined(separator: "\n"))
+        r.clock.advance(2.6)
+        XCTAssertTrue((r.sink.summaries.last ?? "").contains("left alone"), "nothing live after the re-select: left alone, no ping-pong")
+        // The restore and switchTo's one retry (it did not stick): nothing after that, whatever the tool re-selects.
+        XCTAssertEqual(r.sources.selected, [Rig.english, Rig.english])
+        r.clock.advance(10)
+        XCTAssertEqual(r.sources.selected.count, 2, "no ping-pong")
+    }
+    // A watch probe still in flight when the next press arrives: its completion must not end the new dictation.
+    func testAStaleWatchCompletionAfterANewPressIsDropped() {
+        let r = rig()
+        r.clock.deferOffMain = true
+        switchIn(r); r.probes.micTool = true
+        r.clock.advance(0.06)  // the first poll dispatched its probe; the completion is held
+        r.press()  // a new dictation (the key path) while the probe is in flight
+        XCTAssertEqual(r.engine.machine.state, .following)
+        r.clock.flushOffMain()
+        XCTAssertEqual(r.engine.machine.state, .following, "the stale completion did nothing")
+        XCTAssertEqual(r.sink.summaries.count, 1, "only the interrupted tool record was written up")
+    }
+    // A switch-in while the key is held changes nothing: the release starts the watch. A re-select of the tool after
+    // the release (a burst member, or the tool re-selecting itself at its voice end) does not split the dictation.
+    func testSwitchInWhileTheKeyIsHeldIsAbsorbedAndALaterReselectDoesNotSplit() {
         let r = rig()
         r.press(); r.clock.advance(0.5)
         switchIn(r)
         XCTAssertEqual(r.engine.machine.state, .following)
         XCTAssertEqual(r.sink.summaries, [])
         r.probes.micTool = true; r.clock.advance(1.0); r.release()
-        r.clock.advance(0.5); r.probes.micTool = false; r.clock.advance(1.5)
+        r.clock.advance(0.3); switchIn(r)  // the tool re-selects itself after the release
+        XCTAssertEqual(r.sink.summaries, [], "no takeover: the watch is on the tool's signals already")
+        r.clock.advance(0.2); r.probes.micTool = false; r.clock.advance(1.5)
         XCTAssertEqual(r.sources.selected, [Rig.english])
+        XCTAssertEqual(r.sink.summaries.count, 1)
         XCTAssertTrue((r.sink.summaries.last ?? "").contains("held 1.50s, mic off"), r.sink.summaries.last ?? "")
     }
 
@@ -498,14 +566,20 @@ final class FollowModeTests: XCTestCase {
             "2026-10-19 19:52:00.000 dictation com.tencent.inputmethod.wetype.pinyin (follow): switched in by the tool, still live 60s after start, gave up, back after 60.05s | mic tool on device on, window seen: no window (pid 94224) | front=x"
         let takenOver =
             "2026-10-19 18:36:24.000 dictation com.tencent.inputmethod.wetype.pinyin (follow): held 2.40s, window never closed after release, the tool switched itself in, followed from here | mic tool off device off, window while held: no window (pid 94224) | front=x"
+        let notBack =  // the 20:15:43 field line: the text arrived, nothing was switched back
+            "2026-10-19 20:15:43.212 dictation com.tencent.inputmethod.wetype.pinyin (follow): switched in by the tool, window closed 968ms after start, input source unreadable at the press, nothing to switch back to | mic tool off device off, window seen: 1 window | front=x"
         let t1 = DictationEntry.parse(toolOK)!
         XCTAssertEqual(t1.outcome, .textArrived); XCTAssertEqual(t1.heldMs, 0); XCTAssertEqual(t1.textInMs, 3200); XCTAssertTrue(t1.follow)
         XCTAssertEqual(DictationEntry.parse(toolAlone)!.outcome, .tooShort)
-        XCTAssertEqual(DictationEntry.parse(toolGaveUp)!.outcome, .noWindow)
-        XCTAssertEqual(DictationEntry.parse(toolGaveUp)!.cause, .windowNotSeen)
+        XCTAssertEqual(DictationEntry.parse(toolGaveUp)!.outcome, .notRestored, "the tool was live; not seen is false")
+        XCTAssertNil(DictationEntry.parse(toolGaveUp)!.cause)
+        XCTAssertEqual(DictationEntry.parse(notBack)!.outcome, .notRestored, "in follow mode the restore is the deliverable")
         XCTAssertEqual(DictationEntry.parse(takenOver)!.outcome, .interrupted)
-        let ts = DictationStats.compute(lines: [toolOK, toolAlone, toolGaveUp, takenOver], days: nil, today: "2026-10-19")
-        XCTAssertEqual(ts.dictations, 3); XCTAssertEqual(ts.tooShort, 1); XCTAssertEqual(ts.followed, 3)
+        let ts = DictationStats.compute(lines: [toolOK, toolAlone, toolGaveUp, takenOver, notBack], days: nil, today: "2026-10-19")
+        XCTAssertEqual(ts.dictations, 4); XCTAssertEqual(ts.tooShort, 1); XCTAssertEqual(ts.leftAlone, 1); XCTAssertEqual(ts.followed, 4)
+        XCTAssertEqual(ts.outcomes[.notRestored], 2)
+        XCTAssertEqual(ts.successRate!, 1.0 / 3.0, accuracy: 1e-9, "text arrived and back ÷ (that + no window + not switched back)")
+        XCTAssertEqual(DictationStats.compute(lines: [ok], days: nil, today: "2026-10-19").leftAlone, 0)
         XCTAssertEqual(
             DictationStats.compute(lines: [ok, short], days: nil, today: "2026-10-19").followed, 1, "a too-short press is not a dictation")
     }

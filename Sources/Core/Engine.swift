@@ -63,7 +63,8 @@ public struct DictationRecord {
     public var sawMic: Bool = false  // W11: the tool's microphone read "on" at some point during the watch
     public var toolDoneMs: Int?  // W11: watch start → the tool's last live signal went (window closed, or mic off)
     public var toolDoneBy: String = "window"  // W11: which signal ended the watch: "window" | "mic"
-    public var toolGaveUp: Bool = false  // W11: the tool still read live at maxToolDictation
+    public var toolGaveUp: Bool = false  // W11: the tool still read live at the cap
+    public var sawSwitchIn: Bool = false  // W11: the tool's switch-in notification arrived while the key was held (key path)
 }
 
 public final class Engine {
@@ -87,6 +88,11 @@ public final class Engine {
     /// notifications (and the start). Follow mode restores to it when the dictation began inside the voice source
     /// or on the tool's own switch-in, where no press told us where the user came from.
     public var lastOtherSource: String?
+    /// W11 (review round 3, M1): a follow key-path dictation ended with nothing live and the source unchanged; a switch-in
+    /// of the tool within `restoreTimeout` of that end belongs to it (the tool switched in at the text commit) and
+    /// goes back to that dictation's source, live or not.
+    public var lateSwitchWindow: (until: Date, prev: String)?
+    public var restoredAt: Date?  // W11: when the last restore was issued; a switch-in right after it is logged as the tool's re-select
     public var generation: Int = 0
     public var physicalDown: Bool = false  // the shortcut as the keyboard has it (edges go to the machine)
     public var machine: SessionMachine = SessionMachine()  // what a press does: Sources/Core/SessionMachine.swift
@@ -266,6 +272,7 @@ public final class Engine {
             case .begin:
                 generation += 1; record = DictationRecord(pressedAt: clock.now); voicePIDs = []; micOffSince = nil; beginDictation()
                 record.follow = mode.follow; record.toolStarted = event == .toolStarted
+                if event == .press { lateSwitchWindow = nil }  // a new press supersedes the previous dictation's late window
             case .rememberSource:
                 // W11: the tool switches itself in; we only keep where to come back to: the source at the press when it
                 // was another one, else the tracked last other source (a press inside the voice source, or no press at
@@ -387,13 +394,22 @@ public final class Engine {
         if record.follow, held < p.holdDelay || record.toolStarted, !record.sawWindow, !record.sawMic, !record.chained {
             summary(end: "input source left alone"); report("done", ""); return
         }
+        // The tool path gave up with the tool still live: the user may still be dictating; a switch now loses the text.
+        if record.toolStarted, record.toolGaveUp {
+            summary(end: "input source left in \(p.voiceID)"); report("done", ""); return
+        }
         guard sources.current() == p.voiceID else {
             // W11: in follow mode the tool may simply not have taken the key: then nothing changed and nothing is switched.
             let stayed = record.follow && sources.current() == prev
+            // A follow key-path dictation that saw nothing: the tool may switch in at the text commit, after this line.
+            if stayed, !record.toolStarted, held >= p.holdDelay {
+                lateSwitchWindow = (clock.now.addingTimeInterval(p.restoreTimeout), prev)
+            }
             summary(end: stayed ? "input source stayed, nothing to switch back" : "input source already changed, not switched back")
             report("done", ""); return
         }
         summary(end: "back after \(String(format: "%.2f", waited))s")
+        restoredAt = clock.now
         let name = sink.sourceName(prev), voiceName = p.voiceName, waitedText = waited
         // "Try it" must not say "back to X" until the switch is confirmed (FM-16): report only once we know.
         switchTo(prev, "restore") { [self] confirmed in
@@ -410,8 +426,10 @@ public final class Engine {
     /// W11: after the tool's microphone goes off, wait this long for its final text (its window, when it shows one,
     /// closes after the final text; the mic can stop before recognition ends). Field value pending.
     public static let micGrace = 1.0
-    /// W11: the longest a tool-driven follow dictation is watched. A stuck live reading (another app holding the mic,
-    /// a window that never closes) ends here, and the line says `gave up`.
+    /// W11: the longest a tool-driven follow dictation is watched (there is no release to count from). A stuck live
+    /// reading (the tool keeping its own mic open, a window that never closes) ends here; the line says `gave up` and
+    /// the source is left where it is (a restore mid-dictation would lose the text). The key path counts
+    /// `restoreTimeout` from the release instead, as hold mode does (FM-14).
     public static let maxToolDictation = 60.0
 
     /// W11: follow mode's end signal, in place of the key-path window watch. The tool's voice window, when it shows
@@ -447,7 +465,8 @@ public final class Engine {
                 }
                 let grace = byWindow ? capsuleGrace : Engine.micGrace
                 let done = liveGone.map { now.timeIntervalSince($0) >= grace } ?? false
-                let gaveUp = liveSince == nil ? waited >= p.fallbackDelay : waited >= Engine.maxToolDictation
+                let cap = record.toolStarted ? Engine.maxToolDictation : p.restoreTimeout
+                let gaveUp = liveSince == nil ? waited >= p.fallbackDelay : waited >= cap
                 guard done || gaveUp else { clock.after(0.1) { poll() }; return }
                 if gaveUp, liveSince != nil, liveGone == nil { record.toolGaveUp = true }
                 self.waited = waited
@@ -469,7 +488,23 @@ public final class Engine {
             lastOtherSource = id; return
         }
         guard p.follow, !p.toggle, p.switchesInput else { return }
-        if machine.state == .waitingForText, record.toolStarted { return }  // the same switch-in, reported again
+        if machine.state == .following { record.sawSwitchIn = true; return }  // the key is held: its release watches
+        // The same switch-in reported again (a burst), or a re-select after a switch-in already seen while the key was
+        // held: the watch is on the tool's signals already; a second record would split one dictation in two.
+        if machine.state == .waitingForText, record.toolStarted || record.sawSwitchIn { return }
+        if let at = restoredAt, clock.now.timeIntervalSince(at) < 0.5 {
+            log("the tool re-selected itself \(ms(since: at))ms after the restore")
+        }
+        if machine.state == .idle, let w = lateSwitchWindow {
+            lateSwitchWindow = nil
+            if clock.now <= w.until {
+                log(
+                    "the tool switched in \(ms(since: w.until.addingTimeInterval(-p.restoreTimeout)))ms after the key-path dictation ended: going back to \(w.prev)"
+                )
+                previous = w.prev  // chained to that dictation: restored live or not
+            }
+        }
+        // `mode` is rebuilt to the same value a follow press builds (see run); the release of a held key never reads it.
         mode = SessionMode(toggle: false, switchesInput: true, passthrough: false, follow: true)
         run(.toolStarted)
     }
@@ -557,7 +592,8 @@ public final class Engine {
             if let done = r.toolDoneMs {
                 line += ", \(r.toolDoneBy == "mic" ? "mic off" : "window closed") \(done)ms after \(since)"
             } else if r.toolGaveUp {
-                line += ", still live \(String(format: "%.0f", Engine.maxToolDictation))s after \(since), gave up"
+                let cap = r.toolStarted ? Engine.maxToolDictation : p.restoreTimeout
+                line += ", still live \(String(format: "%.0f", cap))s after \(since), gave up"
             } else {
                 line +=
                     r.toolStarted

@@ -10,7 +10,8 @@ public struct DictationEntry: Equatable {
         case noWindow = "no voice window"  // the talk key went out, but no window was seen
         case interrupted = "interrupted"  // the next press came before the text
         case unverified = "not watched"  // an app tool: its window isn't watched
-        case tooShort = "too short to start"  // released before the talk key was sent
+        case notRestored = "text arrived, input source not switched back"  // W11 follow: the restore is the deliverable
+        case tooShort = "too short to start"  // released before the talk key was sent; W11: or a switch-in with nothing live (left alone)
     }
     /// Why a dictation with no voice window failed, from the checks on its line.
     public enum Cause: String, CaseIterable {
@@ -72,8 +73,11 @@ public struct DictationEntry: Equatable {
             outcome = .tooShort
         } else if line.contains("interrupted by the next press") || line.contains("the tool switched itself in") {
             outcome = .interrupted
+        } else if follow && line.contains("gave up") {
+            outcome = .notRestored
         } else if textIn != nil {
-            outcome = .textArrived
+            // W11: a follow line's deliverable is the restore; the text alone is not enough.
+            outcome = follow && !line.contains("back after") ? .notRestored : .textArrived
         } else if line.contains("no switch back needed") {
             outcome = .unverified
         } else {
@@ -99,7 +103,7 @@ public struct DictationEntry: Equatable {
 
 /// The numbers for a set of dictations (and the incidents logged around them).
 public struct DictationStats: Equatable {
-    public var dictations: Int  // the talk key went out (too-short taps not counted)
+    public var dictations: Int  // started dictations (too-short taps and W11's left-alone switch-ins not counted)
     public var outcomes: [DictationEntry.Outcome: Int]
     public var causes: [DictationEntry.Cause: Int]
     public var tooShort: Int
@@ -115,10 +119,13 @@ public struct DictationStats: Equatable {
     // W10: dictations with an `ahead:` reading; of those, with another listener ahead; of those, `echo missing`.
     public var aheadSampled: Int = 0, listenerAhead: Int = 0, listenerAheadFailed: Int = 0
     public var followed: Int = 0  // W11: dictations in follow mode (nothing posted; judged on the voice window alone)
+    public var leftAlone: Int = 0  // W11: switch-ins into the voice source with nothing live after them (not dictations; counted apart)
 
-    /// Share of judged dictations (text arrived or no window) where the text arrived; nil when none were judged.
+    /// Share of judged dictations (text arrived, no window, or not switched back) where the text arrived and the
+    /// source came back; nil when none were judged.
     public var successRate: Double? {
-        let ok = outcomes[.textArrived, default: 0], judged = ok + outcomes[.noWindow, default: 0]
+        let ok = outcomes[.textArrived, default: 0]
+        let judged = ok + outcomes[.noWindow, default: 0] + outcomes[.notRestored, default: 0]
         return judged == 0 ? nil : Double(ok) / Double(judged)
     }
 
@@ -168,6 +175,7 @@ public struct DictationStats: Equatable {
             aheadSampled: started.filter { $0.listenersAhead != nil }.count,
             listenerAhead: started.filter { $0.listenersAhead?.isEmpty == false }.count,
             listenerAheadFailed: started.filter { $0.listenersAhead?.isEmpty == false && $0.echoSeen == false }.count,
-            followed: started.filter(\.follow).count)
+            followed: started.filter(\.follow).count,
+            leftAlone: dictLines.filter { $0.contains("left alone") }.count)
     }
 }

@@ -439,7 +439,7 @@ func cliStats(_ args: [String], json: Bool) -> Int32 {
     let metrics = currentMetricsSummary()
     if json {
         var d: [String: Any] = [
-            "span": span, "dictations": s.dictations, "tooShort": s.tooShort,
+            "span": span, "dictations": s.dictations, "tooShort": s.tooShort, "leftAlone": s.leftAlone,
             "outcomes": Dictionary(uniqueKeysWithValues: s.outcomes.map { ($0.key.rawValue, $0.value) }),
             "failureCauses": Dictionary(uniqueKeysWithValues: s.causes.map { ($0.key.rawValue, $0.value) }),
             "tools": toolNames, "keyTapPaused": s.tapPaused, "slowKeyEvents": s.slowKeys, "triggerCaughtUp": s.caughtUp,
@@ -471,7 +471,9 @@ func cliStats(_ args: [String], json: Bool) -> Int32 {
         }
         print(
             "Dictations".padding(toLength: 24, withPad: " ", startingAt: 0) + String(format: "%5d", s.dictations)
-                + (s.tooShort > 0 ? "  (+\(s.tooShort) too short to start)" : ""))
+                + (s.tooShort > 0
+                    ? "  (+\(s.tooShort) too short to start" + (s.leftAlone > 0 ? ", \(s.leftAlone) of them switch-ins left alone" : "")
+                        + ")" : ""))
         for o in DictationEntry.Outcome.allCases where o != .tooShort { if let n = s.outcomes[o] { row(o.rawValue, n) } }
         for c in DictationEntry.Cause.allCases { if let n = s.causes[c] { print("      \(n) × \(c.rawValue)") } }
         // The target line sits right under the rate it judges. No line at all when nothing was judged yet
@@ -479,7 +481,7 @@ func cliStats(_ args: [String], json: Bool) -> Int32 {
         if let r = s.successRate, let met = s.met {
             print(
                 "Success rate".padding(toLength: 24, withPad: " ", startingAt: 0) + String(format: "%5.1f%%", r * 100)
-                    + "  (text arrived ÷ text arrived + no window)")
+                    + "  (text arrived ÷ text arrived + no window + not switched back)")
             print(
                 "target".padding(toLength: 24, withPad: " ", startingAt: 0)
                     + "success >= \(String(format: "%.1f", DictationStats.successTarget * 100))%  this period \(String(format: "%.1f", r * 100))%  "
