@@ -1,6 +1,6 @@
 # Incident 2026-10-04: the talk key did not go out (echo missing)
 
-Status: cause since 2026-10-17 found on 2026-10-19 (WeType 3.0's exclusive-mode key listener; section at the end). Hijack side: W10 (docs/adr/0023). W7 to W9 below are history. Source: `~/Library/Logs/Hijack.log`, build 1.1.4 (signed, installed 2026-10-03 23:27).
+Status: cause since 2026-10-17 found on 2026-10-19 (WeType 3.0's exclusive-mode key listener; section at the end). Hijack side: W10 (docs/adr/0023) names the listener; W11 (docs/adr/0024, follow mode) stops posting the key and only switches back, since the field tests at the end show WeType 3.0 acts on a physical Fn and on nothing Hijack can post. W7 to W9 below are history. Source: `~/Library/Logs/Hijack.log`, build 1.1.4 (signed, installed 2026-10-03 23:27).
 
 ## What the log shows
 
@@ -314,6 +314,49 @@ system stamps every posted event with the poster's pid, which no CGEvent post ca
 counter-example is the 00:10:38 success. If that reading holds, no CGEvent post from Hijack can start WeType 3.0's
 voice input, and the ways out are a key that looks physical (Option B, Karabiner's virtual keyboard, a dependency on
 the running Karabiner-DriverKit-VirtualHIDDevice daemon), another voice tool, or WeType 2.x.
+
+### Owner test about 17:10 and the way out (W11)
+
+With「快捷键全局生效」on, a physical Fn in Squirrel makes WeType switch itself in and listen; after the release the
+input source stays WeType (owner: 停在微信输入法). So WeType 3.0 does the front half (switch in, listen) on a physical
+key and rejects posted ones; the back half (switch back, ADR 0003) is what is left for Hijack. Option B is closed for a
+user app: Karabiner's virtual-keyboard daemon socket is root-only, and an own DriverKit HID device needs an Apple
+entitlement. W11 adds follow mode (docs/adr/0024): the trigger is the talk key, nothing is posted, Hijack remembers the
+source at the press, watches the window after the release, and switches back.
+
+### Field result on the first follow-mode install (2026-10-19 18:29 to 19:50)
+
+Build 609ecdd (W11 key path only), `hijack set mode follow`, WeType's「快捷键全局生效」on. Two dictations, voice worked
+both times, the input source was never switched back:
+
+```
+2026-10-19 18:36:23.995 dictation com.tencent.inputmethod.wetype.pinyin (follow): held 2.40s, window never closed after release, input source stayed, nothing to switch back | mic tool off device off, window while held: no window (pid 94224) | front=com.anthropic.claudefordesktop
+```
+
+At the check after the release the source was still Squirrel (so "stayed"); a TIS read at 18:40:40 and every one after
+said WeType: it switched itself in later than the check. The second dictation (about 19:50) left no line at all. A 50 ms
+poll of the selected input source (coordinating session, `ismon.swift`, a process with a run loop: without one
+`TISCopyCurrentKeyboardInputSource` returns a stale value) shows `19:49:09 im.rime.inputmethod.Squirrel.Hans` and
+`19:50:29.896 com.tencent.inputmethod.wetype.pinyin` with four `TISNotifySelectedKeyboardInputSourceChanged` posts
+within 30 ms, while `hijack log --live` captured nothing for the press: WeType 3.0's tap, ahead of ours, swallows the
+physical Fn too when it acts on it. Hijack never sees the key; the one signal it gets is the input-source change. The
+owner was inside WeType from the first dictation on, so the second press was inside the voice source: passthrough,
+nothing remembered, nothing restored. ADR 0024 items 7 to 9 (the tool's own switch-in starts the dictation, its
+window or microphone ends it, the last other source is tracked) are the answer. Field lines on the builds that carry it:
+
+```
+2026-10-19 20:15:43.212 dictation com.tencent.inputmethod.wetype.pinyin (follow): switched in by the tool, window closed 968ms after start, input source unreadable at the press, nothing to switch back to | mic tool off device off, window seen: 1 window | front=com.anthropic.claudefordesktop
+2026-10-19 20:37:30.168 dictation com.tencent.inputmethod.wetype.pinyin (follow): switched in by the tool, window closed 4337ms after start, back after 4.61s | mic tool on device off, window seen: 1 window | front=com.anthropic.claudefordesktop
+2026-10-19 20:38:42.056 dictation com.tencent.inputmethod.wetype.pinyin (follow): switched in by the tool, nothing live within 2.50s, input source left alone | mic tool off device off, window seen: no window (pid 94224) | front=com.tencent.WeTypeSettings
+2026-10-19 20:38:51.979 dictation com.tencent.inputmethod.wetype.pinyin (follow): switched in by the tool, window closed 6176ms after start, back after 6.46s | mic tool on device off, window seen: 1 window | front=com.anthropic.claudefordesktop
+```
+
+The first (7ab277d) fired with the process started inside WeType and no other source seen since: WeType's window was
+seen and closed 968 ms after the switch-in, nothing to go back to. The second (8901461, the tracked source persisted;
+the owner had switched to Squirrel once before): the window closed 4.34 s after the switch-in, Hijack switched back to
+Squirrel 4.61 s after it (owner: 切回来了; a TIS read afterwards said `im.rime.inputmethod.Squirrel.Hans`). The
+per-process mic read on this time. The third line is a switch-in with WeType's own settings window in front and nothing
+live after it: left alone, as designed for a manual switch. The fourth is another full round trip (6.2 s of window). Status: resolved for WeType 3.0 by follow mode; the hold path stays for the other tools.
 
 ### Next, for the owner
 

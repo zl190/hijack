@@ -4,6 +4,7 @@
 public enum SessionState: String, CaseIterable {
     case idle
     case passthrough
+    case following  // W11: the tool's own talk key is held and the tool is starting itself; we only remember where to switch back
     case starting
     case listening
     case waitingForText
@@ -17,6 +18,9 @@ public enum SessionEvent: String, CaseIterable {
     case textDone  // the voice window went, or the wait timed out
     case switchFailed  // the input source did not switch within maxSwitchWait: end without the talk key
     case quit  // the app is quitting: stop now, release the talk key, skip waitingForText (FM-10)
+    // W11: the voice tool switched itself in (an input-source change Hijack did not make). Follow mode's one reliable
+    // signal when the tool's own key listener swallows the physical talk key before our tap sees it.
+    case toolStarted
 }
 
 /// What the current press is: fixed for the press, read by the engine before it hands the event over.
@@ -24,6 +28,13 @@ public struct SessionMode: Equatable {
     public var toggle: Bool = false  // tap to start, tap to stop
     public var switchesInput: Bool = true  // an input method (switch to it and back); false: an app with its own hotkey
     public var passthrough: Bool = false  // the shortcut is the tool's own key and the tool is already active
+    /// W11 (docs/adr/0024): the shortcut is the tool's own talk key and the tool switches itself in on it. Hijack
+    /// passes the key, remembers the input source, and switches back after the text. Never posts. Toggle wins over it.
+    public var follow: Bool = false
+
+    public init(toggle: Bool = false, switchesInput: Bool = true, passthrough: Bool = false, follow: Bool = false) {
+        self.toggle = toggle; self.switchesInput = switchesInput; self.passthrough = passthrough; self.follow = follow
+    }
 }
 
 public enum SessionEffect: Equatable {
@@ -33,17 +44,21 @@ public enum SessionEffect: Equatable {
     case finishPrevious  // the previous dictation is still waiting for its text: write it up now
     case begin  // a new dictation
     case switchToVoice  // select the voice input method
+    case rememberSource  // W11: keep the current input source as the one to switch back to, without switching
     case scheduleTalkKey  // send the talk key once the switch is ready (and the hold delay is over)
     case sendTalkKey
     case releaseTalkKey
     case waitForText  // watch the voice window, then report textDone
+    case watchTool  // W11: watch the tool's voice window and microphone (nothing of ours to wait for), then report textDone
     case finish  // summary line; an input method also switches back
 }
 
 public struct SessionMachine {
     public private(set) var state: SessionState = .idle
 
-    public var isActive: Bool { state == .passthrough || state == .starting || state == .listening }
+    public var isActive: Bool { state == .passthrough || state == .following || state == .starting || state == .listening }
+    /// The held key belongs to the tool: its repeats pass too (the engine filters repeats before the machine).
+    public var passesKeyThrough: Bool { state == .passthrough || state == .following }
 
     public mutating func handle(_ event: SessionEvent, _ mode: SessionMode) -> [SessionEffect] {
         let (next, effects) = SessionMachine.transition(state, event, mode)
@@ -55,6 +70,7 @@ public struct SessionMachine {
     public static func transition(_ s: SessionState, _ e: SessionEvent, _ mode: SessionMode) -> (SessionState, [SessionEffect]) {
         func start(_ prefix: [SessionEffect] = []) -> (SessionState, [SessionEffect]) {
             if mode.passthrough && !mode.toggle { return (.passthrough, prefix + [.passKey]) }
+            if mode.follow && !mode.toggle { return (.following, prefix + [.passKey, .begin, .rememberSource]) }
             return (.starting, prefix + [.swallowKey, .begin] + (mode.switchesInput ? [.switchToVoice] : []) + [.scheduleTalkKey])
         }
         // Stop a running session. `keyEffect` is what happens to the key event that stopped it.
@@ -68,6 +84,16 @@ public struct SessionMachine {
         case (.idle, .press): return start()
         case (.waitingForText, .press): return start([.finishPrevious])
         case (.passthrough, .release): return (.idle, [.passKey])
+        // W11: the tool got the physical key; now watch it for its text, then switch back (an app: nothing to switch).
+        case (.following, .release):
+            return mode.switchesInput ? (.waitingForText, [.passKey, .watchTool]) : (.idle, [.passKey, .finish])
+        // W11: the tool switched itself in. Idle: a dictation we never saw a key for. Waiting for a key-path dictation's
+        // text: the tool took over late, so that record is written up and the watch restarts on the tool's signals.
+        case (.idle, .toolStarted) where mode.follow && !mode.toggle && mode.switchesInput:
+            return (.waitingForText, [.begin, .rememberSource, .watchTool])
+        case (.waitingForText, .toolStarted) where mode.follow && !mode.toggle && mode.switchesInput:
+            return (.waitingForText, [.finishPrevious, .begin, .rememberSource, .watchTool])
+        case (_, .toolStarted): return (s, [])  // held (the release will watch), a posted dictation, or not follow mode
         case (.starting, .keySent): return (.listening, [.sendTalkKey])
         case (.starting, .release), (.listening, .release):
             return mode.toggle ? (s, [.swallowKey]) : stop(.swallowKey)
@@ -83,7 +109,7 @@ public struct SessionMachine {
         case (_, .quit): return (s, [])  // idle/waitingForText/passthrough: nothing to release
         case (.idle, .release), (.waitingForText, .release):
             return (s, [.swallowKey])  // toggle: the tap that stopped it
-        case (.passthrough, .press): return (s, [.passKey])
+        case (.passthrough, .press), (.following, .press): return (s, [.passKey])  // the tool's key keeps its repeats
         case (_, .otherKey): return (s, [.passKey])
         case (_, .keySent), (_, .textDone), (_, .switchFailed):
             return (s, [])  // stale: from an earlier dictation

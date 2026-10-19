@@ -54,12 +54,14 @@ final class FakeSources: InputSources {
     var refuse: Set<String> = []  // select returns false for these (FM-16)
     var selected: [String] = []
     var reads = 0
+    var onSelect: ((String) -> Void)?  // W11: what the system does after our select (a notification, the tool re-selecting itself)
     init(_ current: String?) { currentID = current }
     func current() -> String? { reads += 1; return currentID }
     func select(_ id: String) -> Bool {
         selected.append(id)
         if refuse.contains(id) { return false }
         if applies { currentID = id }
+        onSelect?(id)
         return true
     }
 }
@@ -96,7 +98,8 @@ final class FakeProbes: Probes {
     var front = "front=test"
     var calls = 0
     var process: ProcessState?  // W9: nil by default (unreadable)
-    func processState() -> ProcessState? { process }
+    var processStateReads = 0
+    func processState() -> ProcessState? { processStateReads += 1; return process }
     func processIDs(ofProvider id: String) -> [pid_t] { calls += 1; return pids }
     func windows(of pids: [pid_t]) -> WindowState { calls += 1; return pids.isEmpty ? .unknown("not running") : window }
     func micInUse(by pids: [pid_t]?) -> Bool? { calls += 1; return pids == nil ? micDevice : micTool }
@@ -122,6 +125,7 @@ final class FakeSink: Sink {
 final class FakeSupervisor: Supervisor {
     var relaunches: [String] = []
     var lastRelaunchAt: Date?
+    var lastOtherSource: String?  // W11: persisted across restarts
     var mark = false
     var relaunchResult = true  // false: the relauncher could not be spawned
     func relaunch(reason: String) -> Bool { relaunches.append(reason); return relaunchResult }
@@ -161,10 +165,13 @@ final class Rig {
     let supervisor = FakeSupervisor()
     private(set) var engine: Engine!
 
-    init(toggle: Bool = false, switchesInput: Bool = true, trigger: KeySpec = Rig.fn, current: String? = Rig.english, start: Bool = true) {
+    init(
+        toggle: Bool = false, follow: Bool = false, switchesInput: Bool = true, trigger: KeySpec = Rig.fn, current: String? = Rig.english,
+        start: Bool = true
+    ) {
         plan = Plan(
             trigger: trigger, providerID: Rig.voice, switchesInput: switchesInput, voiceID: Rig.voice, voiceName: "WeType",
-            forwardKey: Rig.fn, style: "hold", toggle: toggle, stopOnAnyKey: true,
+            forwardKey: Rig.fn, style: "hold", toggle: toggle, follow: follow, stopOnAnyKey: true,
             holdDelay: 0.2, restoreTimeout: 5.0, fallbackDelay: 2.5)
         sources = FakeSources(current)
         engine = Engine(

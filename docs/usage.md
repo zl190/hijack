@@ -20,7 +20,9 @@ The source of truth is `~/.config/hijack/config.json`. Edits apply on the next k
 }
 ```
 
-`trigger: "follow"` follows the selected tool's voice key. `voiceKeys` stores overrides by source ID. `triggerMode` is `hold` or `toggle`; `language` is `system`, `en` or `zh`. Logs are at `~/Library/Logs/Hijack.log`.
+`trigger: "follow"` follows the selected tool's voice key. `voiceKeys` stores overrides by source ID. `triggerMode` is `hold`, `toggle` or `follow`; `language` is `system`, `en` or `zh`. Logs are at `~/Library/Logs/Hijack.log`.
+
+`triggerMode: "follow"` is for a voice tool that starts itself on its own talk key (WeType 3.0 does, on a physical Fn, and ignores keys posted by another app). Hijack then never posts a key. It watches the system's input source: when it changes into the voice source and Hijack did not switch it, the tool has started, and Hijack goes back to the input source you came from once the tool's voice window closes or its microphone goes quiet. If the tool lets the talk key through, Hijack also sees the key; either way the trigger is the tool's talk key, and to use another physical key you remap it in a keyboard remapper such as Karabiner (`right_option → fn`). A switch to the voice source with no voice after it (⌃Space to type with it) is left alone.
 
 ## Command line
 
@@ -38,6 +40,8 @@ hijack restart           # quit the running app and open it again
 ```
 
 `status`, `sources`, `get`, and `stats` take `--json`.
+
+In follow mode (`triggerMode: "follow"`) a dictation line reads `dictation … (follow): switched in by the tool, window closed 4337ms after start, back after 4.61s | mic tool on device off, window seen: 1 window` (the tool started itself; `mic off … after start` when it showed no window and its microphone ended the watch; `gave up, input source left in …` when it still read live after 60 s, where a switch would lose the text) or, when the tool let the talk key through, `dictation … (follow): held 2.9s, window closed 1627ms after release, back after 1.82s | …`: no `sent`, `echo` or `ahead:` field, since nothing was posted. `nothing live within 2.50s, input source left alone` is a switch to the voice source with no voice after it; a press shorter than `holdDelay` (a tap or a chord on the talk key) reads `released before fn was held for 0.20s`. Neither is judged (`hijack stats` counts the left-alone ones apart). A follow line whose text arrived but that did not switch back (`nothing to switch back to`, `gave up`) is scored `text arrived, input source not switched back` and counts against the success rate. `hijack stats` adds a `Follow mode` line (`followed` in `--json`) once any such line is in the period.
 
 `hijack stats` prints a `target` line under the success rate: `success >= 99.0%` is the current
 reliability bar (`Sources/Core/Stats.swift`'s `successTarget`, provisional until 7 days of 1.2.x data),
@@ -62,7 +66,7 @@ If the trigger does nothing, confirm that Hijack has Accessibility permission an
 
 If dictation stops working and `hijack doctor` finds nothing, choose **Restart Hijack** in the menu (or run `hijack restart`). It quits the app and opens a fresh copy, the same thing Hijack does by itself after a dictation whose talk key never went out, but with no 10-minute limit. Each use leaves a `restart:` line in the log, and `hijack stats` counts them under Incidents as `manual restarts`.
 
-If the log says `echo missing` and `ahead: WeType` (or another app's name), that app re-creates its key listener ahead of Hijack's and sees the talk key first; Hijack does not restart itself for this, because a fresh copy would sit behind it again within seconds. WeType 3.0 does this in its voice-input exclusive mode: turn that mode off in WeType's settings, or give WeType a hold-to-talk key other than Fn. `hijack doctor` prints the same warning while it is the case, and `hijack stats` counts those dictations on its `Key listener` line.
+If the log says `echo missing` and `ahead: WeType` (or another app's name), that app re-creates its key listener ahead of Hijack's and sees the talk key first; Hijack does not restart itself for this, because a fresh copy would sit behind it again within seconds. WeType 3.0 does this in its voice-input exclusive mode, and no user-facing switch for it was found: use follow mode (`hijack set mode follow`, above), where Hijack posts no key at all. `hijack doctor` prints the same warning while it is the case (and calls it harmless in follow mode), and `hijack stats` counts those dictations on its `Key listener` line.
 
 If keys type the wrong thing after Hijack quits unexpectedly, a modifier key may be stuck down. Press and release your talk key once to clear it. Then open Hijack again. Hijack also tries to release a stuck key on its own the next time it starts.
 

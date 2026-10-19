@@ -72,7 +72,7 @@ let cliHelp = """
       hijack version                  running version, and the update Sparkle found last
 
     Settings:
-      mode             hold | toggle
+      mode             hold | toggle | follow    (follow: the voice tool starts itself on its talk key; Hijack only switches back)
       shortcut         follow | a key (right_option, fn, f18, ctrl+option+f18, …)
       any-key-stops    true | false              (toggle mode)
       source           a voice source id or name (see `hijack sources`)
@@ -199,8 +199,15 @@ func cliStatus(json: Bool) -> Int32 {
                     ? "active" : st.trusted ? "OFF — macOS turned it off; quit and reopen Hijack" : "off — waiting for Accessibility"))
         if st.secureInput { print("  secure input    on" + (st.secureInputApp.map { " (\($0))" } ?? "")) }
     }
-    print("  mode            " + (m.toggleMode ? "toggle (tap to start, tap to stop)" : "hold (hold to talk)"))
-    print("  shortcut        \(m.trigger.name)" + (c.trigger == nil ? "  (same as talk key)" : ""))
+    print(
+        "  mode            "
+            + (m.toggleMode
+                ? "toggle (tap to start, tap to stop)"
+                : m.followMode ? "follow (\(p.name) starts itself on its talk key; Hijack only switches back)" : "hold (hold to talk)"))
+    print(
+        "  shortcut        \(m.trigger.name)"
+            + (m.followMode ? "  (the talk key; follow mode ignores the shortcut setting)" : c.trigger == nil ? "  (same as talk key)" : "")
+    )
     print("  voice source    \(p.name)  [\(p.id)]" + (p.isInstalled ? "" : "  NOT INSTALLED"))
     print("  talk key        \(m.forwardKey.name)  (\(keyOrigin(p, user: m.userVoiceKey)))")
     print("  starts with     \(m.voiceStyle)")
@@ -232,10 +239,16 @@ func cliDoctor() -> Int32 {
                     nil, "Hijack's key listener is not in the system's list",
                     "the app is restarting, or macOS turned the listener off; run `hijack doctor` again in a few seconds")
             case .ahead(let ahead) where ahead.isEmpty: check(true, "no other key listener sits ahead of Hijack's")
+            case .ahead(let ahead) where m.followMode:
+                // W11: nothing is posted in follow mode, so a listener ahead of ours cannot swallow anything of ours.
+                check(
+                    true,
+                    "\(ahead.joined(separator: ", ")) keep\(ahead.count == 1 ? "s" : "") a key listener ahead of Hijack's (harmless in follow mode: Hijack posts no key)"
+                )
             case .ahead(let ahead):
                 let advice =
                     ahead.contains("WeType")
-                    ? " (WeType 3.0 does, in its voice-input exclusive mode): turn that mode off in WeType, or set a talk key other than Fn"
+                    ? " (WeType 3.0 does, in its voice-input exclusive mode): `hijack set mode follow` (WeType starts itself on the physical Fn, Hijack only switches back), or turn that mode off in WeType"
                     : "; quit it, change its shortcut, or set a different talk key"
                 check(
                     nil, "\(ahead.joined(separator: ", ")) keep\(ahead.count == 1 ? "s" : "") a key listener ahead of Hijack's",
@@ -333,7 +346,7 @@ func cliSet(_ args: [String]) -> Int32 {
     func seconds(_ r: ClosedRange<Double>) -> Double? { Double(value).flatMap { r.contains($0) ? $0 : nil } }
     switch name {
     case "mode":
-        guard ["hold", "toggle"].contains(value) else { return fail("mode: hold | toggle") }
+        guard ["hold", "toggle", "follow"].contains(value) else { return fail("mode: hold | toggle | follow") }
         c.triggerMode = value
     case "shortcut":
         if value == "follow" {
@@ -426,13 +439,14 @@ func cliStats(_ args: [String], json: Bool) -> Int32 {
     let metrics = currentMetricsSummary()
     if json {
         var d: [String: Any] = [
-            "span": span, "dictations": s.dictations, "tooShort": s.tooShort,
+            "span": span, "dictations": s.dictations, "tooShort": s.tooShort, "leftAlone": s.leftAlone,
             "outcomes": Dictionary(uniqueKeysWithValues: s.outcomes.map { ($0.key.rawValue, $0.value) }),
             "failureCauses": Dictionary(uniqueKeysWithValues: s.causes.map { ($0.key.rawValue, $0.value) }),
             "tools": toolNames, "keyTapPaused": s.tapPaused, "slowKeyEvents": s.slowKeys, "triggerCaughtUp": s.caughtUp,
             "selfRelaunches": s.selfRelaunches, "manualRestarts": s.manualRestarts,
             "nappedSampled": s.nappedSampled, "napped": s.napped, "nappedFailed": s.nappedFailed,
             "aheadSampled": s.aheadSampled, "listenerAhead": s.listenerAhead, "listenerAheadFailed": s.listenerAheadFailed,
+            "followed": s.followed,
             "system": systemJSON(metrics, hasPayloads: hasPayloads),
         ]
         if let r = s.successRate { d["successRate"] = (r * 1000).rounded() / 1000 }
@@ -453,46 +467,54 @@ func cliStats(_ args: [String], json: Bool) -> Int32 {
     } else {
         func row(_ label: String, _ n: Int, _ note: String = "") {
             let share = String(format: "%3.0f%%", Double(n) / Double(s.dictations) * 100)
-            print("  " + label.padding(toLength: 22, withPad: " ", startingAt: 0) + String(format: "%5d", n) + "  \(share)" + note)
+            // W11: the widest label is "text arrived, input source not switched back" (45); the column fits it.
+            print("  " + label.padding(toLength: 46, withPad: " ", startingAt: 0) + String(format: "%5d", n) + "  \(share)" + note)
         }
         print(
-            "Dictations".padding(toLength: 24, withPad: " ", startingAt: 0) + String(format: "%5d", s.dictations)
-                + (s.tooShort > 0 ? "  (+\(s.tooShort) too short to start)" : ""))
+            "Dictations".padding(toLength: 48, withPad: " ", startingAt: 0) + String(format: "%5d", s.dictations)
+                + (s.tooShort > 0
+                    ? "  (+\(s.tooShort) too short to start" + (s.leftAlone > 0 ? ", \(s.leftAlone) of them switch-ins left alone" : "")
+                        + ")" : ""))
         for o in DictationEntry.Outcome.allCases where o != .tooShort { if let n = s.outcomes[o] { row(o.rawValue, n) } }
         for c in DictationEntry.Cause.allCases { if let n = s.causes[c] { print("      \(n) × \(c.rawValue)") } }
         // The target line sits right under the rate it judges. No line at all when nothing was judged yet
         // (same choice as --json, which then omits "met" rather than printing a meaningless comparison).
         if let r = s.successRate, let met = s.met {
             print(
-                "Success rate".padding(toLength: 24, withPad: " ", startingAt: 0) + String(format: "%5.1f%%", r * 100)
-                    + "  (text arrived ÷ text arrived + no window)")
+                "Success rate".padding(toLength: 48, withPad: " ", startingAt: 0) + String(format: "%5.1f%%", r * 100)
+                    + "  (text arrived ÷ text arrived + no window + not switched back)")
             print(
-                "target".padding(toLength: 24, withPad: " ", startingAt: 0)
+                "target".padding(toLength: 48, withPad: " ", startingAt: 0)
                     + "success >= \(String(format: "%.1f", DictationStats.successTarget * 100))%  this period \(String(format: "%.1f", r * 100))%  "
                     + (met ? "met" : "not met"))
         }
         func ms(_ v: Int?) -> String { v.map { $0 < 1000 ? "\($0) ms" : String(format: "%.2f s", Double($0) / 1000) } ?? "–" }
-        print("Talk key sent after".padding(toLength: 24, withPad: " ", startingAt: 0) + "p50 \(ms(s.sentP50))   p95 \(ms(s.sentP95))")
+        print("Talk key sent after".padding(toLength: 48, withPad: " ", startingAt: 0) + "p50 \(ms(s.sentP50))   p95 \(ms(s.sentP95))")
         print(
-            "Text in after release".padding(toLength: 24, withPad: " ", startingAt: 0) + "p50 \(ms(s.textInP50))   p95 \(ms(s.textInP95))")
+            "Text in after release".padding(toLength: 48, withPad: " ", startingAt: 0) + "p50 \(ms(s.textInP50))   p95 \(ms(s.textInP95))")
         print(
-            "Incidents".padding(toLength: 24, withPad: " ", startingAt: 0)
+            "Incidents".padding(toLength: 48, withPad: " ", startingAt: 0)
                 + "key tap paused by macOS \(s.tapPaused) · slow key events \(s.slowKeys) · shortcut caught up \(s.caughtUp) · self-relaunches \(s.selfRelaunches) · manual restarts \(s.manualRestarts)"
         )
         if s.nappedSampled > 0 {
             print(
-                "App Nap".padding(toLength: 24, withPad: " ", startingAt: 0)
+                "App Nap".padding(toLength: 48, withPad: " ", startingAt: 0)
                     + "napped during \(s.napped) of \(s.nappedSampled) sampled dictations (\(s.nappedFailed) of those failed)")
+        }
+        if s.followed > 0 {  // W11: these lines have no sent/echo/ahead fields; the window alone judged them
+            print(
+                "Follow mode".padding(toLength: 48, withPad: " ", startingAt: 0)
+                    + "\(s.followed) of \(s.dictations) dictations (nothing posted; judged on the voice window)")
         }
         if s.aheadSampled > 0 {
             print(
-                "Key listener".padding(toLength: 24, withPad: " ", startingAt: 0)
+                "Key listener".padding(toLength: 48, withPad: " ", startingAt: 0)
                     + "another app's listener sat ahead of ours during \(s.listenerAhead) of \(s.aheadSampled) sampled dictations "
                     + "(\(s.listenerAheadFailed) of those with the echo missing)")
         }
         if toolNames.count > 1 {
             print(
-                "By voice tool".padding(toLength: 24, withPad: " ", startingAt: 0)
+                "By voice tool".padding(toLength: 48, withPad: " ", startingAt: 0)
                     + toolNames.sorted { $0.value > $1.value }.map { "\($0.key) \($0.value)" }.joined(separator: " · "))
         }
     }
@@ -521,7 +543,7 @@ private func systemJSON(_ m: MetricsSummary, hasPayloads: Bool) -> [String: Any]
 /// than being silently absent, which would read as "Hijack has no data" instead of "Hijack could not read it".
 private func printSystemBlock(_ m: MetricsSummary, hasPayloads: Bool) {
     let unrecognized = "n/a (unrecognized format)"
-    func row(_ label: String, _ text: String) { print(label.padding(toLength: 24, withPad: " ", startingAt: 0) + text) }
+    func row(_ label: String, _ text: String) { print(label.padding(toLength: 48, withPad: " ", startingAt: 0) + text) }
     guard hasPayloads else {
         row("System (MetricKit)", "no payloads yet (macOS delivers them about once a day)")
         return

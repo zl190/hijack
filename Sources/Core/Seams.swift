@@ -113,6 +113,9 @@ public protocol Supervisor: AnyObject {
     func relaunch(reason: String) -> Bool
     /// When the app last relaunched itself. Persisted, so a process that is broken from birth cannot loop.
     var lastRelaunchAt: Date? { get set }
+    /// W11: the last input source that was not the voice one, persisted, so a process that starts inside the voice
+    /// source (the previous one quit there, a restart during a dictation) still knows where a follow dictation goes back to.
+    var lastOtherSource: String? { get set }
     /// True once when the previous exit was a self-relaunch (and clears the mark). Read at startup.
     func takeSelfRelaunchMark() -> Bool
 }

@@ -10,7 +10,8 @@ public struct DictationEntry: Equatable {
         case noWindow = "no voice window"  // the talk key went out, but no window was seen
         case interrupted = "interrupted"  // the next press came before the text
         case unverified = "not watched"  // an app tool: its window isn't watched
-        case tooShort = "too short to start"  // released before the talk key was sent
+        case notRestored = "text arrived, input source not switched back"  // W11 follow: the restore is the deliverable
+        case tooShort = "too short to start"  // released before the talk key was sent; W11: or a switch-in with nothing live (left alone)
     }
     /// Why a dictation with no voice window failed, from the checks on its line.
     public enum Cause: String, CaseIterable {
@@ -24,6 +25,7 @@ public struct DictationEntry: Equatable {
     public var day: String  // yyyy-MM-dd
     public var tool: String
     public var toggle: Bool
+    public var follow: Bool = false  // W11: the tool took its own physical key; nothing was posted (no sent/echo/ahead fields)
     public var heldMs: Int
     public var sentMs: Int?
     public var textInMs: Int?  // release → voice window gone
@@ -51,9 +53,13 @@ public struct DictationEntry: Equatable {
             guard let r = try? Regex(pattern), let m = line.firstMatch(of: r), m.count > 1, let s = m[1].substring else { return nil }
             return String(s)
         }
-        guard let tool = word(#"dictation (.+?) \((?:hold|toggle)\):"#), let held = num(#"held ([\d.]+)s"#) else { return nil }
+        guard let tool = word(#"dictation (.+?) \((?:hold|toggle|follow)\):"#) else { return nil }
+        let modeWord = word(#"\((hold|toggle|follow)\): (?:held |switched in)"#)  // the mode word in its slot, not anywhere on the line
+        let follow = modeWord == "follow"
+        // W11: a follow dictation that began on the tool's own switch-in has no hold at all.
+        guard let held = num(#"held ([\d.]+)s"#) ?? (follow && line.contains("switched in by the tool") ? 0 : nil) else { return nil }
         let sent = num(#"sent after (\d+)ms"#).map { Int($0) }
-        let textIn = num(#"window closed (\d+)ms after release"#).map { Int($0) }
+        let textIn = num(#"(?:window closed|mic off) (\d+)ms after (?:release|start)"#).map { Int($0) }
         let echo = line.contains("echo missing") ? false : line.contains("echo after") ? true : nil
         let post = line.contains("post: not seen") ? false : line.contains("post: seen") ? true : nil
         let ahead: [String]? = word(#"ahead: ([^,|]+)"#).flatMap { $0 == "?" ? nil : $0 == "none" ? [] : $0.components(separatedBy: "+") }
@@ -61,12 +67,17 @@ public struct DictationEntry: Equatable {
         let outcome: Outcome
         if line.contains("input source never switched") {
             outcome = .noWindow
-        } else if sent == nil {
+        } else if line.contains("released before") || line.contains("left alone") || (sent == nil && !follow) {
+            // W11: a follow line never has `sent`; it is judged on its window and mic unless it was no dictation
+            // (`released before`, or a switch into the voice source with nothing live after it: `left alone`).
             outcome = .tooShort
-        } else if line.contains("interrupted by the next press") {
+        } else if line.contains("interrupted by the next press") || line.contains("the tool switched itself in") {
             outcome = .interrupted
+        } else if follow && line.contains("gave up") {
+            outcome = .notRestored
         } else if textIn != nil {
-            outcome = .textArrived
+            // W11: a follow line's deliverable is the restore; the text alone is not enough.
+            outcome = follow && !line.contains("back after") ? .notRestored : .textArrived
         } else if line.contains("no switch back needed") {
             outcome = .unverified
         } else {
@@ -83,7 +94,7 @@ public struct DictationEntry: Equatable {
                         ? .keyNotSent : mic == false ? .toolDidntListen : mic == true ? .windowNotSeen : .unknown
         }
         return DictationEntry(
-            day: String(line.prefix(10)), tool: tool, toggle: line.contains("(toggle)"),
+            day: String(line.prefix(10)), tool: tool, toggle: modeWord == "toggle", follow: follow,
             heldMs: Int(held * 1000), sentMs: sent, textInMs: textIn, outcome: outcome, cause: cause,
             postSeen: post, echoSeen: echo, listenersAhead: ahead, tapDisabled: line.contains("key tap disabled"),
             secureInput: line.contains("secure input on"))
@@ -92,7 +103,7 @@ public struct DictationEntry: Equatable {
 
 /// The numbers for a set of dictations (and the incidents logged around them).
 public struct DictationStats: Equatable {
-    public var dictations: Int  // the talk key went out (too-short taps not counted)
+    public var dictations: Int  // started dictations (too-short taps and W11's left-alone switch-ins not counted)
     public var outcomes: [DictationEntry.Outcome: Int]
     public var causes: [DictationEntry.Cause: Int]
     public var tooShort: Int
@@ -107,10 +118,14 @@ public struct DictationStats: Equatable {
     public var manualRestarts: Int = 0  // `restart: ` lines: the menu's Restart Hijack and `hijack restart`
     // W10: dictations with an `ahead:` reading; of those, with another listener ahead; of those, `echo missing`.
     public var aheadSampled: Int = 0, listenerAhead: Int = 0, listenerAheadFailed: Int = 0
+    public var followed: Int = 0  // W11: dictations in follow mode (nothing posted; judged on the voice window alone)
+    public var leftAlone: Int = 0  // W11: switch-ins into the voice source with nothing live after them (not dictations; counted apart)
 
-    /// Share of judged dictations (text arrived or no window) where the text arrived; nil when none were judged.
+    /// Share of judged dictations (text arrived, no window, or not switched back) where the text arrived and the
+    /// source came back; nil when none were judged.
     public var successRate: Double? {
-        let ok = outcomes[.textArrived, default: 0], judged = ok + outcomes[.noWindow, default: 0]
+        let ok = outcomes[.textArrived, default: 0]
+        let judged = ok + outcomes[.noWindow, default: 0] + outcomes[.notRestored, default: 0]
         return judged == 0 ? nil : Double(ok) / Double(judged)
     }
 
@@ -159,6 +174,8 @@ public struct DictationStats: Equatable {
             manualRestarts: kept.filter { $0.dropFirst(23).hasPrefix(" restart: ") }.count,
             aheadSampled: started.filter { $0.listenersAhead != nil }.count,
             listenerAhead: started.filter { $0.listenersAhead?.isEmpty == false }.count,
-            listenerAheadFailed: started.filter { $0.listenersAhead?.isEmpty == false && $0.echoSeen == false }.count)
+            listenerAheadFailed: started.filter { $0.listenersAhead?.isEmpty == false && $0.echoSeen == false }.count,
+            followed: started.filter(\.follow).count,
+            leftAlone: dictLines.filter { $0.contains("left alone") }.count)
     }
 }
