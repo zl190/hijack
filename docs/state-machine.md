@@ -26,7 +26,7 @@ before the machine). `otherKey` — another key while a toggle session runs and 
 
 Modes (fixed per press): `toggle`, `switchesInput`, `passthrough` (the tool is already active, so its own key goes to
 it), `follow` (ADR 0024: the tool starts itself on its own talk key; Hijack only switches back). Toggle wins over
-follow; passthrough wins over both.
+both; passthrough wins over follow.
 
 ## Acceptance (EARS)
 

@@ -42,7 +42,7 @@ mutate "a follow press starts a posted dictation" $M 's|if mode.follow \&\& !mod
 mutate "a2 following release finishes without the window watch" $M \
   's|return mode.switchesInput ? (.waitingForText, \[.passKey, .waitForText\]) : (.idle, \[.passKey, .finish\])|return (.idle, [.passKey, .finish])|' \
   "$SM/testFollowReleaseWaitsForTheTextThenFinishes"
-mutate "a3 following is not active" $M 's|state == .passthrough \|\| state == .following \|\| state == .starting|state == .passthrough \|\| state == .starting|' \
+mutate "a3 following is not active" $M 's~state == .passthrough || state == .following || state == .starting~state == .passthrough || state == .starting~' \
   "$F/testWakeDuringFollowStopsAndRestores"
 
 # The engine
@@ -50,11 +50,21 @@ mutate "b follow mode is never handed to the machine" $E 's|passthrough: follow 
   "$F/testRestoresThePreviousSourceAfterTheToolsWindowCloses"
 mutate "b2 a press inside the voice source is passthrough even with a restore pending" $E 's|passthrough: follow ? inVoice \&\& previous == nil : sameKey|passthrough: follow ? inVoice : sameKey|' \
   "$F/testChainedPressKeepsThePreviousSourceUntilTheChainEnds"
-mutate "b3 the previous source is never remembered" $E 's|if let cur = sources.current(), cur != p.voiceID { previous = cur }|if let cur = sources.current(), cur == p.voiceID { previous = cur }|' \
+mutate "b3 the previous source is never remembered" $E 's|if let cur = sourceAtPress, cur != p.voiceID { previous = cur }|if let cur = sourceAtPress, cur == p.voiceID { previous = cur }|' \
   "$F/testRestoresThePreviousSourceAfterTheToolsWindowCloses"
 mutate "b4 repeats while following are swallowed" $E 's|if down == physicalDown { return machine.passesKeyThrough }|if down == physicalDown { return machine.state == .passthrough }|' \
   "$F/testRepeatsWhileFollowingPass"
-mutate "c no mic or window sample while following" $E 's|guard machine.state == .listening \|\| machine.state == .following, gen == generation else { return }|guard machine.state == .listening, gen == generation else { return }|' \
+mutate "b5 toggle no longer wins over follow" $E 's~let follow = p.follow \&\& !p.toggle~let follow = p.follow~' \
+  "$F/testToggleWinsOverFollow"
+mutate "b6 the release time is not recorded for a follow dictation" $E 's~before == .starting || before == .listening || before == .following~before == .starting || before == .listening~' \
+  "$F/testRestoresThePreviousSourceAfterTheToolsWindowCloses"
+mutate "b7 a stale remembered source survives a passthrough release" $E 's~if machine.state == .idle, before != .idle, !effects.contains(.finish), previous != nil {~if machine.state == .idle, before != .idle, !effects.contains(.finish), previous != nil, false {~' \
+  "$F/testStalePreviousFromAPassthroughReleaseIsDropped"
+mutate "b8 the source is read at every press" $E 's~if (sameKey || follow) \&\& p.switchesInput { sourceAtPress = sources.current() }~if p.switchesInput { sourceAtPress = sources.current() }~' \
+  "$F/testPressesReadTheInputSourceOnlyWhenTheAnswerIsNeeded"
+mutate "b9 a too-short follow press is judged like a dictation" $E 's~if r.follow, held < p.holdDelay {~if r.follow, held < 0 {~' \
+  "$F/testPressShorterThanTheHoldDelayIsTooShort"
+mutate "c no mic or window sample while following" $E 's~guard machine.state == .listening || machine.state == .following, gen == generation else { return }~guard machine.state == .listening, gen == generation else { return }~' \
   "$F/testSamplesWhileHeldReadMicAndWindowOnly"
 mutate "c2 the key-listener chain is read for a key that was never posted" $E 's|let readChain = !record.sampled \&\& plan.style == "hold" \&\& machine.state == .listening|let readChain = !record.sampled \&\& plan.style == "hold"|' \
   "$F/testSamplesWhileHeldReadMicAndWindowOnly"
@@ -66,12 +76,12 @@ mutate "d2 a source that stayed is reported as changed by hand" $E 's|let stayed
 # Stats
 mutate "e stats does not read a follow line" $S 's~(?:hold|toggle|follow)\\):~(?:hold|toggle)\\):~' \
   "$F/testStatsParsesFollowLines"
-mutate "e2 stats counts a follow line as a too-short tap" $S 's|} else if sent == nil \&\& !follow {|} else if sent == nil {|' \
+mutate "e2 stats counts a follow line as a too-short tap" $S 's~} else if line.contains("released before") || (sent == nil \&\& !follow) {~} else if sent == nil {~' \
   "$F/testStatsParsesFollowLines"
 
 # Static checks: the app side carries the mode end to end, and the follow pid lookup runs off the tap callback.
 if grep -q 'follow: m.followMode' Sources/App/System.swift && grep -q 'followMode ? key : m.customTrigger ?? key' Sources/App/System.swift \
-  && grep -q '\["hold", "toggle", "follow"\].contains(value)' Sources/App/CLI.swift && grep -q '"follow"' Sources/App/Config.swift \
+  && grep -q '\["hold", "toggle", "follow"\].contains(value)' Sources/App/CLI.swift && grep -q '\["toggle", "follow"\].contains' Sources/App/Config.swift \
   && grep -q 'value: "follow"' Sources/App/Menu.swift && grep -q 'triggerMode = "follow"' Sources/App/Settings.swift \
   && awk '/case .rememberSource:/ { inb = 1 } inb && /clock.after\(0\)/ { after = 1 } inb && after && /voicePIDs = probes.processIDs/ { found = 1 } inb && /sampleWhileHeld\(gen: gen, after: 0.3\)/ { inb = 0 } END { exit !found }' $E; then
   echo "PASS static grep: follow reaches Plan, CLI, Config, menu and Settings; the pid lookup is off the tap callback"

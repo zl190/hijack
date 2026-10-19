@@ -446,6 +446,7 @@ func cliStats(_ args: [String], json: Bool) -> Int32 {
             "selfRelaunches": s.selfRelaunches, "manualRestarts": s.manualRestarts,
             "nappedSampled": s.nappedSampled, "napped": s.napped, "nappedFailed": s.nappedFailed,
             "aheadSampled": s.aheadSampled, "listenerAhead": s.listenerAhead, "listenerAheadFailed": s.listenerAheadFailed,
+            "followed": s.followed,
             "system": systemJSON(metrics, hasPayloads: hasPayloads),
         ]
         if let r = s.successRate { d["successRate"] = (r * 1000).rounded() / 1000 }
@@ -496,6 +497,11 @@ func cliStats(_ args: [String], json: Bool) -> Int32 {
             print(
                 "App Nap".padding(toLength: 24, withPad: " ", startingAt: 0)
                     + "napped during \(s.napped) of \(s.nappedSampled) sampled dictations (\(s.nappedFailed) of those failed)")
+        }
+        if s.followed > 0 {  // W11: these lines have no sent/echo/ahead fields; the window alone judged them
+            print(
+                "Follow mode".padding(toLength: 24, withPad: " ", startingAt: 0)
+                    + "\(s.followed) of \(s.dictations) dictations (nothing posted; judged on the voice window)")
         }
         if s.aheadSampled > 0 {
             print(

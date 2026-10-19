@@ -360,6 +360,7 @@ class "DictationStats" as DictationStats << (S, SkyBlue) struct >> {
   +aheadSampled : Int
   +listenerAhead : Int
   +listenerAheadFailed : Int
+  +followed : Int
   +successRate : Double?
   +{static} successTarget
   +met : Bool?

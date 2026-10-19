@@ -53,7 +53,8 @@ public struct DictationEntry: Equatable {
             return String(s)
         }
         guard let tool = word(#"dictation (.+?) \((?:hold|toggle|follow)\):"#), let held = num(#"held ([\d.]+)s"#) else { return nil }
-        let follow = line.contains("(follow)")
+        let modeWord = word(#"\((hold|toggle|follow)\): held "#)  // the mode word in its slot, not anywhere on the line
+        let follow = modeWord == "follow"
         let sent = num(#"sent after (\d+)ms"#).map { Int($0) }
         let textIn = num(#"window closed (\d+)ms after release"#).map { Int($0) }
         let echo = line.contains("echo missing") ? false : line.contains("echo after") ? true : nil
@@ -63,7 +64,8 @@ public struct DictationEntry: Equatable {
         let outcome: Outcome
         if line.contains("input source never switched") {
             outcome = .noWindow
-        } else if sent == nil && !follow {  // W11: a follow line never has `sent`; it is judged on its window
+        } else if line.contains("released before") || (sent == nil && !follow) {
+            // W11: a follow line never has `sent`; it is judged on its window unless it says `released before`.
             outcome = .tooShort
         } else if line.contains("interrupted by the next press") {
             outcome = .interrupted
@@ -85,7 +87,7 @@ public struct DictationEntry: Equatable {
                         ? .keyNotSent : mic == false ? .toolDidntListen : mic == true ? .windowNotSeen : .unknown
         }
         return DictationEntry(
-            day: String(line.prefix(10)), tool: tool, toggle: line.contains("(toggle)"), follow: follow,
+            day: String(line.prefix(10)), tool: tool, toggle: modeWord == "toggle", follow: follow,
             heldMs: Int(held * 1000), sentMs: sent, textInMs: textIn, outcome: outcome, cause: cause,
             postSeen: post, echoSeen: echo, listenersAhead: ahead, tapDisabled: line.contains("key tap disabled"),
             secureInput: line.contains("secure input on"))
@@ -109,6 +111,7 @@ public struct DictationStats: Equatable {
     public var manualRestarts: Int = 0  // `restart: ` lines: the menu's Restart Hijack and `hijack restart`
     // W10: dictations with an `ahead:` reading; of those, with another listener ahead; of those, `echo missing`.
     public var aheadSampled: Int = 0, listenerAhead: Int = 0, listenerAheadFailed: Int = 0
+    public var followed: Int = 0  // W11: dictations in follow mode (nothing posted; judged on the voice window alone)
 
     /// Share of judged dictations (text arrived or no window) where the text arrived; nil when none were judged.
     public var successRate: Double? {
@@ -161,6 +164,7 @@ public struct DictationStats: Equatable {
             manualRestarts: kept.filter { $0.dropFirst(23).hasPrefix(" restart: ") }.count,
             aheadSampled: started.filter { $0.listenersAhead != nil }.count,
             listenerAhead: started.filter { $0.listenersAhead?.isEmpty == false }.count,
-            listenerAheadFailed: started.filter { $0.listenersAhead?.isEmpty == false && $0.echoSeen == false }.count)
+            listenerAheadFailed: started.filter { $0.listenersAhead?.isEmpty == false && $0.echoSeen == false }.count,
+            followed: started.filter(\.follow).count)
     }
 }

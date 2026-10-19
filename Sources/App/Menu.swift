@@ -309,10 +309,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // How you dictate
         header(L("听写方式", "How You Dictate"))
         add(L("按住说话", "Hold to Talk"), #selector(setTriggerMode(_:)), on: c.triggerMode == "hold", value: "hold")
-        add(L("点按开始，再点停止（免按）", "Tap to Start, Tap to Stop"), #selector(setTriggerMode(_:)), on: m.toggleMode, value: "toggle")
         add(
             L("跟随\(name)的说话键（\(name)自己开始，Hijack 只切回）", "Follow \(name)'s Talk Key (\(name) starts itself, Hijack only switches back)"),
             #selector(setTriggerMode(_:)), on: m.followMode, value: "follow")
+        add(L("点按开始，再点停止（免按）", "Tap to Start, Tap to Stop"), #selector(setTriggerMode(_:)), on: m.toggleMode, value: "toggle")
         if m.toggleMode {  // how to stop, as a plain description (the switch itself lives in Settings → Dictation)
             let hint = add(c.stopOnAnyKey ? L("再点一下，或按任意键停止", "Tap again or press any key to stop") : L("再点一下停止", "Tap again to stop"))
             hint.attributedTitle = NSAttributedString(
@@ -321,20 +321,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     .font: NSFont.menuFont(ofSize: NSFont.smallSystemFontSize), .foregroundColor: NSColor.secondaryLabelColor,
                 ])
         }
-        let keys = NSMenu()
-        add(
-            L("同\(name)里的说话键（\(m.forwardKey.name)）", "Same as \(name)'s Talk Key (\(m.forwardKey.name))"), #selector(setTrigger(_:)),
-            on: m.customTrigger == nil, to: keys, value: "auto")
-        keys.addItem(.separator())
-        for id in quickKeys {
-            // Every id in quickKeys resolves; see KeysTests.testW5_QuickKeysAlwaysResolveToANamedKey.
-            // swift-format-ignore: NeverForceUnwrap
-            let k = KeySpec.named(id)!; add(k.name, #selector(setTrigger(_:)), on: m.customTrigger == k, to: keys, value: id)
+        if m.followMode {  // W11: the trigger is the talk key; the shortcut setting is not used, so no submenu to pick one
+            add(L("快捷键：\(key)（跟随模式：同说话键）", "Shortcut: \(key) (follow mode: the talk key)"))
+        } else {
+            let keys = NSMenu()
+            add(
+                L("同\(name)里的说话键（\(m.forwardKey.name)）", "Same as \(name)'s Talk Key (\(m.forwardKey.name))"), #selector(setTrigger(_:)),
+                on: m.customTrigger == nil, to: keys, value: "auto")
+            keys.addItem(.separator())
+            for id in quickKeys {
+                // Every id in quickKeys resolves; see KeysTests.testW5_QuickKeysAlwaysResolveToANamedKey.
+                // swift-format-ignore: NeverForceUnwrap
+                let k = KeySpec.named(id)!; add(k.name, #selector(setTrigger(_:)), on: m.customTrigger == k, to: keys, value: id)
+            }
+            if let t = m.customTrigger, t.quickID.map(quickKeys.contains) != true { add(t.name, on: true, to: keys) }
+            keys.addItem(.separator())
+            add(L("其他按键…", "Other Key…"), #selector(recordShortcut), to: keys)
+            add(L("快捷键：\(key)", "Shortcut: \(key)")).submenu = keys
         }
-        if let t = m.customTrigger, t.quickID.map(quickKeys.contains) != true { add(t.name, on: true, to: keys) }
-        keys.addItem(.separator())
-        add(L("其他按键…", "Other Key…"), #selector(recordShortcut), to: keys)
-        add(L("快捷键：\(key)", "Shortcut: \(key)")).submenu = keys
         menu.addItem(.separator())
 
         // Dictation source — only voice tools that are installed; its key and start style live here too.

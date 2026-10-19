@@ -116,22 +116,102 @@ final class FollowModeTests: XCTestCase {
     func testSamplesWhileHeldReadMicAndWindowOnly() {
         let r = rig()
         r.probes.micTool = false; r.probes.window = .none("no window (pid 100)")
+        let napReadsAtStart = r.probes.processStateReads  // the `started:` line reads it once
         r.press(); r.clock.advance(1.0); r.release(); r.clock.advance(2.6)
         let l = r.sink.summaries.last ?? ""
         XCTAssertTrue(l.contains(" | mic tool off device on, window while held: no window (pid 100) | "), l)
         XCTAssertEqual(r.tap.aheadReads, 0, "the key-listener chain is about a posted key; none was")
+        XCTAssertEqual(r.probes.processStateReads - napReadsAtStart, 0, "App Nap is about a posted key too")
         XCTAssertEqual(r.lastEntry()?.cause, .toolDidntListen)
     }
 
-    // Released before the first sample: the line says so with `?`, and is still a dictation, not "too short".
-    func testReleaseBeforeTheFirstSampleIsStillADictation() {
+    // A tap or a chord on the talk key (Fn+Delete, the Globe key) is released before the hold delay: not a dictation.
+    // The line says so, stats leaves it unjudged, and nothing posted anywhere. Both sides of the threshold.
+    func testPressShorterThanTheHoldDelayIsTooShort() {
         let r = rig()
         r.press(); r.clock.advance(0.1); r.release(); r.clock.advance(2.6)
         let l = r.sink.summaries.last ?? ""
-        XCTAssertTrue(l.contains("(follow): held 0.10s, window never closed after release"), l)
-        XCTAssertTrue(l.contains("mic tool ? device ?, window while held: ?"), l)
+        XCTAssertTrue(l.hasSuffix("(follow): held 0.10s, released before fn was held for 0.20s | front=test"), l)
+        XCTAssertEqual(r.lastEntry()?.outcome, .tooShort)
+        XCTAssertTrue(r.keys.posted.isEmpty)
+        XCTAssertEqual(r.sources.selected, [], "the source never became the voice source: nothing to switch back")
+        let stats = DictationStats.compute(lines: ["2026-10-19 12:00:00.000 " + l], days: nil, today: "2026-10-19")
+        XCTAssertEqual(stats.dictations, 0); XCTAssertEqual(stats.tooShort, 1); XCTAssertNil(stats.successRate)
+    }
+    func testPressAtTheHoldDelayIsADictation() {
+        let r = rig()
+        r.press(); r.clock.advance(0.2); r.release(); r.clock.advance(2.6)
+        let l = r.sink.summaries.last ?? ""
+        XCTAssertTrue(l.contains("(follow): held 0.20s, window never closed after release"), l)
+        XCTAssertTrue(l.contains("mic tool ? device ?, window while held: ?"), "released before the first sample: \(l)")
         XCTAssertEqual(r.lastEntry()?.outcome, .noWindow)
-        XCTAssertNotEqual(r.lastEntry()?.outcome, .tooShort)
+    }
+    // A too-short press while a restore is pending still restores, as a too-short hold-mode press does.
+    func testTooShortPressWhileWaitingStillRestores() {
+        let r = rig()
+        r.press(); r.sources.currentID = Rig.voice; r.clock.advance(1.0); r.release(); r.clock.advance(0.3)
+        r.press(); r.clock.advance(0.05); r.release()
+        XCTAssertEqual(r.engine.previous, Rig.english, "kept across the chain")
+        r.clock.advance(2.6)
+        XCTAssertEqual(r.sources.selected, [Rig.english])
+        XCTAssertTrue((r.sink.summaries.last ?? "").contains("released before fn was held"), r.sink.summaries.last ?? "")
+    }
+
+    // Toggle wins over follow: a toggle session needs the posted key, so `follow` is ignored and the line says (toggle).
+    func testToggleWinsOverFollow() {
+        let r = Rig(toggle: true, follow: true)
+        r.press(); r.clock.advance(0.3)
+        XCTAssertEqual(r.engine.machine.state, .listening, "a toggle session, with the talk key sent")
+        r.echo(); r.release(); r.clock.advance(0.1)
+        r.press(); r.clock.advance(2.6)  // the stop tap, then the fallback wait
+        XCTAssertEqual(r.keys.count(Rig.fn, down: true), 1)
+        let l = r.sink.summaries.last ?? ""
+        XCTAssertTrue(l.contains("(toggle): held"), l)
+        XCTAssertTrue(l.contains("fn sent after"), l)
+        XCTAssertFalse(l.contains("(follow)"), l)
+    }
+
+    // A remembered source that outlived its dictation (an interrupted hold dictation, then a same-key passthrough
+    // release) must not be read by a later follow-mode press as a restore still pending.
+    func testStalePreviousFromAPassthroughReleaseIsDropped() {
+        let r = Rig()  // hold mode, Fn is both the shortcut and the talk key
+        r.pressUntilListening(); r.probes.window = .visible(1); r.release(); r.clock.advance(0.3)
+        XCTAssertEqual(r.engine.machine.state, .waitingForText, "setup")
+        XCTAssertEqual(r.sources.currentID, Rig.voice, "setup: switched in")
+        r.press()  // same key, already in the voice source: passthrough, the previous dictation written up as interrupted
+        XCTAssertEqual(r.engine.machine.state, .passthrough)
+        r.clock.advance(1.0); r.release()
+        XCTAssertEqual(r.engine.machine.state, .idle)
+        XCTAssertNil(r.engine.previous, "nothing is pending any more")
+        XCTAssertTrue(r.sink.traces.contains { $0.hasPrefix("dropping the remembered input source") })
+        r.clock.advance(0.1)  // refresh() runs off the tap
+        r.plan.follow = true; r.engine.refresh()
+        XCTAssertTrue(r.engine.plan.follow, "setup")
+        r.press()
+        XCTAssertEqual(r.engine.machine.state, .passthrough, "a plain press inside the voice source, not a chained restore")
+        r.release()
+        XCTAssertEqual(r.sources.selected, [Rig.voice], "the one switch-in of the first dictation; no restore to a stale source")
+    }
+
+    // The input-source reads inside the tap callback at a press (ADR 0011) stay what they were: one for a
+    // press that switches in (to remember the source), none for a toggle stop press; a follow press reads once.
+    func testPressesReadTheInputSourceOnlyWhenTheAnswerIsNeeded() {
+        let t = Rig(toggle: true)
+        var before = t.sources.reads
+        t.press()
+        XCTAssertEqual(t.sources.reads - before, 1, "the start press: the switch-in's own read, as before")
+        t.clock.advance(0.3)
+        before = t.sources.reads
+        t.press()  // the stop press
+        XCTAssertEqual(t.sources.reads - before, 0, "the stop press reads nothing")
+        let h = Rig(trigger: KeySpec.named("right_option")!)
+        before = h.sources.reads
+        h.press()
+        XCTAssertEqual(h.sources.reads - before, 1, "a hold press with its own shortcut: the switch-in's read only")
+        let f = rig()
+        before = f.sources.reads
+        f.press()
+        XCTAssertEqual(f.sources.reads - before, 1, "one read per follow press, shared by the mode decision and the remembered source")
     }
 
     // Quit while following: nothing was posted, so nothing to release, and no restore (the process is exiting).
@@ -141,6 +221,9 @@ final class FollowModeTests: XCTestCase {
         r.engine.stopForQuit()
         XCTAssertTrue(r.keys.posted.isEmpty)
         XCTAssertTrue(r.sink.has("quit: nothing held"))
+        // Past the inactive guard (following is active), and the machine left the state alone: nothing to release.
+        XCTAssertTrue(r.sink.traces.contains { $0.hasPrefix("quit: following → following") }, "\(r.sink.traces)")
+        XCTAssertEqual(r.engine.machine.state, .following)
     }
 
     // Wake during a follow dictation stops it the usual way: a release, then the watch, then the restore.
@@ -193,5 +276,14 @@ final class FollowModeTests: XCTestCase {
         let hold = ok.replacingOccurrences(of: "(follow): held 2.93s,", with: "(hold): held 2.93s, fn sent after 238ms,")
         XCTAssertFalse(DictationEntry.parse(hold)!.follow)
         XCTAssertEqual(DictationEntry.parse(hold)!.sentMs, 238)
+        XCTAssertFalse(
+            DictationEntry.parse(hold.replacingOccurrences(of: "front=x", with: "front=(follow)"))!.follow, "the mode word in its slot only"
+        )
+        XCTAssertEqual(s.followed, 4)
+        let short =
+            "2026-10-19 18:04:00.000 dictation com.tencent.inputmethod.wetype.pinyin (follow): held 0.10s, released before fn was held for 0.20s | front=x"
+        XCTAssertEqual(DictationEntry.parse(short)!.outcome, .tooShort)
+        XCTAssertEqual(
+            DictationStats.compute(lines: [ok, short], days: nil, today: "2026-10-19").followed, 1, "a too-short press is not a dictation")
     }
 }

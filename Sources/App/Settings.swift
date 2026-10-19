@@ -297,19 +297,19 @@ struct DictationTab: View {
                     icon: "hand.raised", title: L("按住说话", "Hold to Talk"), detail: L("按住说，松开停", "Hold the key while you speak"),
                     selected: store.triggerMode == "hold"
                 ) { store.edit { $0.triggerMode = "hold" } }
-                ChoiceRow(
-                    icon: "hand.tap", title: L("点按开始，再点停止（免按）", "Tap to Start, Tap to Stop"),
-                    detail: L("点一下开始，再点一下停止", "Tap once to start, again to stop"),
-                    selected: store.triggerMode == "toggle", divider: true
-                ) { store.edit { $0.triggerMode = "toggle" } }
                 // W11 (docs/adr/0024): the tool starts itself on its own physical talk key; Hijack only switches back.
                 ChoiceRow(
                     icon: "arrow.uturn.backward", title: L("跟随\(store.currentName)的说话键", "Follow \(store.currentName)'s Talk Key"),
                     detail: L(
                         "\(store.currentName)自己开始听写，Hijack 只负责说完切回",
                         "\(store.currentName) starts on its own key; Hijack only switches back after"),
-                    selected: store.triggerMode == "follow", divider: store.triggerMode == "toggle"
+                    selected: store.triggerMode == "follow"
                 ) { store.edit { $0.triggerMode = "follow" } }
+                ChoiceRow(
+                    icon: "hand.tap", title: L("点按开始，再点停止（免按）", "Tap to Start, Tap to Stop"),
+                    detail: L("点一下开始，再点一下停止", "Tap once to start, again to stop"),
+                    selected: store.triggerMode == "toggle", divider: store.triggerMode == "toggle"
+                ) { store.edit { $0.triggerMode = "toggle" } }
                 if store.triggerMode == "toggle" {
                     Row(title: L("按任意键也可停止", "Any Key Also Stops"), divider: false) {
                         Toggle("", isOn: Binding(get: { store.stopOnAnyKey }, set: { v in store.edit { $0.stopOnAnyKey = v } }))
@@ -319,14 +319,26 @@ struct DictationTab: View {
                 }
             }
             Card(title: L("快捷键", "Shortcut")) {
-                Row(
-                    title: L("按这个键听写", "Key you press"),
-                    hint: store.trigger == nil ? L("同\(store.currentName)里的说话键", "Same as \(store.currentName)'s talk key") : nil,
-                    divider: store.trigger != nil
-                ) {
-                    KeyRecorder(store: store, target: .trigger, key: store.effectiveTrigger)
+                if store.triggerMode == "follow" {  // W11: the talk key is the trigger; the shortcut setting is not used
+                    Row(
+                        title: L("按这个键听写", "Key you press"),
+                        hint: L(
+                            "跟随模式：就是\(store.currentName)的说话键，快捷键设置不生效",
+                            "Follow mode: \(store.currentName)'s talk key; the shortcut setting is not used"),
+                        divider: false
+                    ) {
+                        Text(store.effectiveTrigger.name).font(.system(size: 12, weight: .medium)).foregroundStyle(.secondary)
+                    }
+                } else {
+                    Row(
+                        title: L("按这个键听写", "Key you press"),
+                        hint: store.trigger == nil ? L("同\(store.currentName)里的说话键", "Same as \(store.currentName)'s talk key") : nil,
+                        divider: store.trigger != nil
+                    ) {
+                        KeyRecorder(store: store, target: .trigger, key: store.effectiveTrigger)
+                    }
                 }
-                if store.trigger != nil {
+                if store.trigger != nil, store.triggerMode != "follow" {
                     Row(title: L("改回同说话键（\(store.model.forwardKey.name)）", "Use Talk Key (\(store.model.forwardKey.name))"), divider: false)
                     {
                         Button(L("改回", "Reset")) { store.edit { $0.trigger = nil } }

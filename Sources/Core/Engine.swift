@@ -213,11 +213,15 @@ public final class Engine {
     @discardableResult
     public func run(_ event: SessionEvent, keyCode: Int? = nil) -> Bool {
         let p = plan
+        var sourceAtPress: String?  // read once per press, only when the answer decides the mode (ADR 0011)
         if event == .press {
             // The shortcut is the tool's own key and the tool is already in front: it gets the real key.
             let sameKey = p.trigger == p.forwardKey && !p.toggle && p.style == "hold"
             let follow = p.follow && !p.toggle
-            let inVoice = !p.switchesInput || sources.current() == p.voiceID
+            // One TIS read, and only for a same-key or follow press of an input method: a toggle press or a hold
+            // press with its own shortcut never needed it and still does not (review round 1, M2).
+            if (sameKey || follow) && p.switchesInput { sourceAtPress = sources.current() }
+            let inVoice = !p.switchesInput || sourceAtPress == p.voiceID
             // W11: in follow mode a press inside the voice source is passthrough only when no restore is pending;
             // with one pending (a press while waiting for the previous text) the dictation chains and keeps `previous`.
             mode = SessionMode(
@@ -250,7 +254,7 @@ public final class Engine {
             case .rememberSource:
                 // W11: the tool switches itself in on the physical key; we only keep where to come back to. The mic
                 // and window samples still run (off-main), so the line can say whether the tool took the key.
-                if let cur = sources.current(), cur != p.voiceID { previous = cur }
+                if let cur = sourceAtPress, cur != p.voiceID { previous = cur }
                 enterPhase("following"); report("listening", p.voiceName)
                 // The tool's processes, for the samples: listing running apps asks other processes, so after the
                 // tap returns (ADR 0011), as sendKey() does from its scheduled turn.
@@ -272,6 +276,13 @@ public final class Engine {
             case .waitForText: report("finishing", p.voiceName); waitForText()
             case .finish: finish()
             }
+        }
+        // Back in idle without a finish (a passthrough release after an interrupted dictation, a quit): the source
+        // remembered for that dictation is stale now. Left in place, a later follow-mode press inside the voice
+        // source would read it as a pending restore and switch back to it (review round 1, M2).
+        if machine.state == .idle, before != .idle, !effects.contains(.finish), previous != nil {
+            trace("dropping the remembered input source \(self.previous ?? ""): back in idle without a finish")
+            previous = nil
         }
         return pass
     }
@@ -338,7 +349,13 @@ public final class Engine {
         }
         guard p.switchesInput else { summary(end: "no switch back needed"); report("done", p.voiceName); return }
         guard let prev else {
-            summary(end: "started inside \(p.voiceName), nothing to switch back to"); report("done", p.voiceName); return
+            // Follow mode only gets here when the source could not be read at the press (inside the voice source it
+            // is passthrough and never finishes); hold mode when the dictation started inside the voice source.
+            summary(
+                end: record.follow
+                    ? "input source unreadable at the press, nothing to switch back to"
+                    : "started inside \(p.voiceName), nothing to switch back to")
+            report("done", p.voiceName); return
         }
         guard sources.current() == p.voiceID else {
             // W11: in follow mode the tool may simply not have taken the key: then nothing changed and nothing is switched.
@@ -436,7 +453,12 @@ public final class Engine {
         func onOff(_ b: Bool?) -> String { b.map { $0 ? "on" : "off" } ?? "?" }
         var line =
             "dictation \(p.providerID) (\(r.follow ? "follow" : p.toggle ? "toggle" : "hold")): held \(String(format: "%.2f", held))s"
-        if r.follow {
+        if r.follow, held < p.holdDelay {
+            // W11: a tap or a chord on the talk key (Fn+Delete, the Globe key) is not a dictation, as a hold-mode press
+            // released before the hold delay is not: the line says so and `hijack stats` leaves it unjudged. The
+            // window watch and the restore still ran, as they do for a too-short hold-mode press.
+            line += ", released before \(p.forwardKey.logID) was held for \(String(format: "%.2f", p.holdDelay))s"
+        } else if r.follow {
             // W11: nothing was posted, so no `sent`, `echo`, `ahead:` or `nap:`; the window and mic say whether the tool took its key.
             line += r.windowGoneMs.map { ", window closed \($0)ms after release" } ?? ", window never closed after release"
             line +=

@@ -31,7 +31,8 @@ menu and in Settings). In it:
 1. **The trigger is the tool's own talk key** (Fn for WeType, read as ADR 0004 reads it). The configured shortcut is
    ignored; `hijack status` says so. A user who wants a different physical key maps it in a keyboard remapper
    (Karabiner `right_option → fn`: its virtual keyboard output counts as physical for WeType).
-2. **Hijack never posts a key.** On the press, when the current input source is not the voice source, the key passes
+2. **Hijack never posts a key during a dictation.** (The one release of a talk key found stuck at startup, FM-10,
+   is unchanged: it is not part of a dictation.) On the press, when the current input source is not the voice source, the key passes
    through untouched, the current source is remembered as the one to switch back to, and a dictation record opens.
    No switch, no post, no event-source rebuild. The mic and window samples while held still run, off the main thread.
 3. **On the release the key passes through and the window watch of ADR 0003 starts** (`waitingForText`); when the
@@ -41,7 +42,9 @@ menu and in Settings). In it:
 4. **Already in the voice source at the press, with no restore pending: passthrough**, exactly as today's same-key
    hold mode. Nothing to restore, no line. A press while a restore is pending (the user presses again before the
    previous text landed) chains: the previous dictation is written up as interrupted and the new one keeps the
-   remembered source (the FM-17 rule).
+   remembered source (the FM-17 rule). A press released before the hold delay (a tap or a chord on the talk key, such
+   as Fn+Delete or the Globe key) is written up as `released before fn was held for 0.20s` and left unjudged by
+   `hijack stats`, as a too-short hold-mode press is; the window watch and the restore still run, as they do there.
 5. **The summary line keeps its shape with the mode word `(follow)`** and no `sent after`, `echo`, `ahead:` or `nap:`
    fields: all four are about a posted key, and none was.
    `dictation com.tencent.inputmethod.wetype.pinyin (follow): held 2.93s, window closed 1627ms after release, back after 1.82s | mic tool on device on, window while held: 1 window | front=…`
@@ -66,7 +69,8 @@ new profile 跟随.
 
 ## Consequences
 
-- With WeType 3.0 the owner dictates again: WeType starts on the physical key, Hijack switches back after the text.
+- Expected with WeType 3.0: WeType starts on the physical key, Hijack switches back after the text. The field line
+  that shows it is the open check below; until it is in, this is the design, not a measurement.
 - The front half is WeType's now: whether it listened is visible on the line (`mic tool`, `window while held`) but no
   longer Hijack's to fix. `hijack doctor`'s key-listener warning is reported as harmless in follow mode.
 - The `starting` and `listening` states, the hold delay and the switch-in path are untouched and still serve the
@@ -76,10 +80,47 @@ new profile 跟随.
 
 ## Verification
 
-`swift test`: 252 tests, 0 failures (236 before W11). `scripts/mutate-w11.sh` breaks one line of shipped code at a
+`swift test`: 257 tests, 0 failures (236 before W11). `scripts/mutate-w11.sh` breaks one line of shipped code at a
 time; the named tests must go RED, then GREEN once the line is restored, and a mutant that does not compile is a FAIL.
 Output of the run on 2026-10-19:
 
 ```
-(pasted below once the run completes)
+PASS a follow press starts a posted dictation: broken -> tests RED
+PASS a follow press starts a posted dictation: restored -> tests GREEN
+PASS a2 following release finishes without the window watch: broken -> tests RED
+PASS a2 following release finishes without the window watch: restored -> tests GREEN
+PASS a3 following is not active: broken -> tests RED
+PASS a3 following is not active: restored -> tests GREEN
+PASS b follow mode is never handed to the machine: broken -> tests RED
+PASS b follow mode is never handed to the machine: restored -> tests GREEN
+PASS b2 a press inside the voice source is passthrough even with a restore pending: broken -> tests RED
+PASS b2 a press inside the voice source is passthrough even with a restore pending: restored -> tests GREEN
+PASS b3 the previous source is never remembered: broken -> tests RED
+PASS b3 the previous source is never remembered: restored -> tests GREEN
+PASS b4 repeats while following are swallowed: broken -> tests RED
+PASS b4 repeats while following are swallowed: restored -> tests GREEN
+PASS b5 toggle no longer wins over follow: broken -> tests RED
+PASS b5 toggle no longer wins over follow: restored -> tests GREEN
+PASS b6 the release time is not recorded for a follow dictation: broken -> tests RED
+PASS b6 the release time is not recorded for a follow dictation: restored -> tests GREEN
+PASS b7 a stale remembered source survives a passthrough release: broken -> tests RED
+PASS b7 a stale remembered source survives a passthrough release: restored -> tests GREEN
+PASS b8 the source is read at every press: broken -> tests RED
+PASS b8 the source is read at every press: restored -> tests GREEN
+PASS b9 a too-short follow press is judged like a dictation: broken -> tests RED
+PASS b9 a too-short follow press is judged like a dictation: restored -> tests GREEN
+PASS c no mic or window sample while following: broken -> tests RED
+PASS c no mic or window sample while following: restored -> tests GREEN
+PASS c2 the key-listener chain is read for a key that was never posted: broken -> tests RED
+PASS c2 the key-listener chain is read for a key that was never posted: restored -> tests GREEN
+PASS d the summary line calls a follow dictation hold: broken -> tests RED
+PASS d the summary line calls a follow dictation hold: restored -> tests GREEN
+PASS d2 a source that stayed is reported as changed by hand: broken -> tests RED
+PASS d2 a source that stayed is reported as changed by hand: restored -> tests GREEN
+PASS e stats does not read a follow line: broken -> tests RED
+PASS e stats does not read a follow line: restored -> tests GREEN
+PASS e2 stats counts a follow line as a too-short tap: broken -> tests RED
+PASS e2 stats counts a follow line as a too-short tap: restored -> tests GREEN
+PASS static grep: follow reaches Plan, CLI, Config, menu and Settings; the pid lookup is off the tap callback
+ALL PASS
 ```
