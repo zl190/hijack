@@ -312,23 +312,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         menu.addItem(.separator())
 
-        // How you dictate
+        // How you dictate: a plain mode switch. Each title names the mode; one small line under the switch says what
+        // the chosen mode does, so the titles stay short (owner, 2026-10-19). Auto (ADR 0025) shows what it resolved to.
         header(L("听写方式", "How You Dictate"))
-        add(L("按住说话", "Hold to Talk"), #selector(setTriggerMode(_:)), on: c.triggerMode == "hold", value: "hold")
-        add(
-            L("跟随\(name)的说话键（\(name)自己开始，Hijack 只切回）", "Follow \(name)'s Talk Key (\(name) starts itself, Hijack only switches back)"),
-            #selector(setTriggerMode(_:)), on: m.followMode, value: "follow")
-        add(L("点按开始，再点停止（免按）", "Tap to Start, Tap to Stop"), #selector(setTriggerMode(_:)), on: m.toggleMode, value: "toggle")
-        if m.toggleMode {  // how to stop, as a plain description (the switch itself lives in Settings → Dictation)
-            let hint = add(c.stopOnAnyKey ? L("再点一下，或按任意键停止", "Tap again or press any key to stop") : L("再点一下停止", "Tap again to stop"))
-            hint.attributedTitle = NSAttributedString(
-                string: hint.title,
+        func hint(_ text: String) {
+            let h = add(text)
+            h.attributedTitle = NSAttributedString(
+                string: text,
                 attributes: [  // a description, aligned with the titles above
                     .font: NSFont.menuFont(ofSize: NSFont.smallSystemFontSize), .foregroundColor: NSColor.secondaryLabelColor,
                 ])
         }
+        let modeNames = [
+            "hold": L("按住说话", "Hold to Talk"), "follow": L("跟随\(name)", "Follow \(name)"),
+            "toggle": L("点按开始，再点停止", "Tap to Start, Tap to Stop"),
+        ]
+        add(
+            L("自动（当前：\(modeNames[m.resolvedMode] ?? m.resolvedMode)）", "Auto (now: \(modeNames[m.resolvedMode] ?? m.resolvedMode))"),
+            #selector(setTriggerMode(_:)), on: m.autoMode, value: "auto")
+        for mode in ["hold", "follow", "toggle"] {
+            add(modeNames[mode] ?? mode, #selector(setTriggerMode(_:)), on: !m.autoMode && m.resolvedMode == mode, value: mode)
+        }
+        switch m.resolvedMode {
+        case "follow":
+            hint(
+                m.autoMode && m.provider.installedVersion != nil
+                    ? L(
+                        "\(name) \(m.provider.installedVersion ?? "")自己接管说话键，Hijack 只负责说完切回",
+                        "\(name) \(m.provider.installedVersion ?? "") takes its talk key itself; Hijack only switches back after")
+                    : L("\(name)自己开始，Hijack 只负责说完切回", "\(name) starts itself; Hijack only switches back after"))
+        case "toggle":  // how to stop, as a plain description (the switch itself lives in Settings → Dictation)
+            hint(c.stopOnAnyKey ? L("再点一下，或按任意键停止", "Tap again or press any key to stop") : L("再点一下停止", "Tap again to stop"))
+        default:  // hold; in auto mode say why, since an unreadable version also lands here (review 0025 M2)
+            if m.autoMode {
+                hint(
+                    m.provider.installedVersion.map {
+                        L("\(name) \($0)：按住说，Hijack 替你按说话键", "\(name) \($0): Hijack presses the talk key for you")
+                    }
+                        ?? L("读不到\(name)的版本，按「按住说话」处理", "\(name)'s version is unknown, so Hold to Talk is assumed"))
+            }
+        }
         if m.followMode {  // W11: the trigger is the talk key; the shortcut setting is not used, so no submenu to pick one
-            add(L("快捷键：\(key)（跟随模式：同说话键）", "Shortcut: \(key) (follow mode: the talk key)"))
+            add(L("快捷键：\(key)（\(name)的说话键）", "Shortcut: \(key) (\(name)'s talk key)"))
         } else {
             let keys = NSMenu()
             add(

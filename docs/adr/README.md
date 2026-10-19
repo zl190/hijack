@@ -20,6 +20,7 @@ Each record has a `Topic:` line. This index groups the records by topic. Status:
 | [0004](0004-read-the-talk-key-from-the-voice-tool-s-own-settings.md) | Read the talk key from the voice tool's own settings | Accepted | 2026-10-01 |
 | [0005](0005-put-each-voice-tool-behind-one-protocol.md) | Put each voice tool behind one protocol | Accepted | 2026-10-01 |
 | [0024](0024-follow-mode.md) | Follow mode: the voice tool starts itself, Hijack only switches back | Accepted | 2026-10-19 |
+| [0025](0025-auto-mode.md) | Auto mode: pick hold or follow from the voice tool's version | Accepted | 2026-10-19 |
 
 ## Settings
 
