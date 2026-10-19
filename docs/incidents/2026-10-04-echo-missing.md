@@ -347,13 +347,16 @@ window or microphone ends it, the last other source is tracked) are the answer. 
 ```
 2026-10-19 20:15:43.212 dictation com.tencent.inputmethod.wetype.pinyin (follow): switched in by the tool, window closed 968ms after start, input source unreadable at the press, nothing to switch back to | mic tool off device off, window seen: 1 window | front=com.anthropic.claudefordesktop
 2026-10-19 20:37:30.168 dictation com.tencent.inputmethod.wetype.pinyin (follow): switched in by the tool, window closed 4337ms after start, back after 4.61s | mic tool on device off, window seen: 1 window | front=com.anthropic.claudefordesktop
+2026-10-19 20:38:42.056 dictation com.tencent.inputmethod.wetype.pinyin (follow): switched in by the tool, nothing live within 2.50s, input source left alone | mic tool off device off, window seen: no window (pid 94224) | front=com.tencent.WeTypeSettings
+2026-10-19 20:38:51.979 dictation com.tencent.inputmethod.wetype.pinyin (follow): switched in by the tool, window closed 6176ms after start, back after 6.46s | mic tool on device off, window seen: 1 window | front=com.anthropic.claudefordesktop
 ```
 
 The first (7ab277d) fired with the process started inside WeType and no other source seen since: WeType's window was
 seen and closed 968 ms after the switch-in, nothing to go back to. The second (8901461, the tracked source persisted;
 the owner had switched to Squirrel once before): the window closed 4.34 s after the switch-in, Hijack switched back to
 Squirrel 4.61 s after it (owner: 切回来了; a TIS read afterwards said `im.rime.inputmethod.Squirrel.Hans`). The
-per-process mic read on this time. Status: resolved for WeType 3.0 by follow mode; the hold path stays for the other tools.
+per-process mic read on this time. The third line is a switch-in with WeType's own settings window in front and nothing
+live after it: left alone, as designed for a manual switch. The fourth is another full round trip (6.2 s of window). Status: resolved for WeType 3.0 by follow mode; the hold path stays for the other tools.
 
 ### Next, for the owner
 

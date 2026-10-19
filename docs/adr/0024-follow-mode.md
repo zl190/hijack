@@ -140,7 +140,7 @@ dictation (counted apart, `leftAlone`), and a follow line whose text arrived wit
 
 ## Verification
 
-`swift test`: 271 tests, 0 failures (236 before W11). `scripts/mutate-w11.sh` breaks one line of shipped code at a
+`swift test`: 275 tests, 0 failures (236 before W11). `scripts/mutate-w11.sh` breaks one line of shipped code at a
 time; the named tests must go RED, then GREEN once the line is restored, and a mutant that does not compile is a FAIL.
 Output of the run on 2026-10-19:
 
@@ -195,6 +195,24 @@ PASS b19 the watch never gives up: broken -> tests RED
 PASS b19 the watch never gives up: restored -> tests GREEN
 PASS b20 a start inside the voice source forgets the persisted source: broken -> tests RED
 PASS b20 a start inside the voice source forgets the persisted source: restored -> tests GREEN
+PASS b21 a late switch-in after the key record ended is not chained to it: broken -> tests RED
+PASS b21 a late switch-in after the key record ended is not chained to it: restored -> tests GREEN
+PASS b22 the late window never closes: broken -> tests RED
+PASS b22 the late window never closes: restored -> tests GREEN
+PASS b23 a switch-in seen while held does not stop a later takeover: broken -> tests RED
+PASS b23 a switch-in seen while held does not stop a later takeover: restored -> tests GREEN
+PASS b24 the key path waits the tool-path cap for a window that never closes: broken -> tests RED
+PASS b24 the key path waits the tool-path cap for a window that never closes: restored -> tests GREEN
+PASS b25 the tool path restores mid-dictation at the cap: broken -> tests RED
+PASS b25 the tool path restores mid-dictation at the cap: restored -> tests GREEN
+PASS b26 a chained press is never recognised: broken -> tests RED
+PASS b26 a chained press is never recognised: restored -> tests GREEN
+PASS b27 the mic end uses the window grace: broken -> tests RED
+PASS b27 the mic end uses the window grace: restored -> tests GREEN
+PASS b28 the stale watch completion ends the new dictation: broken -> tests RED
+PASS b28 the stale watch completion ends the new dictation: restored -> tests GREEN
+PASS e4 stats scores a follow line without a restore as text arrived: broken -> tests RED
+PASS e4 stats scores a follow line without a restore as text arrived: restored -> tests GREEN
 PASS c no mic or window sample while following: broken -> tests RED
 PASS c no mic or window sample while following: restored -> tests GREEN
 PASS c2 the key-listener chain is read for a key that was never posted: broken -> tests RED
