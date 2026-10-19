@@ -287,7 +287,11 @@ final class FollowModeTests: XCTestCase {
         r.clock.advance(3.0)
         XCTAssertEqual(r.engine.machine.state, .waitingForText, "live while the mic is on")
         r.probes.micTool = false  // the user stopped talking
-        r.clock.advance(Engine.micGrace + 0.3)
+        r.clock.advance(0.5)
+        XCTAssertEqual(
+            r.engine.machine.state, .waitingForText,
+            "the mic's grace is longer than the window's (the final text can land after the mic stops)")
+        r.clock.advance(Engine.micGrace - 0.5 + 0.3)
         XCTAssertEqual(r.engine.machine.state, .idle)
         XCTAssertEqual(r.sources.selected, [Rig.english], "switched back once")
         XCTAssertTrue(r.keys.posted.isEmpty)
@@ -494,17 +498,25 @@ final class FollowModeTests: XCTestCase {
         r.clock.advance(10)
         XCTAssertEqual(r.sources.selected.count, 2, "no ping-pong")
     }
-    // A watch probe still in flight when the next press arrives: its completion must not end the new dictation.
+    // A watch probe still in flight when the next dictation starts: its completion (which would give up: nothing
+    // live, past fallbackDelay) must not end the new dictation's watch.
     func testAStaleWatchCompletionAfterANewPressIsDropped() {
         let r = rig()
         r.clock.deferOffMain = true
-        switchIn(r); r.probes.micTool = true
-        r.clock.advance(0.06)  // the first poll dispatched its probe; the completion is held
-        r.press()  // a new dictation (the key path) while the probe is in flight
+        switchIn(r)
+        r.clock.advance(0.06)  // the tool record's first poll dispatched its probe (nothing live); the completion is held
+        r.press()  // a new dictation (the key path) while that probe is in flight
         XCTAssertEqual(r.engine.machine.state, .following)
-        r.clock.flushOffMain()
-        XCTAssertEqual(r.engine.machine.state, .following, "the stale completion did nothing")
+        r.sources.currentID = Rig.voice; r.probes.window = .visible(1)
+        r.clock.advance(0.3); r.release()
+        r.clock.advance(2.6)  // past fallbackDelay for the stale record; the new watch's own probe (window visible) is held too
+        XCTAssertEqual(r.engine.machine.state, .waitingForText, "setup")
+        r.clock.flushOffMain()  // the stale completion first, then the new one
+        XCTAssertEqual(r.engine.machine.state, .waitingForText, "the stale completion did not end the new watch")
         XCTAssertEqual(r.sink.summaries.count, 1, "only the interrupted tool record was written up")
+        r.clock.deferOffMain = false
+        r.probes.window = .none("no window (pid 100)"); r.clock.advance(0.5)
+        XCTAssertEqual(r.sources.selected, [Rig.english], "the new dictation ends on its own signal")
     }
     // A switch-in while the key is held changes nothing: the release starts the watch. A re-select of the tool after
     // the release (a burst member, or the tool re-selecting itself at its voice end) does not split the dictation.

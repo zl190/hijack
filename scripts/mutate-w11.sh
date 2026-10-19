@@ -91,7 +91,7 @@ mutate "b19 the watch never gives up" $E 's~let gaveUp = liveSince == nil ? wait
   "$F/testAStuckLiveReadingGivesUpAtTheCap"
 mutate "b20 a start inside the voice source forgets the persisted source" $E 's~lastOtherSource = supervisor.lastOtherSource~lastOtherSource = nil~' \
   "$F/testAStartInsideTheVoiceSourceTakesThePersistedSourceAndTrackingPersistsIt"
-mutate "b21 a late switch-in after the key record ended is not chained to it" $E 's~if stayed, !record.toolStarted, held >= p.holdDelay { lateSwitchWindow = (clock.now.addingTimeInterval(p.restoreTimeout), prev) }~if stayed, !record.toolStarted, held >= p.holdDelay, false { lateSwitchWindow = (clock.now.addingTimeInterval(p.restoreTimeout), prev) }~' \
+mutate "b21 a late switch-in after the key record ended is not chained to it" $E 's~if stayed, !record.toolStarted, held >= p.holdDelay {~if stayed, !record.toolStarted, held >= p.holdDelay, false {~' \
   "$F/testLateSwitchInAfterTheKeyRecordEndedRestoresEvenWithNothingLive"
 mutate "b22 the late window never closes" $E 's~if clock.now <= w.until {~if true {~' \
   "$F/testLateSwitchInBeyondRestoreTimeoutIsLeftAlone"
