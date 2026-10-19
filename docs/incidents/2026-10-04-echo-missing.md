@@ -297,12 +297,30 @@ PASS static grep: the live rows carry hid/enabled/filtering, one chain function,
 ALL PASS
 ```
 
+### Field tests after the W10 install (2026-10-19, 16:28 to 16:51)
+
+Each test is one setting changed by the owner, then one dictation; the line is quoted from the log.
+
+| Test | Line | Reading |
+|---|---|---|
+| Baseline, W10 installed | 16:28:36 `echo missing, ahead: WeType, mic tool off, no window (pid 94224)` then `self-relaunch skipped: WeType's key listener sits ahead of ours` | the field and the skip work; nothing else changed |
+| WeType's「快捷键全局生效」(`voiceShortcutGlobalEnabled`) turned off | 16:28:44 same as above | not the exclusive mode; the chain did not change |
+| WeType's Accessibility permission revoked (its tap left the list: 19 taps, Hijack #0, doctor green) | 16:47:05 `echo after 255ms, ahead: none, mic tool off, window while held: 1 window` | the echo is back: WeType's tap was the swallower. The one window was WeType's own panel「按住「fn」使用语音输入 — 开启辅助功能权限后…」: WeType 3.0 refuses Fn voice without Accessibility, and its「自定义快捷键」panel needs it too. Permission restored. |
+| Hijack posts without its user-data tag (`ours` read from `kCGEventSourceUnixProcessID`), WeType's tap back in front | 16:51:27 `echo missing, ahead: WeType, mic tool off` | the tag is not what WeType judges by; reverted |
+
+What is left on the table: WeType's `[ShortcutKeyMonitor][CGEvent] injected keyboard event bypass` string and the four
+lines above fit one reading, that WeType 3.0 acts only on key events that did not come from another process (the
+system stamps every posted event with the poster's pid, which no CGEvent post can hide). Not proven; the one
+counter-example is the 00:10:38 success. If that reading holds, no CGEvent post from Hijack can start WeType 3.0's
+voice input, and the ways out are a key that looks physical (Option B, Karabiner's virtual keyboard, a dependency on
+the running Karabiner-DriverKit-VirtualHIDDevice daemon), another voice tool, or WeType 2.x.
+
 ### Next, for the owner
 
-1. WeType's own setting `settingfunction_voiceInputExclusiveMode` (its strings also say `exclusive mode disabled`): turn the
-   voice-input exclusive mode off in WeType's settings, then dictate. The next line should read `echo after N ms, ahead: none`
-   or show the mode still on as `ahead: WeType`.
-2. If the setting cannot be found or changed: give WeType a hold-to-talk key other than Fn in its settings (Hijack reads it
-   from there, ADR 0004); the `Fn key` / `Globe key` handling is where WeType's exclusive filter lives.
+1. `settingfunction_voiceInputExclusiveMode` has no stored value in any of WeType's settings files and no label in its
+   bundle: no user-facing switch was found. A hold-to-talk key other than Fn is behind the same Accessibility gate
+   (WeType's own panel says so), so it was not tried; it is still the one cheap experiment left.
+2. Decide between Option B (post through Karabiner's virtual keyboard), another voice tool (Sogou, Doubao, Handy are
+   already providers), or WeType 2.x.
 3. Still open: the fault before 10-17 (10-04, 10-06, 10-11, with WeType 2.x) is not explained by this; from now on its
    lines will carry `ahead:` and say whether a listener was in front then too.
