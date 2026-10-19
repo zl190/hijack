@@ -174,6 +174,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let settings = NSMenuItem(title: L("设置…", "Settings…"), action: #selector(openSettings), keyEquivalent: ",")
         settings.target = self
         appMenu.addItem(settings)
+        let restart = NSMenuItem(title: L("重启 \(appName)", "Restart \(appName)"), action: #selector(restartApp), keyEquivalent: "")
+        restart.target = self
+        appMenu.addItem(restart)
         appMenu.addItem(.separator())
         appMenu.addItem(
             NSMenuItem(title: L("隐藏 \(appName)", "Hide \(appName)"), action: #selector(NSApplication.hide(_:)), keyEquivalent: "h"))
@@ -373,6 +376,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         #if compiler(>=6.4)
             if #available(macOS 27.0, *) { settings.preferredImageVisibility = .hidden }
         #endif
+        // Always there, like Squirrel's Deploy: when a dictation fails and the fault lines above show nothing,
+        // the one thing the user can do without a terminal is start a fresh process. The W8 self-relaunch
+        // does the same on one signature and at most once per 10 minutes; this has no such limit.
+        add(L("重启 \(appName)", "Restart \(appName)"), #selector(restartApp))
         menu.addItem(.separator())
         menu.addItem(
             NSMenuItem(title: L("退出 \(appName)", "Quit \(appName)"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
@@ -424,6 +431,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc func relaunchApp() {
         log("menu: relaunching after the key listener was found off")
         relaunchProcess(selfInitiated: false)  // Sources/App/System.swift, shared with the W8 self-relaunch
+    }
+
+    /// The menu's Restart Hijack. The `restart:` line is what `hijack stats` counts as a manual restart; the
+    /// next `started:` line then says nothing special (only the W8 self-relaunch marks itself).
+    @objc func restartApp() {
+        // Logged only once the relauncher is running, so a restart that never happened is not counted.
+        // relaunchProcess logs its own failure line; the alert is the user's only sign that the click did nothing.
+        guard relaunchProcess(selfInitiated: false) else {
+            let a = NSAlert()
+            a.messageText = L("重启失败", "Couldn't restart \(appName)")
+            a.informativeText = L("Hijack 没能重新打开自己，请退出后手动打开。", "Hijack could not reopen itself. Quit it and open it again by hand.")
+            a.runModal()
+            return
+        }
+        log("restart: requested from the menu")
     }
 
     // FM-01, FM-04, FM-25: the engine still thinks a session is active, but the physical key is already up.

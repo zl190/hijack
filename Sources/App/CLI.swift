@@ -3,11 +3,13 @@ import AppKit
 import ApplicationServices
 
 // MARK: command line — the same binary; with a known command as its first argument it runs that and exits.
-//   hijack status | doctor | sources | get [setting] | set <setting> <value> | log [-f] [-n N] [--live] | stats | version | help
+//   hijack status | doctor | sources | get [setting] | set <setting> <value> | log [-f] [-n N] [--live] | stats | restart | version | help
 // --json on status / sources / get / stats, for scripts and agents. Settings go through the same Config as the app,
 // so the running app picks changes up on its next key press or menu open.
 
-let cliCommands: Set<String> = ["status", "doctor", "sources", "get", "set", "log", "stats", "version", "help", "--help", "-h"]
+let cliCommands: Set<String> = [
+    "status", "doctor", "sources", "get", "set", "log", "stats", "restart", "version", "help", "--help", "-h",
+]
 
 /// Runs a CLI command and returns its exit code, or nil when the arguments aren't a CLI call (start the app).
 func runCLI(_ args: [String]) -> Int32? {
@@ -22,6 +24,7 @@ func runCLI(_ args: [String]) -> Int32? {
     case "set": return cliSet(rest)
     case "log": return cliLog(rest)
     case "stats": return cliStats(rest, json: json)
+    case "restart": return cliRestart()
     case "version": return cliVersion()
     default: print(cliHelp); return 0
     }
@@ -65,6 +68,7 @@ let cliHelp = """
       hijack log [-f] [-n N]          show the log: one line per dictation, plus errors (-f follows it)
       hijack log --live               watch every step of each dictation as it happens (Ctrl-C to stop)
       hijack stats [--days N|--all] [--json]   how reliable dictation has been (default: last 7 days)
+      hijack restart                  quit the running app and open it again (same as the menu's Restart Hijack)
       hijack version                  running version, and the update Sparkle found last
 
     Settings:
@@ -106,6 +110,45 @@ private func metricsFileCount() -> Int {
 /// The summary over every payload currently on disk; empty (not nil) when there are none yet.
 func currentMetricsSummary() -> MetricsSummary {
     metricsFileCount() > 0 ? MetricsSummary.summarize(folder: metricsFolderURL) : MetricsSummary()
+}
+
+/// `hijack restart`: the command-line twin of the menu's Restart Hijack, for a terminal or an agent. This process is
+/// the CLI, not the app, so it cannot call `relaunchProcess`; it does from outside what that does from inside: a
+/// `restart:` line in the log, SIGTERM to the recorded pid (main.swift turns it into a clean quit that releases a
+/// held talk key), a wait for that pid to go away, then `open -b`. The new app writes state.json on its own start,
+/// which is how this knows it is up. Exit 1 when the old process will not quit or the new one does not appear.
+/// Review M2: state.json outlives every quit and `AppState.read()` only checks that its pid is alive, so after
+/// the system reuses that pid the file names some other process. A signal goes only to a pid that is Hijack.
+func cliRestart() -> Int32 {
+    let old = AppState.read().flatMap { st -> AppState? in
+        NSRunningApplication(processIdentifier: st.pid)?.bundleIdentifier == "com.zl190.hijack" ? st : nil
+    }
+    log("restart: requested from the command line" + (old.map { " (pid \($0.pid))" } ?? " (not running)"))
+    if let old {
+        kill(old.pid, SIGTERM)
+        var waited = 0
+        while kill(old.pid, 0) == 0 && waited < 100 { usleep(100_000); waited += 1 }
+        if kill(old.pid, 0) == 0 {
+            return fail(
+                "Hijack (pid \(old.pid)) was asked to quit but is still running after 10 s. "
+                    + "If it quits on its own later, open it again with: open -b com.zl190.hijack")
+        }
+        print("Hijack (pid \(old.pid)) quit")
+    } else {
+        print("Hijack is not running")
+    }
+    let reopen = Process()
+    reopen.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+    reopen.arguments = ["-b", "com.zl190.hijack"]
+    do { try reopen.run() } catch { return fail("couldn't run open: \(error)") }
+    reopen.waitUntilExit()
+    if reopen.terminationStatus != 0 { return fail("open -b com.zl190.hijack failed (exit \(reopen.terminationStatus))") }
+    var waited = 0
+    while waited < 100 {
+        if let new = AppState.read(), new.pid != old?.pid { print("Hijack opened (pid \(new.pid))"); return 0 }
+        usleep(100_000); waited += 1
+    }
+    return fail("Hijack did not come up within 10 s; see ~/Library/Logs/Hijack.log")
 }
 
 /// Any key the user can type on the command line: a name, "ctrl+option+f18", or a JSON object.
@@ -368,7 +411,7 @@ func cliStats(_ args: [String], json: Bool) -> Int32 {
             "outcomes": Dictionary(uniqueKeysWithValues: s.outcomes.map { ($0.key.rawValue, $0.value) }),
             "failureCauses": Dictionary(uniqueKeysWithValues: s.causes.map { ($0.key.rawValue, $0.value) }),
             "tools": toolNames, "keyTapPaused": s.tapPaused, "slowKeyEvents": s.slowKeys, "triggerCaughtUp": s.caughtUp,
-            "selfRelaunches": s.selfRelaunches,
+            "selfRelaunches": s.selfRelaunches, "manualRestarts": s.manualRestarts,
             "nappedSampled": s.nappedSampled, "napped": s.napped, "nappedFailed": s.nappedFailed,
             "system": systemJSON(metrics, hasPayloads: hasPayloads),
         ]
@@ -414,7 +457,7 @@ func cliStats(_ args: [String], json: Bool) -> Int32 {
             "Text in after release".padding(toLength: 24, withPad: " ", startingAt: 0) + "p50 \(ms(s.textInP50))   p95 \(ms(s.textInP95))")
         print(
             "Incidents".padding(toLength: 24, withPad: " ", startingAt: 0)
-                + "key tap paused by macOS \(s.tapPaused) · slow key events \(s.slowKeys) · shortcut caught up \(s.caughtUp) · self-relaunches \(s.selfRelaunches)"
+                + "key tap paused by macOS \(s.tapPaused) · slow key events \(s.slowKeys) · shortcut caught up \(s.caughtUp) · self-relaunches \(s.selfRelaunches) · manual restarts \(s.manualRestarts)"
         )
         if s.nappedSampled > 0 {
             print(

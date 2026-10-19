@@ -96,6 +96,7 @@ public struct DictationStats: Equatable {
     // W9: dictations with `nap: on|off`; of those, `nap: on`; of those, `echo missing`.
     public var nappedSampled: Int = 0, napped: Int = 0, nappedFailed: Int = 0
     public var selfRelaunches: Int = 0  // W8: `self-relaunch:` lines (the suppressed ones are not counted)
+    public var manualRestarts: Int = 0  // `restart: ` lines: the menu's Restart Hijack and `hijack restart`
 
     /// Share of judged dictations (text arrived or no window) where the text arrived; nil when none were judged.
     public var successRate: Double? {
@@ -144,6 +145,7 @@ public struct DictationStats: Equatable {
             nappedSampled: dictLines.filter { $0.contains("nap: on") || $0.contains("nap: off") }.count,
             napped: dictLines.filter { $0.contains("nap: on") }.count,
             nappedFailed: dictLines.filter { $0.contains("nap: on") && $0.contains("echo missing") }.count,
-            selfRelaunches: kept.filter { $0.contains("self-relaunch: ") }.count)
+            selfRelaunches: kept.filter { $0.contains("self-relaunch: ") }.count,
+            manualRestarts: kept.filter { $0.dropFirst(23).hasPrefix(" restart: ") }.count)
     }
 }
