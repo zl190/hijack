@@ -75,7 +75,7 @@ mutate "b11 a chained too-short press drops the pending restore" $E 's~record.ch
   "$F/testTooShortPressWhileWaitingStillRestores"
 mutate "b12 the switch-in notification starts a dictation in hold mode too" $E 's~guard p.follow, !p.toggle, p.switchesInput else { return }~guard !p.toggle, p.switchesInput else { return }~' \
   "$F/testHoldModeIgnoresItsOwnSwitchInAndTracksTheOtherSources"
-mutate "b13 a burst of notifications starts a dictation each" $E 's~if machine.state == .waitingForText, record.toolStarted { return }~if false { return }~' \
+mutate "b13 a burst of notifications starts a dictation each" $E 's~if machine.state == .waitingForText, record.toolStarted || record.sawSwitchIn { return }~if false { return }~' \
   "$F/testABurstOfNotificationsForOneSwitchInStartsOneDictation"
 mutate "b14 the other sources are not tracked" $E 's~lastOtherSource = id; return~return~' \
   "$F/testHoldModeIgnoresItsOwnSwitchInAndTracksTheOtherSources"
@@ -87,8 +87,8 @@ mutate "b17 the mic does not keep the dictation live" $E 's~let live = byWindow 
   "$F/testToolSwitchInWithNoKeySeenIsADictationEndedByItsMic"
 mutate "b18 a window seen does not take over from the mic" $E 's~let live = byWindow ? window.busy == true : window.busy == true || micTool == true~let live = window.busy == true || micTool == true~' \
   "$F/testAWindowSeenEndsTheWatchEvenWhileTheMicIsOn"
-mutate "b19 the watch never gives up" $E 's~let gaveUp = liveSince == nil ? waited >= p.fallbackDelay : waited >= Engine.maxToolDictation~let gaveUp = liveSince == nil ? waited >= p.fallbackDelay : false~' \
-  "$F/testAStuckLiveReadingGivesUpAtTheCap"
+mutate "b19 the watch never gives up" $E 's~let gaveUp = liveSince == nil ? waited >= p.fallbackDelay : waited >= cap~let gaveUp = liveSince == nil ? waited >= p.fallbackDelay : false~' \
+  "$F/testAStuckLiveReadingOnTheToolPathGivesUpAndLeavesTheSource"
 mutate "b20 a start inside the voice source forgets the persisted source" $E 's~lastOtherSource = supervisor.lastOtherSource~lastOtherSource = nil~' \
   "$F/testAStartInsideTheVoiceSourceTakesThePersistedSourceAndTrackingPersistsIt"
 mutate "b21 a late switch-in after the key record ended is not chained to it" $E 's~if stayed, !record.toolStarted, held >= p.holdDelay {~if stayed, !record.toolStarted, held >= p.holdDelay, false {~' \
