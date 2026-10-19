@@ -223,16 +223,23 @@ func cliDoctor() -> Int32 {
         check(
             st.tapActive, "key listener installed", st.trusted ? "macOS turned it off; quit and reopen Hijack" : "grant Accessibility first"
         )
-        // W10 (docs/adr/0023): a filtering key listener ahead of ours sees the talk key first and can swallow it.
+        // W10 (docs/adr/0023): an older app's filtering key listener ahead of ours sees the talk key first and can swallow it.
         if st.tapActive {
-            switch keyListenersAhead(of: st.pid) {
-            case nil: check(nil, "key listener chain", "couldn't read the system's event tap list")
-            case let ahead? where ahead.isEmpty: check(true, "no other key listener sits ahead of Hijack's")
-            case let ahead?:
+            switch keyListenerChain(of: st.pid, modifierKey: m.forwardKey.modifierOnly) {
+            case .unreadable: check(nil, "key listener chain", "couldn't read the system's event tap list")
+            case .notListed:
+                check(
+                    nil, "Hijack's key listener is not in the system's list",
+                    "the app is restarting, or macOS turned the listener off; run `hijack doctor` again in a few seconds")
+            case .ahead(let ahead) where ahead.isEmpty: check(true, "no other key listener sits ahead of Hijack's")
+            case .ahead(let ahead):
+                let advice =
+                    ahead.contains("WeType")
+                    ? " (WeType 3.0 does, in its voice-input exclusive mode): turn that mode off in WeType, or set a talk key other than Fn"
+                    : "; quit it, change its shortcut, or set a different talk key"
                 check(
                     nil, "\(ahead.joined(separator: ", ")) keep\(ahead.count == 1 ? "s" : "") a key listener ahead of Hijack's",
-                    "it sees the talk key first and can swallow it (WeType 3.0 does, in its voice-input exclusive mode): "
-                        + "turn that mode off in WeType, or set a talk key other than Fn; each dictation line says `ahead:`")
+                    "it sees the talk key first and can swallow it" + advice + "; each dictation line says `ahead:`")
             }
         }
     }
@@ -481,7 +488,7 @@ func cliStats(_ args: [String], json: Bool) -> Int32 {
             print(
                 "Key listener".padding(toLength: 24, withPad: " ", startingAt: 0)
                     + "another app's listener sat ahead of ours during \(s.listenerAhead) of \(s.aheadSampled) sampled dictations "
-                    + "(\(s.listenerAheadFailed) of those failed)")
+                    + "(\(s.listenerAheadFailed) of those with the echo missing)")
         }
         if toolNames.count > 1 {
             print(

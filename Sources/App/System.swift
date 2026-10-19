@@ -131,7 +131,10 @@ final class LiveTap: TapControl {
     func enable() { if let tap { CGEvent.tapEnable(tap: tap, enable: true) } }
     func keyIsDown(_ code: Int) -> Bool { CGEventSource.keyState(.hidSystemState, key: CGKeyCode(code)) }
     func modifierIsDown(_ flag: CGEventFlags) -> Bool { CGEventSource.flagsState(.hidSystemState).contains(flag) }
-    func listenersAhead() -> [String]? { keyListenersAhead(of: getpid()) }
+    func listenersAhead(for key: KeySpec) -> [String]? {
+        if case .ahead(let names) = keyListenerChain(of: getpid(), modifierKey: key.modifierOnly) { return names }
+        return nil
+    }
     var secureInputOn: Bool { IsSecureEventInputEnabled() }
 
     func install(_ onEvent: @escaping (KeyInput) -> Bool) -> Bool {
@@ -172,35 +175,46 @@ final class LiveTap: TapControl {
     }
 }
 
-/// W10 (docs/adr/0023): the processes whose enabled, filtering key-event taps at the HID level are listed before
-/// `pid`'s own tap in `CGGetEventTapList`, in that order, each name once. The list is kept newest-first for taps
-/// pushed to the head, and a tap created later runs earlier (measured 2026-10-19, docs/incidents): so a listener
-/// listed before ours sees every key, ours included, before we do, and can swallow it. nil when the list cannot
-/// be read or `pid` has no enabled key tap at that level. Limit: a tap appended at the tail is also listed before
-/// older head taps yet runs after them; the names tell a reader which case it is. One call, no I/O: fine on the
-/// main thread, never inside the tap callback.
-func keyListenersAhead(of pid: pid_t) -> [String]? {
-    let keyMask: CGEventMask =
-        1 << CGEventType.keyDown.rawValue | 1 << CGEventType.keyUp.rawValue | 1 << CGEventType.flagsChanged.rawValue
+/// W10 (docs/adr/0023): the system's event-tap list as rows, judged by `keyListenerChain` (Sources/Core). The list is
+/// kept newest-first for taps pushed to the head (measured 2026-10-19 with two listen-only taps of one process: the
+/// younger one was listed first and fired first; the same order for filtering taps across processes is inferred, see
+/// docs/incidents). Limit: a tap appended at the tail is also listed before older head taps yet runs after them; the
+/// names tell a reader which case it is. One window-server call (2 ms p50, 12 ms max at load 30), no I/O; the Engine
+/// calls it off the main thread, never inside the tap callback. 128 rows is plenty (21 on this Mac); past that, ours
+/// may fall off the list and read as `.notListed`.
+func keyListenerChain(of pid: pid_t, modifierKey: Bool) -> KeyListenerChain {
+    let flagsMask: CGEventMask = 1 << CGEventType.flagsChanged.rawValue
+    let keysMask: CGEventMask = 1 << CGEventType.keyDown.rawValue | 1 << CGEventType.keyUp.rawValue
     var count: UInt32 = 0
     var taps = [CGEventTapInformation](repeating: CGEventTapInformation(), count: 128)
-    guard CGGetEventTapList(128, &taps, &count) == .success else { return nil }
-    let keyTaps = taps.prefix(Int(count)).filter {
-        $0.tapPoint == .cghidEventTap && $0.enabled && $0.eventsOfInterest & keyMask != 0
+    guard CGGetEventTapList(128, &taps, &count) == .success else { return .unreadable }
+    let rows = taps.prefix(Int(count)).map {
+        TapRow(
+            pid: $0.tappingProcess, hidLevel: $0.tapPoint == .cghidEventTap, enabled: $0.enabled,
+            filtering: $0.options == .defaultTap, watchesFlags: $0.eventsOfInterest & flagsMask != 0,
+            watchesKeys: $0.eventsOfInterest & keysMask != 0)
     }
-    guard let ours = keyTaps.firstIndex(where: { $0.tappingProcess == pid }) else { return nil }
-    var names: [String] = []
-    for t in keyTaps.prefix(ours) where t.options == .defaultTap && t.tappingProcess != pid {
-        let name = processName(t.tappingProcess)
-        if !names.contains(name) { names.append(name) }
-    }
-    return names
+    let ourStart = processStart(pid)
+    return keyListenerChain(
+        rows: rows, ours: pid, modifierKey: modifierKey, name: processName,
+        startedBeforeUs: { other in
+            guard let ourStart, let theirs = processStart(other) else { return nil }
+            return theirs < ourStart
+        })
 }
 
 private func processName(_ pid: pid_t) -> String {
-    var buf = [CChar](repeating: 0, count: Int(PATH_MAX) * 4)
+    var buf = [CChar](repeating: 0, count: Int(PATH_MAX) * 4)  // PROC_PIDPATHINFO_MAXSIZE
     guard proc_pidpath(pid, &buf, UInt32(buf.count)) > 0 else { return "pid \(pid)" }
     return URL(fileURLWithPath: String(cString: buf)).lastPathComponent
+}
+
+/// When the process started, as (seconds, microseconds) since the epoch; nil when the kernel will not say (gone, or not ours to see).
+private func processStart(_ pid: pid_t) -> (UInt64, UInt64)? {
+    var info = proc_bsdinfo()
+    let size = Int32(MemoryLayout<proc_bsdinfo>.size)
+    guard proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, size) == size else { return nil }
+    return (info.pbi_start_tvsec, info.pbi_start_tvusec)
 }
 
 struct LiveProbes: Probes {

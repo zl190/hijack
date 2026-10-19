@@ -42,7 +42,7 @@ mutate "d started line drops the nap suffix" $E 's|(after self-relaunch)" : "") 
   "$T/testStartedAndRelaunchLinesCarryNapFromAReadAtThatMoment"
 mutate "d2 relaunch line drops the nap suffix" $E 's|log("self-relaunch: \\(why)\\(napNow())")|log("self-relaunch: \\(why)")|' \
   "$T/testStartedAndRelaunchLinesCarryNapFromAReadAtThatMoment"
-mutate "e sample moved to every state (no hold-style gate)" $E 's|if !record.sampled, plan.style == "hold" {|if !record.sampled {|' \
+mutate "e sample moved to every state (no hold-style gate)" $E 's|let readChain = !record.sampled \&\& plan.style == "hold"|let readChain = !record.sampled|' \
   "$T/testTapStyleHasNoSample"
 
 # Static check: LiveProbes reads flavor 3 (TASK_SUPPRESSION_POLICY) with 16 words, and never flavor 4 (TASK_POLICY_STATE, root-only).

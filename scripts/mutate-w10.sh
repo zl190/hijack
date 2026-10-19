@@ -32,7 +32,7 @@ mutate "a summary always prints ahead: none" $E 's|return a.isEmpty ? "none" : a
   "$T/testSummaryNamesTheListenersAheadInChainOrder"
 mutate "a2 unreadable chain prints ahead: none" $E 's|guard let a else { return "?" }|guard let a else { return "none" }|' \
   "$T/testSummarySaysAheadUnknownWhenTheChainCouldNotBeRead"
-mutate "b chain read on every sample" $E 's|if !record.sampled, plan.style == "hold" {|if plan.style == "hold" {|' \
+mutate "b chain read on every sample" $E 's|let readChain = !record.sampled \&\& plan.style == "hold"|let readChain = plan.style == "hold"|' \
   "$T/testChainIsReadOncePerDictation"
 mutate "c relaunch guard inverted (skips when ours is first)" $E 's|if let ahead = r.ahead, !ahead.isEmpty {|if let ahead = r.ahead, ahead.isEmpty {|' \
   "$T/(testFailedPostBehindAnotherListenerDoesNotRelaunchAndSaysWhy|testFailedPostWithOurListenerFirstRelaunches)"
@@ -42,17 +42,21 @@ mutate "c3 unread chain counts as a listener ahead" $E 's|if let ahead = r.ahead
   "$T/testFailedPostWithUnknownChainRelaunches"
 mutate "d stats ignores the ahead field" Sources/Core/Stats.swift 's|word(#"ahead: (\[^,\|\]+)"#)|word(#"ahead-: ([^,\|]+)"#)|' \
   "$T/testStatsCountsListenersAhead"
+mutate "d3 stats keeps the keyNotSent cause behind a listener" Sources/Core/Stats.swift 's|: echo == false \&\& ahead?.isEmpty == false|: false|' \
+  "$T/testStatsCountsListenersAhead"
 mutate "d2 stats counts a failure as any listener ahead" Sources/Core/Stats.swift 's|$0.listenersAhead?.isEmpty == false \&\& $0.echoSeen == false|$0.listenersAhead?.isEmpty == false|' \
   "$T/testStatsCountsListenersAhead"
 
 # Static checks: the live chain read keeps to enabled, filtering, key-event taps at the HID level, and the
 # doctor command uses the same function (one definition of "ahead").
 L=Sources/App/System.swift
-if grep -q '\.tapPoint == \.cghidEventTap' $L && grep -q '\$0\.enabled' $L && grep -q 't\.options == \.defaultTap' $L \
-  && [ "$(grep -c 'func keyListenersAhead(of pid: pid_t)' $L)" = 1 ] && grep -q 'keyListenersAhead(of: st.pid)' Sources/App/CLI.swift; then
-  echo "PASS static grep: keyListenersAhead filters hid/enabled/filtering key taps, defined once, used by doctor"
+if grep -q 'hidLevel: \$0\.tapPoint == \.cghidEventTap' $L && grep -q 'enabled: \$0\.enabled' $L && grep -q 'filtering: \$0\.options == \.defaultTap' $L \
+  && [ "$(grep -c 'func keyListenerChain(of pid: pid_t, modifierKey: Bool)' $L)" = 1 ] && grep -q 'keyListenerChain(of: st.pid' Sources/App/CLI.swift \
+  && [ "$(grep -c 'tap.listenersAhead(for: key)' Sources/Core/Engine.swift)" = 1 ] \
+  && awk '/clock.offMain\(\{/ { inb = 1 } inb && /tap.listenersAhead\(for: key\)/ { found = 1 } /\}\) \{ \[self\]/ { inb = 0 } END { exit !found }' Sources/Core/Engine.swift; then
+  echo "PASS static grep: the live rows carry hid/enabled/filtering, one chain function, used by doctor, read inside offMain"
 else
-  echo "FAIL static grep: keyListenersAhead filter or doctor use is missing"; fail=1
+  echo "FAIL static grep: live rows, doctor use, or the off-main read is missing"; fail=1
 fi
 
 [ "$fail" -eq 0 ] && echo "ALL PASS" || echo "SOME FAILED"

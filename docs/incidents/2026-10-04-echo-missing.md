@@ -166,8 +166,9 @@ Scripts: `scripts/taps.swift` (the event-tap chain with process names), `hijack 
   WeType process 94224 started at 15:53:35 and is the one on every failure line since (`no window (pid 94224)`, 18 lines).
 - Dictations with the talk key sent, from the log: 10-12 to 10-16: 17 sent, 0 `echo missing`, 15 with the mic on (the two
   others were too short to judge). From 10-17 15:53 on: 21 sent, 20 `echo missing`, 1 good (10-19 00:10:38).
-- Every self-relaunch since 10-18 (7 of the 8 ever) was followed by `echo missing` within seconds to minutes. The two
-  relaunches before (10-06, 10-11) were followed by good dictations. The restart stopped helping on the day WeType 3.0 arrived.
+- Every self-relaunch since 10-18 (7 of the 8 ever) was followed by `echo missing` within seconds to minutes. The one
+  self-relaunch before (10-11) and the manual restart of 10-06 were followed by good dictations. The restart stopped
+  helping on the day WeType 3.0 arrived.
 
 ### Lead 1: the event-tap chain, and the slow key events
 
@@ -183,9 +184,12 @@ order | id        | location | filter/listen | key events | enabled | pid proces
 
 WeType's process is two days older than Hijack's, yet its tap is listed first. Three facts settle what that means:
 
-1. A tap created later is listed first and runs first. Measured with a scratch process that created two head-inserted
-   listen-only taps 1 ms apart: the younger one was listed first and its callback fired 0.2 to 0.6 ms before the
-   older one on all six posts. So the list is newest-first for head-inserted taps, and list order is run order for them.
+1. A tap created later is listed first and runs first. Measured with a scratch process (not kept in the repo) that
+   created two head-inserted listen-only taps 1 ms apart and posted six key events; the younger tap was listed first
+   and its callback ran first each time: `hid-head2 +89.4ms | hid-head +89.6ms`, `+65.3 | +65.5`, `+65.7 | +66.1`,
+   `+65.0 | +65.7`, `+205.3 | +205.6` (ms after the post). So the list is newest-first for head-inserted taps, and
+   list order is run order for them in one process; that it also holds for filtering taps across processes is
+   inferred, not measured.
 2. WeType re-creates its tap whenever a new tap appears. Poll of the list every 100 ms around `hijack restart`:
 
    ```
@@ -196,8 +200,10 @@ WeType's process is two days older than Hijack's, yet its tap is listed first. T
    15:33:13.564  #0 WeType id 254912071           #1 Hijack(95012)          (WeType re-created its tap, 3.6 s later)
    ```
 
-   WeType's tap id was 622680824 at 15:20, 452076074 at 15:27, 2064101247 at 15:29 and 254912071 at 15:33: a new tap each
-   time another process created one. Nothing else in the list moved.
+   WeType's tap id was 622680824 at 15:20, 452076074 at about 15:27 (after Hijack's self-relaunch at 15:24:03 created a
+   new tap), 2064101247 at 15:29 (after the scratch process created its taps at about 15:27) and 254912071 at 15:33 (the
+   poll above). Only the 15:33 change was watched as it happened; the other three are before-and-after readings with one
+   new tap in between each. Nothing else in the list moved.
 3. The WeType binary names the mechanism. `strings` on `WeType.app/Contents/MacOS/WeType`: `[ShortcutKeyMonitor] COMPETITOR
    DETECTED:`, `No flagsChanged competitors found (`, `Force recreating EventTap, reason:`, `Exclusive mode state: ...,
    healthCheck: always, competitorDetection:`, `boostExclusivePriorityIfNeeded`, `settingfunction_voiceInputExclusiveMode`,
@@ -206,11 +212,11 @@ WeType's process is two days older than Hijack's, yet its tap is listed first. T
    `ExternalKeyboardMonitor.swift`, `VoiceInput/VoiceInputDeviceLevelMonitor.swift`. WeType's own log files
    (`~/Library/Caches/WeType/Logs/wt_*.xlog`) are encrypted (xlog magic 0x07) and were not read.
 
-So since 10-17 every key event, our posted Fn included, reaches WeType's filtering tap before ours, however often Hijack
-restarts. A fresh process of ours is first for about four seconds, then behind again. The post itself is fine: the
-Hijack-exact Fn (HID-state source, flagsChanged, key 63, `maskSecondaryFn`, the user-data marker) posted from a fresh
-scratch process reached a head tap at +89 ms, a tail-appended HID tap at +102 ms and an annotated-session tap at +416 ms
-while Squirrel was the active input source. In a real dictation WeType is the active source, and our tap sees nothing:
+So on 10-19, whenever the chain was read, WeType's filtering tap was listed before ours, and a restart of ours won the
+first place for about four seconds. The list was not read before 10-19; that the same order held since the update is
+inferred from the failure pattern. The post itself is fine: the Hijack-exact Fn (HID-state source, flagsChanged, key 63,
+`maskSecondaryFn`, the user-data marker) posted from the same scratch process reached a head tap at +89.4 ms, a
+tail-appended HID tap at +101.6 ms and an annotated-session tap at +415.8 ms while Squirrel was the active input source. In a real dictation WeType is the active source, and our tap sees nothing:
 the only filtering tap between the head and ours is WeType's. What WeType does with it is its own business; its
 `injected keyboard event bypass` string says it tells injected events apart, and the 00:10:38 success says it sometimes
 acts on ours. That part is not measured here.
@@ -234,9 +240,9 @@ Two lines ever, 15:11:13.489 and 15:11:27.238 on 10-19, each 1.05 s after a `sta
 (`hijack restart` at 15:11:11, the menu at 15:11:25). None after the starts at 15:10:58, 15:13:41, 15:13:43, 15:13:46.
 The check reads `flagsState(.hidSystemState)`, which (lead 2) shows only what the keyboard reports: Fn was physically down
 at those two moments and up two minutes later. A stuck key would have stayed. The simplest reading is a hand on the
-physical Fn right after each restart (the owner was testing physical Fn that afternoon); the 1 s guard did not see the
-edge because, with WeType's tap ahead of ours, a swallowed Fn edge never reaches our tap. Not a software fault; owner to
-confirm the hand.
+physical Fn right after each restart (the owner was testing physical Fn that afternoon). Why the 1 s guard did not see
+the edge is not explained: both lines fall inside the few seconds after a start when our new tap is first. Not a
+software fault by the evidence; owner to confirm the hand.
 
 ### Lead 4: the Claude desktop app
 
@@ -247,15 +253,22 @@ and `com.openai.codex`. The correlation is usage, not cause. Killed.
 
 ### What W10 changed
 
-- `Engine`: the 0.3 s sample reads the chain once (`TapControl.listenersAhead()`), the dictation line carries
-  `ahead: none | <names joined by +> | ?` where `post:` was, and a failed post behind another listener logs
+- `Engine`: the first held sample reads the chain once, off the main thread (`TapControl.listenersAhead(for:)`;
+  `CGGetEventTapList` measured at 2 ms p50, 3.9 ms p95, 12 ms max over 200 calls at load average 29 to 37). The
+  dictation line carries `ahead: none | <names joined by +> | ?` where `post:` was: the older processes whose
+  filtering taps for the talk key's event type are listed before ours (a younger process ahead of us is ordinary
+  creation order and is not named; a relaunch puts us back in front of it). A failed post behind such a listener logs
   `self-relaunch skipped: <names>'s key listener sits ahead of ours (...)` instead of relaunching (docs/adr/0023).
-- `hijack doctor`: `✓ no other key listener sits ahead of Hijack's`, or `⚠︎ WeType keeps a key listener ahead of Hijack's`
-  with what to do. `hijack stats`: a `Key listener` line and `aheadSampled` / `listenerAhead` / `listenerAheadFailed` in `--json`.
+  The judge is pure (`Sources/Core/KeyListenerChain.swift`, `KeyListenerChainTests`); the app side only reads the list.
+- `hijack doctor`: `✓ no other key listener sits ahead of Hijack's`, `⚠︎ WeType keeps a key listener ahead of Hijack's`
+  with what to do, or `⚠︎ Hijack's key listener is not in the system's list` while the app restarts. `hijack stats`: a
+  `Key listener` line, a cause bucket `talk key taken by another app's key listener`, and `aheadSampled` /
+  `listenerAhead` / `listenerAheadFailed` in `--json`.
 - `scripts/taps.swift`: the whole chain with names, for a reader.
 - Tests: `Tests/HijackCoreTests/ListenerChainTests.swift`. Mutation checks: `scripts/mutate-w10.sh` (output below);
-  `mutate-w7/w8/w9.sh` lost their `post:` entries; all four scripts were run on 2026-10-19 (w7, w9, w10 ALL PASS; w8's
-  static grep "one `open -b` spawn" fails on the restart-button branch because `hijack restart` added its own, a PR #7 item).
+  `mutate-w7/w8/w9.sh` lost their `post:` entries; all four scripts were run on 2026-10-19: w7, w9 and w10 ALL PASS; w8's
+  sixteen mutations PASS and its static grep "one `open -b` spawn" FAILs on the restart-button branch because
+  `hijack restart` added a second spawn (a PR #7 item, not touched here).
 
 ### Mutation check output (`scripts/mutate-w10.sh`, 2026-10-19)
 
@@ -274,9 +287,11 @@ PASS c3 unread chain counts as a listener ahead: broken -> tests RED
 PASS c3 unread chain counts as a listener ahead: restored -> tests GREEN
 PASS d stats ignores the ahead field: broken -> tests RED
 PASS d stats ignores the ahead field: restored -> tests GREEN
+PASS d3 stats keeps the keyNotSent cause behind a listener: broken -> tests RED
+PASS d3 stats keeps the keyNotSent cause behind a listener: restored -> tests GREEN
 PASS d2 stats counts a failure as any listener ahead: broken -> tests RED
 PASS d2 stats counts a failure as any listener ahead: restored -> tests GREEN
-PASS static grep: keyListenersAhead filters hid/enabled/filtering key taps, defined once, used by doctor
+PASS static grep: the live rows carry hid/enabled/filtering, one chain function, used by doctor, read inside offMain
 ALL PASS
 ```
 

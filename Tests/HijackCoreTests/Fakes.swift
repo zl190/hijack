@@ -84,7 +84,8 @@ final class FakeTap: TapControl {
     func enable() { if enableFails > 0 { enableFails -= 1 } else { enabled = true } }
     func keyIsDown(_ code: Int) -> Bool { keysDown.contains(code) }
     func modifierIsDown(_ flag: CGEventFlags) -> Bool { flagsDown.contains(flag) }
-    func listenersAhead() -> [String]? { aheadReads += 1; return ahead }
+    var aheadKeys: [KeySpec] = []  // which talk key each read asked about
+    func listenersAhead(for key: KeySpec) -> [String]? { aheadReads += 1; aheadKeys.append(key); return ahead }
 }
 
 final class FakeProbes: Probes {

@@ -42,10 +42,10 @@ public protocol TapControl: AnyObject {
     func enable()
     func keyIsDown(_ code: Int) -> Bool  // the key as the keyboard has it
     func modifierIsDown(_ flag: CGEventFlags) -> Bool  // the modifier as the system has it
-    /// W10 (docs/adr/0023): the other processes whose filtering key listeners sit ahead of ours in the system's
-    /// chain (they see a key first and can swallow it), in chain order. [] when ours is first; nil when the chain
-    /// could not be read.
-    func listenersAhead() -> [String]?
+    /// W10 (docs/adr/0023, `keyListenerChain` in KeyListenerChain.swift): the older processes whose filtering listeners
+    /// for `key`'s event type sit ahead of ours in the system's chain, in chain order. [] when ours is first; nil when
+    /// the chain could not be read or ours is not in it. May be called off the main thread.
+    func listenersAhead(for key: KeySpec) -> [String]?
     var secureInputOn: Bool { get }
 }
 

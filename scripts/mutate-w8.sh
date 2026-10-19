@@ -35,7 +35,7 @@ mutate "b hold threshold 0.5 s -> 0.0 s" $E 's|relaunchMinHold: TimeInterval = 0
 mutate "b2 hold threshold 0.5 s -> 0.6 s" $E 's|relaunchMinHold: TimeInterval = 0.5|relaunchMinHold: TimeInterval = 0.6|' \
   "$T/testHeldJustOverHalfASecondRelaunches"
 # c, c2 (the `post:` condition) were removed on 2026-10-19 with the probe; the listener-chain guard that replaced it is in scripts/mutate-w10.sh.
-mutate "c unsampled chain blocks the relaunch" $E 's|if let ahead = r.ahead, !ahead.isEmpty {|if r.ahead?.isEmpty != true {|' \
+mutate "c unsampled chain blocks the relaunch" $E 's|if let ahead = r.ahead, !ahead.isEmpty {|if let ahead = r.ahead ?? ["?"], !ahead.isEmpty {|' \
   "$T/testUnsampledChainStillRelaunches"
 mutate "d rate limit 10 min -> 0" $E 's|relaunchGap: TimeInterval = 600|relaunchGap: TimeInterval = 0|' \
   "$T/(testSecondFailureNineMinutesLaterIsSuppressed|testPersistedDateSuppressesInAFreshProcess)"

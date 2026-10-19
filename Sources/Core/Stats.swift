@@ -15,6 +15,7 @@ public struct DictationEntry: Equatable {
     /// Why a dictation with no voice window failed, from the checks on its line.
     public enum Cause: String, CaseIterable {
         case keyNotSent = "talk key never went out (echo missing)"
+        case takenAhead = "talk key taken by another app's key listener (echo missing, ahead: …)"
         case toolDidntListen = "voice tool didn't start listening (mic off)"
         case windowNotSeen = "tool listened, its window wasn't seen (mic on)"
         case unknown = "not enough checks on the line"
@@ -76,8 +77,10 @@ public struct DictationEntry: Equatable {
             cause =
                 line.contains("input source never switched")
                 ? .sourceNotSwitched
-                : echo == false || (echo == nil && post == false)
-                    ? .keyNotSent : mic == false ? .toolDidntListen : mic == true ? .windowNotSeen : .unknown
+                : echo == false && ahead?.isEmpty == false
+                    ? .takenAhead
+                    : echo == false || (echo == nil && post == false)
+                        ? .keyNotSent : mic == false ? .toolDidntListen : mic == true ? .windowNotSeen : .unknown
         }
         return DictationEntry(
             day: String(line.prefix(10)), tool: tool, toggle: line.contains("(toggle)"),

@@ -74,6 +74,33 @@ final class ListenerChainTests: XCTestCase {
         XCTAssertEqual(r.supervisor.relaunches.count, 1)
         XCTAssertFalse(r.sink.has("self-relaunch skipped"), "\(r.sink.lines)")
     }
+    // Guard order: the active-session guard comes first (a newer press interrupted this summary: nothing is logged),
+    // the rate limit last (behind a listener the line says `skipped`, never `suppressed`).
+    func testAheadWithANewerSessionActiveLogsNothing() {
+        let r = Rig(); r.tap.ahead = ["WeType"]
+        r.pressUntilListening(hold: 0.6, echo: false)
+        r.release(); r.press()  // the next press interrupts: summary(end: interrupted) runs with a new session starting
+        XCTAssertTrue(r.sink.summaries.contains { $0.contains("interrupted by the next press") }, "\(r.sink.summaries)")
+        r.clock.advance(0)
+        XCTAssertEqual(r.supervisor.relaunches, [])
+        XCTAssertFalse(r.sink.has("self-relaunch"), "\(r.sink.lines)")
+    }
+    func testAheadUnderTheRateLimitSaysSkippedNotSuppressed() {
+        let r = Rig()
+        _ = line(r, echo: false)  // ours first: relaunches, and starts the 10 min clock
+        XCTAssertEqual(r.supervisor.relaunches.count, 1)
+        r.tap.ahead = ["WeType"]; r.clock.advance(9 * 60)
+        _ = line(r, echo: false)
+        XCTAssertEqual(r.supervisor.relaunches.count, 1)
+        XCTAssertFalse(r.sink.has("self-relaunch suppressed"), "\(r.sink.lines)")
+        XCTAssertEqual(r.sink.lines.filter { $0.hasPrefix("self-relaunch skipped: WeType") }.count, 1, "\(r.sink.lines)")
+    }
+    // The read asks about the talk key, so the live side can keep to taps that watch its event type.
+    func testChainIsReadForTheTalkKey() {
+        let r = Rig()
+        _ = line(r)
+        XCTAssertEqual(r.tap.aheadKeys, [Rig.fn])
+    }
     func testEchoSeenBehindAnotherListenerNeitherRelaunchesNorSkips() {
         let r = Rig(); r.tap.ahead = ["WeType"]
         _ = line(r, echo: true)
@@ -94,6 +121,14 @@ final class ListenerChainTests: XCTestCase {
         XCTAssertEqual(s.aheadSampled, 3)
         XCTAssertEqual(s.listenerAhead, 2)
         XCTAssertEqual(s.listenerAheadFailed, 1)
+        // The failure behind a listener has its own cause; the old line keeps the old one.
+        XCTAssertEqual(DictationEntry.parse(ts + ahead)!.cause, .takenAhead)
+        XCTAssertEqual(DictationEntry.parse(ts + old)!.cause, .keyNotSent)
+        XCTAssertEqual(s.causes[.takenAhead], 1)
+        XCTAssertEqual(s.causes[.keyNotSent], 1)
+        // A name with a space survives; the field ends at the next comma.
+        let spaced = DictationEntry.parse(ts + " | echo after 5ms, ahead: Claude Helper+We_Type, nap: ?, mic tool on device on")
+        XCTAssertEqual(spaced?.listenersAhead, ["Claude Helper", "We_Type"])
         let e = DictationEntry.parse(ts + aheadOK)!
         XCTAssertEqual(e.listenersAhead, ["WeType", "LinearMouse"])
         XCTAssertEqual(DictationEntry.parse(ts + none)!.listenersAhead, [])
