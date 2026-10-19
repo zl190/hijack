@@ -34,6 +34,7 @@ hijack get [setting]     # read settings
 hijack set mode toggle   # change a setting (validated)
 hijack log -f            # follow the log
 hijack stats             # how reliable dictation has been (default: last 7 days)
+hijack restart           # quit the running app and open it again
 ```
 
 `status`, `sources`, `get`, and `stats` take `--json`.
@@ -58,6 +59,8 @@ Hijack checks for a new version once a day and asks before it installs one. "Che
 ## Troubleshooting
 
 If the trigger does nothing, confirm that Hijack has Accessibility permission and that your selected voice tool works on its own. Run `hijack doctor` to check permissions, configuration and voice-source availability.
+
+If dictation stops working and `hijack doctor` finds nothing, choose **Restart Hijack** in the menu (or run `hijack restart`). It quits the app and opens a fresh copy, the same thing Hijack does by itself after a dictation whose talk key never went out, but with no 10-minute limit. Each use leaves a `restart:` line in the log, and `hijack stats` counts them under Incidents as `manual restarts`.
 
 If keys type the wrong thing after Hijack quits unexpectedly, a modifier key may be stuck down. Press and release your talk key once to clear it. Then open Hijack again. Hijack also tries to release a stuck key on its own the next time it starts.
 

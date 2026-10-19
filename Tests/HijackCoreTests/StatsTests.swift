@@ -96,6 +96,22 @@ final class StatsTests: XCTestCase {
         XCTAssertEqual(s.tools, ["WeType": 6, "Handy": 1])
         XCTAssertEqual(DictationStats.compute(lines: lines, days: nil, today: "2026-10-03").dictations, 8)
     }
+    // A manual restart (the menu's Restart Hijack, `hijack restart`) is its own count, apart from the W8
+    // self-relaunch: a suppressed self-relaunch and a dictation line that merely mentions a restart count as neither.
+    func testManualRestartsAreCountedApartFromSelfRelaunches() {
+        let lines = [
+            "2026-10-19 15:01:21.062 self-relaunch: talk key did not go out: echo missing, post not seen nap=off",
+            "2026-10-19 15:01:29.174 self-relaunch suppressed: last one 0m ago (talk key did not go out: echo missing, post not seen)",
+            "2026-10-19 15:02:00.000 restart: requested from the menu",
+            "2026-10-19 15:02:01.000 started: trigger Right Option, forward Fn, voice WeType nap=off",
+            "2026-10-19 15:03:00.000 restart: requested from the command line (pid 123)",
+            "2026-10-19 15:04:00.000 menu: relaunching after the key listener was found off",
+            ok1,
+        ]
+        let s = DictationStats.compute(lines: lines, today: "2026-10-19")
+        XCTAssertEqual(s.selfRelaunches, 1)
+        XCTAssertEqual(s.manualRestarts, 2)
+    }
     func testPercentiles() {
         let lines = (1...20).map {
             "2026-10-03 10:00:\(String(format: "%02d", $0)).000 dictation WeType (hold): held 1.00s, Fn sent after \($0 * 10)ms, window closed 1000ms after release, back after 1.2s | echo after 1ms"
