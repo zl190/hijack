@@ -134,7 +134,7 @@ dictation.
 
 ## Verification
 
-`swift test`: 258 tests, 0 failures (236 before W11). `scripts/mutate-w11.sh` breaks one line of shipped code at a
+`swift test`: 270 tests, 0 failures (236 before W11). `scripts/mutate-w11.sh` breaks one line of shipped code at a
 time; the named tests must go RED, then GREEN once the line is restored, and a mutant that does not compile is a FAIL.
 Output of the run on 2026-10-19:
 
@@ -145,12 +145,16 @@ PASS a2 following release finishes without the window watch: broken -> tests RED
 PASS a2 following release finishes without the window watch: restored -> tests GREEN
 PASS a3 following is not active: broken -> tests RED
 PASS a3 following is not active: restored -> tests GREEN
+PASS a4 the tool's switch-in starts a dictation in every mode: broken -> tests RED
+PASS a4 the tool's switch-in starts a dictation in every mode: restored -> tests GREEN
+PASS a5 a late switch-in while waiting is ignored: broken -> tests RED
+PASS a5 a late switch-in while waiting is ignored: restored -> tests GREEN
 PASS b follow mode is never handed to the machine: broken -> tests RED
 PASS b follow mode is never handed to the machine: restored -> tests GREEN
 PASS b2 a press inside the voice source is passthrough even with a restore pending: broken -> tests RED
 PASS b2 a press inside the voice source is passthrough even with a restore pending: restored -> tests GREEN
-PASS b3 the previous source is never remembered: broken -> tests RED
-PASS b3 the previous source is never remembered: restored -> tests GREEN
+PASS b3 the source read at the press is never remembered (the tracked one masks it): broken -> tests RED
+PASS b3 the source read at the press is never remembered (the tracked one masks it): restored -> tests GREEN
 PASS b4 repeats while following are swallowed: broken -> tests RED
 PASS b4 repeats while following are swallowed: restored -> tests GREEN
 PASS b5 toggle no longer wins over follow: broken -> tests RED
@@ -167,6 +171,22 @@ PASS b10 a too-short follow press undoes the user's own source switch: broken ->
 PASS b10 a too-short follow press undoes the user's own source switch: restored -> tests GREEN
 PASS b11 a chained too-short press drops the pending restore: broken -> tests RED
 PASS b11 a chained too-short press drops the pending restore: restored -> tests GREEN
+PASS b12 the switch-in notification starts a dictation in hold mode too: broken -> tests RED
+PASS b12 the switch-in notification starts a dictation in hold mode too: restored -> tests GREEN
+PASS b13 a burst of notifications starts a dictation each: broken -> tests RED
+PASS b13 a burst of notifications starts a dictation each: restored -> tests GREEN
+PASS b14 the other sources are not tracked: broken -> tests RED
+PASS b14 the other sources are not tracked: restored -> tests GREEN
+PASS b15 the tracked source is never used as the one to go back to: broken -> tests RED
+PASS b15 the tracked source is never used as the one to go back to: restored -> tests GREEN
+PASS b16 a switch-in with nothing live still switches back: broken -> tests RED
+PASS b16 a switch-in with nothing live still switches back: restored -> tests GREEN
+PASS b17 the mic does not keep the dictation live: broken -> tests RED
+PASS b17 the mic does not keep the dictation live: restored -> tests GREEN
+PASS b18 a window seen does not take over from the mic: broken -> tests RED
+PASS b18 a window seen does not take over from the mic: restored -> tests GREEN
+PASS b19 the watch never gives up: broken -> tests RED
+PASS b19 the watch never gives up: restored -> tests GREEN
 PASS c no mic or window sample while following: broken -> tests RED
 PASS c no mic or window sample while following: restored -> tests GREEN
 PASS c2 the key-listener chain is read for a key that was never posted: broken -> tests RED
