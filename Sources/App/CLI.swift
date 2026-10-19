@@ -467,10 +467,11 @@ func cliStats(_ args: [String], json: Bool) -> Int32 {
     } else {
         func row(_ label: String, _ n: Int, _ note: String = "") {
             let share = String(format: "%3.0f%%", Double(n) / Double(s.dictations) * 100)
-            print("  " + label.padding(toLength: 22, withPad: " ", startingAt: 0) + String(format: "%5d", n) + "  \(share)" + note)
+            // W11: the widest label is "text arrived, input source not switched back" (45); the column fits it.
+            print("  " + label.padding(toLength: 46, withPad: " ", startingAt: 0) + String(format: "%5d", n) + "  \(share)" + note)
         }
         print(
-            "Dictations".padding(toLength: 24, withPad: " ", startingAt: 0) + String(format: "%5d", s.dictations)
+            "Dictations".padding(toLength: 48, withPad: " ", startingAt: 0) + String(format: "%5d", s.dictations)
                 + (s.tooShort > 0
                     ? "  (+\(s.tooShort) too short to start" + (s.leftAlone > 0 ? ", \(s.leftAlone) of them switch-ins left alone" : "")
                         + ")" : ""))
