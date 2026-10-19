@@ -26,11 +26,16 @@ not a posted flagsChanged. It cannot tell the two cases apart either.
 1. **Read the chain at the sample.** 0.3 s after the talk key went out (the sample that already reads App Nap), read
    `CGGetEventTapList` once and keep the names of the processes that are older than ours and whose enabled, filtering
    taps for the talk key's event type (flagsChanged for Fn, keyDown for a plain key) at the HID level are listed before
-   ours. Older and ahead means the process re-created its tap after ours appeared: the one pattern that puts it ahead
-   again after any restart of ours. A younger process ahead is ordinary creation order and is not named: a relaunch
-   puts us back in front of it, which is ADR 0022's case. The dictation line carries the result as `ahead: none`,
+   ours. Older and ahead means the process re-created its tap after ours appeared: the pattern WeType 3.0 shows, and
+   the one a restart of ours cannot beat while it keeps doing so. (A process that re-created its tap once, after a
+   wake or a device change, matches the rule too; the judge cannot tell the two apart from one reading, and the
+   next dictation's `ahead:` will.) A younger process ahead is ordinary creation order and is not named: a relaunch
+   puts us back in front of it, which is ADR 0022's case. An unknown start time counts as older and the process is
+   named as `pid N`, so a reader sees it. The dictation line carries the result as `ahead: none`,
    `ahead: WeType`, `ahead: A+B`, or `ahead: ?` (not sampled, the list could not be read, or ours is not in it). It
-   replaces `post:`. Names lose `+`, `,` and `|` so the field stays parseable.
+   replaces `post:`. Names lose `+`, `,` and `|` so the field stays parseable. The read completes a few milliseconds
+   after the sample starts; an app provider's dictation released inside that window ends with `ahead: ?` and is judged
+   as unsampled (an input method's summary waits for the text first, so it always has the reading).
 2. **No relaunch behind another listener.** The relaunch of ADR 0022 keeps its signature minus the `post:` term (hold
    style, held at least 0.5 s, talk key sent, no echo) and gains one exclusion: when `ahead:` names anyone, log
    `self-relaunch skipped: <names>'s key listener sits ahead of ours (talk key did not go out: echo missing)` and do
@@ -43,8 +48,8 @@ not a posted flagsChanged. It cannot tell the two cases apart either.
    line carries the field, counts such failures under their own cause (`talk key taken by another app's key listener`),
    and `--json` gains `aheadSampled`, `listenerAhead`, `listenerAheadFailed`.
 
-The read is one call to the window server, no I/O: 2 ms p50, 3.9 ms p95, 12 ms max over 200 calls at load average 29 to
-37 (2026-10-19). It runs in the sample's off-main block, never on the main run loop that hosts our tap and never inside
+The read is one call to the window server, no I/O: `swift scripts/taplist-latency.swift` on 2026-10-19 at load average
+29 to 37 printed `CGGetEventTapList x200: p50 1.974 ms  p95 3.914 ms  max 12.068 ms`. It runs in the sample's off-main block, never on the main run loop that hosts our tap and never inside
 the tap callback (ADR 0011). The judge is a pure function over the list's rows (`Sources/Core/KeyListenerChain.swift`),
 tested without the window server.
 

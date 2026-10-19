@@ -185,8 +185,8 @@ order | id        | location | filter/listen | key events | enabled | pid proces
 WeType's process is two days older than Hijack's, yet its tap is listed first. Three facts settle what that means:
 
 1. A tap created later is listed first and runs first. Measured with a scratch process (not kept in the repo) that
-   created two head-inserted listen-only taps 1 ms apart and posted six key events; the younger tap was listed first
-   and its callback ran first each time: `hid-head2 +89.4ms | hid-head +89.6ms`, `+65.3 | +65.5`, `+65.7 | +66.1`,
+   created two head-inserted listen-only taps 1 ms apart and posted eight key events, five of which reached the HID
+   taps; the younger tap was listed first and its callback ran first each time: `hid-head2 +89.4ms | hid-head +89.6ms`, `+65.3 | +65.5`, `+65.7 | +66.1`,
    `+65.0 | +65.7`, `+205.3 | +205.6` (ms after the post). So the list is newest-first for head-inserted taps, and
    list order is run order for them in one process; that it also holds for filtering taps across processes is
    inferred, not measured.
@@ -254,7 +254,8 @@ and `com.openai.codex`. The correlation is usage, not cause. Killed.
 ### What W10 changed
 
 - `Engine`: the first held sample reads the chain once, off the main thread (`TapControl.listenersAhead(for:)`;
-  `CGGetEventTapList` measured at 2 ms p50, 3.9 ms p95, 12 ms max over 200 calls at load average 29 to 37). The
+  `CGGetEventTapList` measured by `scripts/taplist-latency.swift` at load average 29 to 37: `p50 1.974 ms  p95 3.914 ms
+  max 12.068 ms` over 200 calls). The
   dictation line carries `ahead: none | <names joined by +> | ?` where `post:` was: the older processes whose
   filtering taps for the talk key's event type are listed before ours (a younger process ahead of us is ordinary
   creation order and is not named; a relaunch puts us back in front of it). A failed post behind such a listener logs
@@ -267,7 +268,8 @@ and `com.openai.codex`. The correlation is usage, not cause. Killed.
 - `scripts/taps.swift`: the whole chain with names, for a reader.
 - Tests: `Tests/HijackCoreTests/ListenerChainTests.swift`. Mutation checks: `scripts/mutate-w10.sh` (output below);
   `mutate-w7/w8/w9.sh` lost their `post:` entries; all four scripts were run on 2026-10-19: w7, w9 and w10 ALL PASS; w8's
-  sixteen mutations PASS and its static grep "one `open -b` spawn" FAILs on the restart-button branch because
+  sixteen mutations PASS (after round 2 of the review, which caught a mutant that only failed to compile; every script
+  now fails a mutant that does not build) and its static grep "one `open -b` spawn" FAILs on the restart-button branch because
   `hijack restart` added a second spawn (a PR #7 item, not touched here).
 
 ### Mutation check output (`scripts/mutate-w10.sh`, 2026-10-19)

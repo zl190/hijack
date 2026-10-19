@@ -21,6 +21,10 @@ mutate() { # name file sed-expression test-filter
   if cmp -s "$file" "$file.w7orig"; then
     echo "FAIL $name: the sed expression changed nothing"; fail=1; mv "$file.w7orig" "$file"; current=""; return
   fi
+  if ! swift build --build-tests >/dev/null 2>&1; then
+    echo "FAIL $name: the mutant does not compile (a build error is not a RED test)"; fail=1
+    mv "$file.w7orig" "$file"; current=""; return
+  fi
   if red "$filter"; then echo "PASS $name: broken -> tests RED"; else echo "FAIL $name: broken -> tests stayed GREEN"; fail=1; fi
   mv "$file.w7orig" "$file"; current=""
   if green "$filter"; then echo "PASS $name: restored -> tests GREEN"; else echo "FAIL $name: restored -> tests not green"; fail=1; fi
