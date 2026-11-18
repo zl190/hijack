@@ -10,3 +10,5 @@ handoff.yaml
 RESUME.md
 .sparkle/
 dist-test/
+.checks-memo/
+docs/receipts/checks/*/

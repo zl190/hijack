@@ -1,0 +1,43 @@
+{
+  "schema": 1,
+  "checks_file": "/Users/zl190/Developer/agent/claude/hijack-paved-road/checks.json",
+  "tree": "abd60735cb6c2033037b1fa1e899c3cb467e74e2",
+  "dirty": true,
+  "fast": true,
+  "startedAt": "2026-11-18T163100Z",
+  "finishedAt": "2026-11-18T163103Z",
+  "logs": "docs/receipts/checks/2026-11-18T163100Z-abd6073",
+  "tmpLogs": "/var/folders/cm/9hw1nvt50gs6ssszm43npc2m0000gn/T/checks.tf4qpdzh",
+  "summary": {
+    "pass": 1,
+    "pass(memo)": 0,
+    "fail": 0,
+    "skip": 2
+  },
+  "checks": [
+    {
+      "name": "lint",
+      "status": "pass",
+      "reason": "exit 0",
+      "seconds": 2,
+      "exit": 0,
+      "log": "docs/receipts/checks/2026-11-18T163100Z-abd6073/lint.log"
+    },
+    {
+      "name": "test",
+      "status": "skip",
+      "reason": "skipped: --fast",
+      "seconds": 0,
+      "exit": null,
+      "log": null
+    },
+    {
+      "name": "build",
+      "status": "skip",
+      "reason": "skipped: --fast",
+      "seconds": 0,
+      "exit": null,
+      "log": null
+    }
+  ]
+}
