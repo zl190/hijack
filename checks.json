@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "note": "Declared checks for scripts/check.sh (app-check kernel); CI runs the same command. lint is fast; test fetches Sparkle then runs swift test; build produces build/Hijack.app (ad-hoc unless SIGN_ID). Add a check by adding an object; the adapter does not change.",
+  "checks": [
+    {"name": "lint", "run": ["make", "lint"]},
+    {"name": "test", "run": ["make", "test"], "slow": true},
+    {"name": "build", "run": ["make", "build"], "slow": true}
+  ]
+}

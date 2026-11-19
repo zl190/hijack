@@ -23,15 +23,10 @@ jobs:
           xcodebuild -version
           xcrun swift-format --version
 
-      # Blocking since the full format on 2026-10-04 (see docs/swift-format.md).
-      - name: Check formatting
-        run: make lint
-
-      - name: Run the unit tests
-        run: make test
-
-      - name: Build the app (ad-hoc)
-        run: make build
+      # One command for every declared check (checks.json: lint, test, build); the same command runs locally as
+      # scripts/check.sh --fast before a commit. Formatting blocks since 2026-10-04 (docs/swift-format.md).
+      - name: Run the declared checks
+        run: scripts/check.sh
 
       - name: Zip the app
         run: ditto -c -k --keepParent build/Hijack.app build/Hijack.zip
